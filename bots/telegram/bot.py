@@ -303,7 +303,10 @@ async def run_bot(
                 telegram_local_file_root=context.settings.telegram.bot_api_local_file_root,
             )
 
-            await dp.start_polling(bot)
+            await dp.start_polling(
+                bot,
+                tasks_concurrency_limit=settings.telegram.max_concurrent_updates,
+            )
     finally:
         mapping_task.cancel()
         await asyncio.gather(mapping_task, return_exceptions=True)

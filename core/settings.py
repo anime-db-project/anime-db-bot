@@ -174,6 +174,7 @@ class TelegramSettings:
     anime_input_ttl_seconds: int
     admin_user_ids: tuple[int, ...]
     bot_api_local_file_root: Path | None = None
+    max_concurrent_updates: int = 64
 
 
 @dataclass(frozen=True, slots=True)
@@ -411,6 +412,9 @@ class AppSettings:
                 admin_user_ids=_admin_ids(_raw(values, "ADMIN_TELEGRAM_USER_IDS")),
                 bot_api_local_file_root=_optional_path(
                     values, "TELEGRAM_BOT_API_LOCAL_FILE_ROOT"
+                ),
+                max_concurrent_updates=_int(
+                    values, "TELEGRAM_MAX_CONCURRENT_UPDATES", 64, 1
                 ),
             ),
             storage=StorageSettings(

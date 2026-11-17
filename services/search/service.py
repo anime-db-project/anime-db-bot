@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from difflib import SequenceMatcher
 
 from core.cache import BoundedTTLCache
+from core.singleflight import SingleFlight
 from core.canonicalization import contains_cyrillic, normalize_key, transliterate_ru
 from core.contracts import AnimeSearchProvider
 from core.identity import AnimeIdentity
@@ -79,6 +80,10 @@ class SearchService:
         self._result_set_cache = BoundedTTLCache[
             tuple[str, int, int, int, int], SearchResultSet
         ](max_entries=cache_max, ttl_seconds=cache_ttl, name="search_result_set")
+        self._page_flight: SingleFlight[tuple[str, int, int], SearchPage] = SingleFlight()
+        self._collection_flight: SingleFlight[
+            tuple[str, int, int, int, int], SearchResultSet
+        ] = SingleFlight()
 
     @property
     def provider_names(self) -> tuple[str, ...]:
@@ -123,7 +128,18 @@ class SearchService:
         cached = self._cache.get(cache_key)
         if cached is not None:
             return cached
+        return await self._page_flight.run(
+            cache_key,
+            lambda: self._search_uncached(query, page, page_size, cache_key),
+        )
 
+    async def _search_uncached(
+        self,
+        query: str,
+        page: int,
+        page_size: int,
+        cache_key: tuple[str, int, int],
+    ) -> SearchPage:
         async def run(provider: AnimeSearchProvider):
             try:
                 result = await provider.search(query, page=page, limit=page_size)
@@ -168,7 +184,23 @@ class SearchService:
         cached = self._result_set_cache.get(cache_key)
         if cached is not None:
             return cached
+        return await self._collection_flight.run(
+            cache_key,
+            lambda: self._collect_uncached(
+                query, page_size, max_pages, threshold, tail_pages, max_items, cache_key
+            ),
+        )
 
+    async def _collect_uncached(
+        self,
+        query: str,
+        page_size: int,
+        max_pages: int,
+        threshold: int,
+        tail_pages: int,
+        max_items: int,
+        cache_key: tuple[str, int, int, int, int],
+    ) -> SearchResultSet:
         async def collect_provider(
             provider_index: int,
             provider: AnimeSearchProvider,

@@ -32,6 +32,7 @@ class PersonalRateLimiter:
         self._settings = settings
         self._lock = threading.RLock()
         self._events: dict[tuple[str, int], deque[float]] = defaultdict(deque)
+        self._last_sweep_at: float | None = None
 
     @property
     def settings(self) -> RateLimitSettings:
@@ -56,6 +57,16 @@ class PersonalRateLimiter:
         key = ((platform or "").strip().casefold(), int(user_id))
 
         with self._lock:
+            # Expired users who never return must not retain their buckets.
+            if (
+                self._last_sweep_at is None
+                or timestamp - self._last_sweep_at >= 60.0
+            ):
+                hour_cutoff = timestamp - 3600.0
+                for stale_key, stale_events in tuple(self._events.items()):
+                    if not stale_events or stale_events[-1] <= hour_cutoff:
+                        self._events.pop(stale_key, None)
+                self._last_sweep_at = timestamp
             events = self._events[key]
             hour_floor = timestamp - 3600.0
             while events and events[0] <= hour_floor:
@@ -84,6 +95,7 @@ class PersonalRateLimiter:
     def reset(self) -> None:
         with self._lock:
             self._events.clear()
+            self._last_sweep_at = None
 
 
 class UpstreamRateLimiter:

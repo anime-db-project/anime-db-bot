@@ -508,16 +508,23 @@ class MappingResolver:
         for provider, external_id in seeds:
             params.extend([provider, external_id])
 
+        # Split the two edge directions so SQLite can use their individual
+        # indexes instead of scanning the full accepted-edge index.
         edge_query = """
             SELECT target.provider, target.external_id
-            FROM edges AS e
-            JOIN nodes AS target
-              ON target.id=CASE WHEN e.a_node=? THEN e.b_node ELSE e.a_node END
+            FROM (
+                SELECT e.b_node AS other_node
+                FROM edges AS e
+                WHERE e.a_node=? AND e.status='accepted'
+                UNION
+                SELECT e.a_node AS other_node
+                FROM edges AS e
+                WHERE e.b_node=? AND e.status='accepted'
+            ) AS neighbors
+            JOIN nodes AS target ON target.id=neighbors.other_node
             LEFT JOIN conflicts AS c
               ON c.source_node=? AND c.target_provider=target.provider
-            WHERE e.status='accepted'
-              AND (e.a_node=? OR e.b_node=?)
-              AND c.source_node IS NULL
+            WHERE c.source_node IS NULL
             ORDER BY target.provider, target.external_id
         """
         override_query = f"""
@@ -555,7 +562,7 @@ class MappingResolver:
                     node_id = int(node_row[0])
                     for target_provider, target_id in conn.execute(
                         edge_query,
-                        (node_id, node_id, node_id, node_id),
+                        (node_id, node_id, node_id),
                     ):
                         per_seed[(seed_provider, seed_id)][str(target_provider)].add(
                             str(target_id)

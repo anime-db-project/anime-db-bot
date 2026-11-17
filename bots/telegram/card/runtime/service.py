@@ -6,7 +6,6 @@ from aiogram.types import Message
 
 from bots.telegram.card.runtime.state import TelegramCardState
 from bots.telegram.card.views.renderer import send_anime_view
-from bots.telegram.people.loading import start_people_prefetch
 from core.models import SearchCandidate
 from localization import text
 from services.runtime.app_context import get_app_context
@@ -51,7 +50,6 @@ async def aggregate_and_send(
         )
 
     token = state.remember_anime(anime, owner_user_id)
-    start_people_prefetch(state, token, anime)
     await send_anime_view(
         message,
         token,
