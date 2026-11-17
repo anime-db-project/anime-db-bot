@@ -58,10 +58,7 @@ class PersonalRateLimiter:
 
         with self._lock:
             # Expired users who never return must not retain their buckets.
-            if (
-                self._last_sweep_at is None
-                or timestamp - self._last_sweep_at >= 60.0
-            ):
+            if self._last_sweep_at is None or timestamp - self._last_sweep_at >= 60.0:
                 hour_cutoff = timestamp - 3600.0
                 for stale_key, stale_events in tuple(self._events.items()):
                     if not stale_events or stale_events[-1] <= hour_cutoff:

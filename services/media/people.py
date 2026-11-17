@@ -52,6 +52,8 @@ class PeopleProgressService:
         self._sources = tuple(sources)
         self._aggregator = aggregator
         self._portrait_batch_size = max(1, min(int(portrait_batch_size), 200))
+        self._manifest_slots = asyncio.Semaphore(12)
+        self._remote_portrait_slots = asyncio.Semaphore(8)
 
     def build_progress(
         self, anime: AggregatedAnime, section: str
@@ -281,6 +283,16 @@ class PeopleProgressService:
         finally:
             item.manifest_task = None
 
+    async def _limited_manifest(
+        self,
+        anime: AggregatedAnime,
+        section: str,
+        progress: PeopleLoadProgress,
+        item: SourceLoadProgress,
+    ) -> bool:
+        async with self._manifest_slots:
+            return await self._run_manifest(anime, section, progress, item)
+
     def _start_manifest(
         self,
         anime: AggregatedAnime,
@@ -290,7 +302,9 @@ class PeopleProgressService:
     ) -> asyncio.Task[bool] | None:
         if item.manifest_complete or item.manifest_task is not None:
             return item.manifest_task
-        task = asyncio.create_task(self._run_manifest(anime, section, progress, item))
+        task = asyncio.create_task(
+            self._limited_manifest(anime, section, progress, item)
+        )
         item.manifest_task = task
         return task
 
@@ -377,6 +391,19 @@ class PeopleProgressService:
             section=section,
         )
 
+    async def _limited_remote_enrichment(
+        self,
+        anime: AggregatedAnime,
+        section: str,
+        progress: PeopleLoadProgress,
+        item: SourceLoadProgress,
+        targets: list[PersonCredit],
+    ) -> None:
+        async with self._remote_portrait_slots:
+            await self._run_remote_enrichment(
+                anime, section, progress, item, targets
+            )
+
     async def _run_portrait_batch(
         self,
         anime: AggregatedAnime,
@@ -409,7 +436,7 @@ class PeopleProgressService:
                     loader = getattr(item.source, f"load_{section}_portraits", None)
                     if callable(loader):
                         task = asyncio.create_task(
-                            self._run_remote_enrichment(
+                            self._limited_remote_enrichment(
                                 anime, section, progress, item, local_targets
                             )
                         )

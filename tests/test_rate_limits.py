@@ -62,6 +62,14 @@ class PersonalRateLimiterTests(unittest.TestCase):
         self.assertEqual(blocked.window, "hour")
         self.assertEqual(blocked.retry_after, 3538)
 
+    def test_inactive_user_buckets_are_reclaimed(self) -> None:
+        limiter = PersonalRateLimiter(rate_settings())
+        for user_id in range(500):
+            self.assertTrue(limiter.check("telegram", user_id, now=0).allowed)
+        self.assertEqual(len(limiter._events), 500)
+        limiter.check("telegram", 999, now=3700)
+        self.assertEqual(len(limiter._events), 1)
+
     def test_blocked_attempt_is_not_added_to_bucket(self) -> None:
         limiter = PersonalRateLimiter(
             rate_settings(

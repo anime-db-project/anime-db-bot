@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import asyncio
+
 import secrets
 import sqlite3
 import time
@@ -274,12 +276,17 @@ class TelegramModerationMiddleware(BaseMiddleware):
             return await handler(event, data)
 
         user_id = int(user.id)
-        touch_platform_user("telegram", user_id)
+        # Both operations use synchronous SQLite. Run them off the event loop,
+        # preserving the activated contextvars through asyncio.to_thread.
+        def register_and_check():
+            touch_platform_user("telegram", user_id)
+            if is_telegram_admin(user_id):
+                return None
+            return get_active_ban("telegram", user_id)
 
+        ban = await asyncio.to_thread(register_and_check)
         if is_telegram_admin(user_id):
             return await handler(event, data)
-
-        ban = get_active_ban("telegram", user_id)
         if ban is None:
             return await handler(event, data)
 

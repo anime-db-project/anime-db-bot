@@ -47,6 +47,16 @@ class UserSettingsStoreTests(unittest.TestCase):
             self.assertEqual(store.get(123, platform="telegram").locale, "en")
             self.assertEqual(store.get(123, platform="discord").locale, "ru")
 
+    def test_repeated_activity_skips_redundant_writes(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            store = SQLiteUserSettingsStore(Path(directory) / "users.sqlite3")
+            store.touch_user("telegram", 42)
+            self.assertIn(("telegram", 42), store._touches)
+            first = store._touches[("telegram", 42)]
+            store.touch_user("telegram", 42)
+            self.assertEqual(store._touches[("telegram", 42)], first)
+            self.assertEqual(store.list_user_ids("telegram"), [42])
+
     def test_known_users_are_platform_scoped_and_persistent(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "settings.sqlite3"

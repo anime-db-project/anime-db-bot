@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import sqlite3
 import threading
+import time
+from collections import OrderedDict
 from contextlib import contextmanager
 from contextvars import ContextVar, Token
 from dataclasses import dataclass
@@ -28,6 +30,11 @@ class SQLiteUserSettingsStore:
         self._path = str(path)
         self._initialized = False
         self._init_lock = threading.Lock()
+        self._cache_lock = threading.RLock()
+        self._locales: OrderedDict[
+            tuple[str, int], tuple[float, UserSettings]
+        ] = OrderedDict()
+        self._touches: OrderedDict[tuple[str, int], float] = OrderedDict()
 
     def _connect(self) -> sqlite3.Connection:
         if self._path != ":memory:":
@@ -124,6 +131,14 @@ class SQLiteUserSettingsStore:
         if user_id is None:
             return UserSettings()
         platform_key = self._platform_key(platform)
+        cache_key = (platform_key, int(user_id))
+        now = time.monotonic()
+        with self._cache_lock:
+            cached = self._locales.get(cache_key)
+            if cached is not None and cached[0] > now:
+                self._locales.move_to_end(cache_key)
+                return cached[1]
+            self._locales.pop(cache_key, None)
         self._ensure_schema()
         with managed_sqlite_connection(self._connect()) as connection:
             row = connection.execute(
@@ -133,9 +148,17 @@ class SQLiteUserSettingsStore:
                 """,
                 (platform_key, int(user_id)),
             ).fetchone()
-        if row is None:
-            return UserSettings()
-        return UserSettings(locale=normalize_locale(str(row[0])))
+        result = (
+            UserSettings(locale=normalize_locale(str(row[0])))
+            if row is not None
+            else UserSettings()
+        )
+        with self._cache_lock:
+            self._locales[cache_key] = (time.monotonic() + 120.0, result)
+            self._locales.move_to_end(cache_key)
+            while len(self._locales) > 20000:
+                self._locales.popitem(last=False)
+        return result
 
     def set_locale(
         self,
@@ -158,7 +181,12 @@ class SQLiteUserSettingsStore:
                 """,
                 (platform_key, int(user_id), normalized),
             )
-        return UserSettings(locale=normalized)
+        result = UserSettings(locale=normalized)
+        with self._cache_lock:
+            key = (platform_key, int(user_id))
+            self._locales[key] = (time.monotonic() + 120.0, result)
+            self._locales.move_to_end(key)
+        return result
 
     def touch_user(self, platform: str, user_id: int) -> None:
         platform_key = self._platform_key(platform)
@@ -166,6 +194,15 @@ class SQLiteUserSettingsStore:
         if user_id <= 0:
             raise ValueError("user_id must be positive")
 
+        # Update last_seen at most once every five minutes for an active
+        # user. This removes a disk transaction from most button presses.
+        key = (platform_key, user_id)
+        now = time.monotonic()
+        with self._cache_lock:
+            last_touch = self._touches.get(key)
+            if last_touch is not None and now - last_touch < 300.0:
+                self._touches.move_to_end(key)
+                return
         self._ensure_schema()
         with managed_sqlite_connection(self._connect()) as connection:
             connection.execute(
@@ -177,6 +214,11 @@ class SQLiteUserSettingsStore:
                 """,
                 (platform_key, user_id),
             )
+        with self._cache_lock:
+            self._touches[key] = now
+            self._touches.move_to_end(key)
+            while len(self._touches) > 20000:
+                self._touches.popitem(last=False)
 
     def list_user_ids(self, platform: str) -> list[int]:
         platform_key = (platform or "").strip().casefold()
@@ -195,6 +237,9 @@ class SQLiteUserSettingsStore:
         with managed_sqlite_connection(self._connect()) as connection:
             connection.execute("DELETE FROM user_settings")
             connection.execute("DELETE FROM known_users")
+        with self._cache_lock:
+            self._locales.clear()
+            self._touches.clear()
 
 
 _CURRENT_USER_SETTINGS_STORE: ContextVar[SQLiteUserSettingsStore | None] = ContextVar(

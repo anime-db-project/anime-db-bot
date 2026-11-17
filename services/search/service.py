@@ -80,7 +80,9 @@ class SearchService:
         self._result_set_cache = BoundedTTLCache[
             tuple[str, int, int, int, int], SearchResultSet
         ](max_entries=cache_max, ttl_seconds=cache_ttl, name="search_result_set")
-        self._page_flight: SingleFlight[tuple[str, int, int], SearchPage] = SingleFlight()
+        self._page_flight: SingleFlight[tuple[str, int, int], SearchPage] = (
+            SingleFlight()
+        )
         self._collection_flight: SingleFlight[
             tuple[str, int, int, int, int], SearchResultSet
         ] = SingleFlight()

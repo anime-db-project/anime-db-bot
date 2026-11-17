@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import asyncio
+
 from contextlib import contextmanager
 import base64
 import logging
@@ -38,6 +40,8 @@ class HttpClientPool:
         self._proxy_cursor: dict[tuple[str, int], int] = {}
         self._user_agent_cursor: dict[str, int] = {}
         self._closed = False
+        # Limit total outgoing traffic even when many card handlers expand at once.
+        self._request_slots = asyncio.Semaphore(48)
 
     def _client(
         self,
@@ -58,6 +62,7 @@ class HttpClientPool:
         kwargs: dict[str, Any] = {
             "follow_redirects": True,
             "headers": {"User-Agent": USER_AGENT},
+            "limits": httpx.Limits(max_connections=48, max_keepalive_connections=24),
         }
         if proxy is not None:
             kwargs["transport"] = AsyncProxyTransport.from_url(proxy.url)
@@ -156,16 +161,17 @@ class HttpClientPool:
                 )
                 request_kwargs["headers"] = headers
             try:
-                response = await self._client(
-                    source,
-                    proxy=client_proxy,
-                    proxy_slot=client_proxy_slot,
-                ).request(
-                    method,
-                    url,
-                    timeout=timeout,
-                    **request_kwargs,
-                )
+                async with self._request_slots:
+                    response = await self._client(
+                        source,
+                        proxy=client_proxy,
+                        proxy_slot=client_proxy_slot,
+                    ).request(
+                        method,
+                        url,
+                        timeout=timeout,
+                        **request_kwargs,
+                    )
             except Exception as exc:
                 last_error = exc
                 if attempt_number < len(attempts):
