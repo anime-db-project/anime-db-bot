@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import asyncio
 import logging
 
 from aiogram.types import Message
@@ -10,9 +9,6 @@ from core.models import AggregatedAnime
 from localization import text
 from services.media.people import PeopleLoadProgress, SourceLoadProgress
 from services.runtime.app_context import get_app_context
-
-_BACKGROUND_PEOPLE_PREFETCH_TASKS: set[asyncio.Task[None]] = set()
-
 
 def progress_key(token: str, section: str) -> str:
     return f"{token}:{section}"
@@ -59,45 +55,6 @@ async def settle_started_batches(
     progress: PeopleLoadProgress, source: str | None = None
 ) -> None:
     await _service().settle_started_batches(progress, source)
-
-
-def _track_prefetch(task: asyncio.Task[None]) -> None:
-    _BACKGROUND_PEOPLE_PREFETCH_TASKS.add(task)
-    task.add_done_callback(_BACKGROUND_PEOPLE_PREFETCH_TASKS.discard)
-
-
-async def _prefetch_section(
-    anime: AggregatedAnime,
-    section: str,
-    progress: PeopleLoadProgress,
-) -> None:
-    try:
-        await _service().prefetch(anime, section, progress)
-    except asyncio.CancelledError:
-        raise
-    except Exception:
-        logging.exception("People manifest prefetch failed for %s", section)
-
-
-def start_people_prefetch(
-    state: TelegramCardState,
-    token: str,
-    anime: AggregatedAnime,
-) -> None:
-    """Start lightweight staff/voice manifests before the user opens the sections."""
-    service = _service()
-    for section in ("staff", "voices"):
-        key = progress_key(token, section)
-        progress = state.people_loads.get(key)
-        if progress is None:
-            progress = service.build_progress(anime, section)
-            state.people_loads[key] = progress
-        if not progress.sources:
-            continue
-        service.start_manifest_loads(anime, section, progress)
-        _track_prefetch(
-            asyncio.create_task(_prefetch_section(anime, section, progress))
-        )
 
 
 async def ensure_lazy_people(
@@ -154,5 +111,4 @@ __all__ = [
     "scope_total_hint",
     "settle_started_batches",
     "source_names",
-    "start_people_prefetch",
 ]

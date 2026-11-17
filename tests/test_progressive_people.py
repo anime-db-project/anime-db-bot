@@ -1,11 +1,12 @@
 from __future__ import annotations
 
-import asyncio
 import unittest
 from unittest.mock import AsyncMock, MagicMock, patch
 
 from bots.telegram.card.runtime.state import TelegramCardState
-from bots.telegram.people.loading import ensure_lazy_people, start_people_prefetch
+from bots.telegram.people.loading import ensure_lazy_people
+from bots.telegram.card.runtime.service import aggregate_and_send
+from core.models import SearchCandidate
 from bots.telegram.people.portraits import _keyboard
 from core.models import AggregatedAnime, PersonCredit
 from services.media.people import PeopleLoadProgress, SourceLoadProgress
@@ -249,29 +250,36 @@ class ProgressivePeopleLoadingWiringTests(unittest.IsolatedAsyncioTestCase):
             requested_page=0,
         )
 
-    async def test_main_card_prefetch_starts_manifest_and_first_portrait_batch(
-        self,
-    ) -> None:
+    async def test_main_card_has_no_eager_staff_or_voice_prefetch(self) -> None:
         state = TelegramCardState.create(60)
         anime = AggregatedAnime(title="Example")
-        staff = PeopleLoadProgress(
-            sources={"Staff": SourceLoadProgress(source=object())}
-        )
-        voices = PeopleLoadProgress(
-            sources={"Voices": SourceLoadProgress(source=object())}
-        )
-        service = MagicMock()
-        service.build_progress.side_effect = [staff, voices]
-        service.prefetch = AsyncMock(return_value=None)
+        candidate = SearchCandidate(title="Example", external_ids={"mal": "1"})
+        context = MagicMock()
+        context.aggregator.aggregate = AsyncMock(return_value=anime)
+        context.imdb_rating_service.enrich = AsyncMock(return_value=None)
+        message = AsyncMock()
 
-        with patch("bots.telegram.people.loading._service", return_value=service):
-            start_people_prefetch(state, "token", anime)
-            await asyncio.sleep(0)
-            await asyncio.sleep(0)
+        with (
+            patch(
+                "bots.telegram.card.runtime.service.get_app_context",
+                return_value=context,
+            ),
+            patch(
+                "bots.telegram.card.runtime.service.get_user_locale",
+                return_value="ru",
+            ),
+            patch(
+                "bots.telegram.card.runtime.service.send_anime_view",
+                new_callable=AsyncMock,
+            ) as send_view,
+        ):
+            await aggregate_and_send(message, candidate, 42, state)
 
-        self.assertEqual(service.build_progress.call_count, 2)
-        self.assertEqual(service.start_manifest_loads.call_count, 2)
-        self.assertEqual(service.prefetch.await_count, 2)
+        send_view.assert_awaited_once()
+        self.assertEqual(len(state.anime_sessions), 1)
+        self.assertEqual(len(state.people_loads), 0)
+        context.aggregator.aggregate.assert_awaited_once_with(candidate)
+
 
 
 class ProgressivePeopleKeyboardTests(unittest.TestCase):
