@@ -109,8 +109,8 @@ class DailySplitFileHandler(logging.Handler):
             # Windows will not unlink temporary directories while their log
             # streams are open. Use short-lived handles on that platform.
             self._rotate_if_needed(path, encoded_size)
-            with path.open("a", encoding="utf-8") as handle:
-                handle.write(line)
+            with path.open("a", encoding="utf-8") as windows_stream:
+                windows_stream.write(line)
             return
 
         size = self._sizes.get(path)
