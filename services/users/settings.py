@@ -31,9 +31,9 @@ class SQLiteUserSettingsStore:
         self._initialized = False
         self._init_lock = threading.Lock()
         self._cache_lock = threading.RLock()
-        self._locales: OrderedDict[
-            tuple[str, int], tuple[float, UserSettings]
-        ] = OrderedDict()
+        self._locales: OrderedDict[tuple[str, int], tuple[float, UserSettings]] = (
+            OrderedDict()
+        )
         self._touches: OrderedDict[tuple[str, int], float] = OrderedDict()
 
     def _connect(self) -> sqlite3.Connection:

@@ -105,6 +105,14 @@ class DailySplitFileHandler(logging.Handler):
     def _write(self, path: Path, rendered: str) -> None:
         line = f"{rendered}\n"
         encoded_size = len(line.encode("utf-8"))
+        if os.name == "nt":
+            # Windows will not unlink temporary directories while their log
+            # streams are open. Use short-lived handles on that platform.
+            self._rotate_if_needed(path, encoded_size)
+            with path.open("a", encoding="utf-8") as handle:
+                handle.write(line)
+            return
+
         size = self._sizes.get(path)
         if size is None:
             size = path.stat().st_size if path.exists() else 0

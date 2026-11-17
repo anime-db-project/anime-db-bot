@@ -216,7 +216,9 @@ class SearchService:
             entries: list[tuple[int, str, int, SearchCandidate]] = []
             irrelevant_streak = 0
             complete = True
-            deadline = asyncio.get_running_loop().time() + _SEARCH_PROVIDER_BUDGET_SECONDS
+            deadline = (
+                asyncio.get_running_loop().time() + _SEARCH_PROVIDER_BUDGET_SECONDS
+            )
 
             for page_number in range(1, max_pages + 1):
                 try:

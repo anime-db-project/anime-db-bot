@@ -400,9 +400,7 @@ class PeopleProgressService:
         targets: list[PersonCredit],
     ) -> None:
         async with self._remote_portrait_slots:
-            await self._run_remote_enrichment(
-                anime, section, progress, item, targets
-            )
+            await self._run_remote_enrichment(anime, section, progress, item, targets)
 
     async def _run_portrait_batch(
         self,

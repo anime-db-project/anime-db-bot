@@ -87,17 +87,13 @@ class AnimeAggregator(AggregationMergeSupport):
                 timeout=_IDENTITY_TIMEOUT_SECONDS,
             )
         except TimeoutError:
-            logging.warning(
-                "Identity resolver exceeded the interactive latency budget"
-            )
+            logging.warning("Identity resolver exceeded the interactive latency budget")
             return identity
 
     async def aggregate(self, candidate: SearchCandidate) -> AggregatedAnime:
         titles_for_resolution = [candidate.title, *candidate.aliases]
         identity = (
-            await self._enrich_with_budget(
-                candidate.identity, titles_for_resolution
-            )
+            await self._enrich_with_budget(candidate.identity, titles_for_resolution)
         ).copy()
         if identity.is_empty():
             raise RuntimeError(
