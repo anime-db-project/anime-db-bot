@@ -4,6 +4,9 @@ import asyncio
 import re
 import unicodedata
 from dataclasses import dataclass
+
+_SEARCH_PAGE_TIMEOUT_SECONDS = 12.0
+_SEARCH_PROVIDER_BUDGET_SECONDS = 16.0
 from difflib import SequenceMatcher
 
 from core.cache import BoundedTTLCache
@@ -144,7 +147,10 @@ class SearchService:
     ) -> SearchPage:
         async def run(provider: AnimeSearchProvider):
             try:
-                result = await provider.search(query, page=page, limit=page_size)
+                result = await asyncio.wait_for(
+                    provider.search(query, page=page, limit=page_size),
+                    timeout=_SEARCH_PAGE_TIMEOUT_SECONDS,
+                )
                 return provider.name, result, None
             except Exception as exc:
                 return provider.name, None, f"{type(exc).__name__}: {exc}"
@@ -210,13 +216,20 @@ class SearchService:
             entries: list[tuple[int, str, int, SearchCandidate]] = []
             irrelevant_streak = 0
             complete = True
+            deadline = asyncio.get_running_loop().time() + _SEARCH_PROVIDER_BUDGET_SECONDS
 
             for page_number in range(1, max_pages + 1):
                 try:
-                    page = await provider.search(
-                        query,
-                        page=page_number,
-                        limit=page_size,
+                    remaining = deadline - asyncio.get_running_loop().time()
+                    if remaining <= 0:
+                        raise TimeoutError("search provider exceeded its time budget")
+                    page = await asyncio.wait_for(
+                        provider.search(
+                            query,
+                            page=page_number,
+                            limit=page_size,
+                        ),
+                        timeout=remaining,
                     )
                 except Exception as exc:
                     return (

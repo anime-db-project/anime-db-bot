@@ -276,10 +276,14 @@ class TelegramModerationMiddleware(BaseMiddleware):
             return await handler(event, data)
 
         user_id = int(user.id)
+
         # Both operations use synchronous SQLite. Run them off the event loop,
         # preserving the activated contextvars through asyncio.to_thread.
         def register_and_check():
             touch_platform_user("telegram", user_id)
+            # Warm the small locale cache from the worker, so the handlers
+            # never perform their first SQLite read on the event loop.
+            get_user_locale(user_id)
             if is_telegram_admin(user_id):
                 return None
             return get_active_ban("telegram", user_id)

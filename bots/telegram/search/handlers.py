@@ -985,12 +985,20 @@ async def _execute_query(
             )
             result_set = await service.collect(query)
             if len(provider_keys) > 1:
-                result_set = await expand_text_search(
-                    service=service,
-                    direct_lookup=direct_lookup,
-                    query=query,
-                    initial=result_set,
-                )
+                try:
+                    result_set = await asyncio.wait_for(
+                        expand_text_search(
+                            service=service,
+                            direct_lookup=direct_lookup,
+                            query=query,
+                            initial=result_set,
+                        ),
+                        timeout=8.0,
+                    )
+                except TimeoutError:
+                    # Optional cross-language expansion must not delay an
+                    # already available and valid result set indefinitely.
+                    logging.info("Search expansion exceeded the interactive budget")
     except Exception as exc:
         logging.error(
             "Anime search failed for %r: %s: %s",

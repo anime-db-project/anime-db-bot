@@ -35,6 +35,10 @@ from services.aggregation.release_schedule import build_episode_release_schedule
 from services.identity.resolver import IdentityResolver
 
 
+_IDENTITY_TIMEOUT_SECONDS = 8.0
+_METADATA_TIMEOUT_SECONDS = 12.0
+
+
 class AnimeAggregator(AggregationMergeSupport):
     """Identity-native metadata aggregation with no mandatory database key.
 
@@ -74,10 +78,24 @@ class AnimeAggregator(AggregationMergeSupport):
                 conflicts,
             )
 
+    async def _enrich_with_budget(
+        self, identity: AnimeIdentity, titles: list[str]
+    ) -> AnimeIdentity:
+        try:
+            return await asyncio.wait_for(
+                self._identity_resolver.enrich(identity, titles),
+                timeout=_IDENTITY_TIMEOUT_SECONDS,
+            )
+        except TimeoutError:
+            logging.warning(
+                "Identity resolver exceeded the interactive latency budget"
+            )
+            return identity
+
     async def aggregate(self, candidate: SearchCandidate) -> AggregatedAnime:
         titles_for_resolution = [candidate.title, *candidate.aliases]
         identity = (
-            await self._identity_resolver.enrich(
+            await self._enrich_with_budget(
                 candidate.identity, titles_for_resolution
             )
         ).copy()
@@ -88,7 +106,10 @@ class AnimeAggregator(AggregationMergeSupport):
 
         async def run(source: AnimeSource, current_identity: AnimeIdentity):
             try:
-                record = await source.get_details(current_identity.copy())
+                record = await asyncio.wait_for(
+                    source.get_details(current_identity.copy()),
+                    timeout=_METADATA_TIMEOUT_SECONDS,
+                )
                 return source.name, record, None
             except Exception as exc:
                 return source.name, None, f"{type(exc).__name__}: {exc}"
@@ -119,7 +140,7 @@ class AnimeAggregator(AggregationMergeSupport):
         identity_expanded = identity.fingerprint() != first_pass_fingerprint
         before_enrichment = identity.fingerprint()
         identity = (
-            await self._identity_resolver.enrich(identity, titles_for_resolution)
+            await self._enrich_with_budget(identity, titles_for_resolution)
         ).copy()
         identity_expanded = (
             identity_expanded or identity.fingerprint() != before_enrichment

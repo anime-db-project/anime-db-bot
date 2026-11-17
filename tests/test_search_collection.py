@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import os
 import unittest
 
@@ -26,6 +27,47 @@ def item(title: str, identity: dict[str, str], **kwargs) -> SearchCandidate:
 
 
 class SearchCollectionTests(unittest.IsolatedAsyncioTestCase):
+    async def test_concurrent_same_query_shares_one_upstream_request(self) -> None:
+        class CountingProvider:
+            name = "Counting"
+
+            def __init__(self) -> None:
+                self.calls = 0
+
+            async def search(self, query: str, *, page: int, limit: int) -> SearchPage:
+                self.calls += 1
+                await asyncio.sleep(0.02)
+                return SearchPage([], page, limit, False)
+
+        provider = CountingProvider()
+        service = SearchService((provider,))
+        results = await asyncio.gather(*(service.collect("slime") for _ in range(80)))
+        self.assertEqual(len(results), 80)
+        self.assertEqual(provider.calls, 1)
+
+    async def test_search_provider_time_budget_returns_partial_results(self) -> None:
+        class SlowProvider:
+            name = "Slow"
+
+            async def search(self, query: str, *, page: int, limit: int) -> SearchPage:
+                if page > 1:
+                    await asyncio.sleep(2)
+                return SearchPage(
+                    [SearchCandidate(title="Naruto", external_ids={"mal": "20"})],
+                    page,
+                    limit,
+                    page == 1,
+                )
+
+        from unittest.mock import patch
+
+        service = SearchService((SlowProvider(),))
+        with patch("services.search.service._SEARCH_PROVIDER_BUDGET_SECONDS", 0.06):
+            result = await service.collect("Naruto")
+        self.assertEqual(len(result.items), 1)
+        self.assertFalse(result.complete)
+        self.assertIn("Slow", result.errors)
+
     def setUp(self) -> None:
         self.previous = {
             key: os.environ.get(key)
