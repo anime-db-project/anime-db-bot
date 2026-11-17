@@ -281,7 +281,6 @@ class ProgressivePeopleLoadingWiringTests(unittest.IsolatedAsyncioTestCase):
         context.aggregator.aggregate.assert_awaited_once_with(candidate)
 
 
-
 class ProgressivePeopleKeyboardTests(unittest.TestCase):
     def test_next_button_stays_available_at_loaded_boundary(self) -> None:
         anime = AggregatedAnime(title="Example")

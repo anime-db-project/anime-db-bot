@@ -10,6 +10,7 @@ from localization import text
 from services.media.people import PeopleLoadProgress, SourceLoadProgress
 from services.runtime.app_context import get_app_context
 
+
 def progress_key(token: str, section: str) -> str:
     return f"{token}:{section}"
 
