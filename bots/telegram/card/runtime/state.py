@@ -9,7 +9,7 @@ from core.models import AggregatedAnime, EpisodePage, EpisodeRecord, TrailerReco
 from core.related_anime import AggregatedAnimeReference
 from services.media.people import PeopleLoadProgress
 
-MAX_PEOPLE_LOADS = 400
+MAX_PEOPLE_LOADS = 800
 
 
 @dataclass(slots=True)

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import html
+import json
 import math
 import re
 import time
@@ -57,6 +58,10 @@ _MAX_INTERACTIVE_PACE_WAIT_SECONDS = 0.75
 
 _FULL_CACHE: BoundedTTLCache[tuple[str, str], dict[str, Any]] = BoundedTTLCache(
     max_entries=750,
+    max_weight=64 * 1024 * 1024,
+    weigher=lambda data: len(
+        json.dumps(data, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
+    ),
     name="anisearch_full",
 )
 _INFLIGHT_LOCK = asyncio.Lock()

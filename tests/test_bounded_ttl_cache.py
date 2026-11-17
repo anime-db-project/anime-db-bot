@@ -48,6 +48,27 @@ class BoundedTTLCacheTests(unittest.TestCase):
         self.assertNotIn("negative", cache)
         self.assertEqual(cache["positive"], "x")
 
+    def test_total_weight_limit_and_oversized_item(self) -> None:
+        cache = BoundedTTLCache[str, str](
+            max_entries=10,
+            ttl_seconds=60,
+            max_weight=6,
+            weigher=len,
+        )
+        cache.set("a", "aaaa")
+        cache.set("b", "bbb")
+        self.assertNotIn("a", cache)
+        self.assertEqual(cache["b"], "bbb")
+        self.assertEqual(cache._weight, 3)
+        cache.set("oversized", "abcdefgh")
+        self.assertNotIn("oversized", cache)
+        self.assertEqual(cache._weight, 3)
+        cache.pop("b")
+        self.assertEqual(cache._weight, 0)
+        cache.set("a", "aaaa")
+        cache.clear()
+        self.assertEqual(cache._weight, 0)
+
     def test_zero_ttl_does_not_store(self) -> None:
         cache = BoundedTTLCache[str, str](max_entries=2, ttl_seconds=0)
         cache.set("a", "x")

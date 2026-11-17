@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 import time
+from collections import OrderedDict
 from collections.abc import Iterator, MutableMapping
 from typing import Generic, TypeVar
 
@@ -29,10 +30,14 @@ class ExpiringSessionStore(MutableMapping[str, T], Generic[T]):
         self._max_entries = max(1, int(max_entries))
         self._name = str(name or "session").strip().casefold() or "session"
         self._ttl_seconds = max(1, int(ttl_seconds or session_ttl_seconds()))
-        self._items: dict[str, tuple[float, T]] = {}
+        self._items: OrderedDict[str, tuple[float, T]] = OrderedDict()
+        self._next_prune_at = 0.0
 
-    def _prune(self) -> None:
+    def _prune(self, *, force: bool = False) -> None:
         now = time.monotonic()
+        if not force and now < self._next_prune_at:
+            return
+        self._next_prune_at = now + 5.0
         expired = [
             key for key, (expires_at, _) in self._items.items() if expires_at <= now
         ]
@@ -51,17 +56,20 @@ class ExpiringSessionStore(MutableMapping[str, T], Generic[T]):
 
     def __getitem__(self, key: str) -> T:
         self._prune()
-        _, value = self._items.pop(key)
-        self._items[key] = (time.monotonic() + self._ttl_seconds, value)
+        expires_at, value = self._items.pop(key)
+        now = time.monotonic()
+        if expires_at <= now:
+            raise KeyError(key)
+        self._items[key] = (now + self._ttl_seconds, value)
         return value
 
     def __setitem__(self, key: str, value: T) -> None:
-        self._prune()
+        self._prune(force=len(self._items) >= self._max_entries)
         self._items.pop(key, None)
         self._items[key] = (time.monotonic() + self._ttl_seconds, value)
         evicted = 0
         while len(self._items) > self._max_entries:
-            self._items.pop(next(iter(self._items)), None)
+            self._items.popitem(last=False)
             evicted += 1
         if evicted:
             logging.info(
@@ -78,11 +86,11 @@ class ExpiringSessionStore(MutableMapping[str, T], Generic[T]):
         del self._items[key]
 
     def __iter__(self) -> Iterator[str]:
-        self._prune()
+        self._prune(force=True)
         return iter(tuple(self._items))
 
     def __len__(self) -> int:
-        self._prune()
+        self._prune(force=True)
         return len(self._items)
 
     def get(self, key: str, default: T | None = None) -> T | None:

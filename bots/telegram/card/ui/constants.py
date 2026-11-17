@@ -2,7 +2,7 @@ from __future__ import annotations
 
 STANDARD_MESSAGE_LIMIT = 3900
 RICH_MESSAGE_LIMIT = 32000
-MAX_ANIME_SESSIONS = 200
+MAX_ANIME_SESSIONS = 800
 
 SECTION_LABELS = {
     "main": "section_main",

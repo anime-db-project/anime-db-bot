@@ -52,8 +52,8 @@ from services.search.image_service import ImageSearchService
 from services.search.expansion import expand_text_search
 from services.users.settings import get_user_locale
 
-MAX_SEARCH_SESSIONS = 200
-MAX_SCOPE_SESSIONS = 200
+MAX_SEARCH_SESSIONS = 400
+MAX_SCOPE_SESSIONS = 400
 MAX_PENDING_INPUTS = 500
 MAX_IMAGE_INPUTS = 100
 
