@@ -87,6 +87,26 @@ class SplitLogFileTests(unittest.TestCase):
             ):
                 self.assertNotIn("secret-value", path.read_text(encoding="utf-8"))
 
+    def test_log_retention_preserves_unrelated_content(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            old = root / (datetime.now().astimezone() - timedelta(days=45)).strftime(
+                "%Y.%m.%d"
+            )
+            old.mkdir()
+            (old / "bot.log").write_text("old log", encoding="utf-8")
+            (old / "important.txt").write_text("keep", encoding="utf-8")
+            handler = DailySplitFileHandler(root, retention_days=30)
+            handler.setFormatter(StructuredLogFormatter(SecretRedactor()))
+            handler.emit(
+                logging.LogRecord("x", logging.INFO, __file__, 1, "new log", (), None)
+            )
+            handler.close()
+            self.assertFalse((old / "bot.log").exists())
+            self.assertEqual(
+                (old / "important.txt").read_text(encoding="utf-8"), "keep"
+            )
+
     def test_handler_rolls_to_new_daily_folder_without_restart(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)

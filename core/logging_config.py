@@ -172,6 +172,7 @@ def configure_logging(
     log_directory: Path | str | None = None,
     log_max_bytes: int = 10 * 1024 * 1024,
     log_backups: int = 5,
+    log_retention_days: int = 30,
     stream: TextIO | None = None,
     logger: logging.Logger | None = None,
 ) -> logging.Handler:
@@ -196,6 +197,7 @@ def configure_logging(
             log_directory,
             max_bytes=log_max_bytes,
             backups=log_backups,
+            retention_days=log_retention_days,
         )
         file_handler.setFormatter(handler.formatter)
         target.addHandler(file_handler)

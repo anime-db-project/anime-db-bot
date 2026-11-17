@@ -76,9 +76,7 @@ class BoundedTTLCache(Generic[K, V]):
             self.pop(key)
             return
 
-        weight = (
-            max(1, int(self._weigher(value))) if self._weigher is not None else 1
-        )
+        weight = max(1, int(self._weigher(value))) if self._weigher is not None else 1
         if self.max_weight is not None and weight > self.max_weight:
             self.pop(key)
             return

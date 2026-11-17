@@ -163,6 +163,7 @@ class LoggingSettings:
     directory: Path
     max_bytes: int
     backups: int
+    retention_days: int = 30
 
 
 @dataclass(frozen=True, slots=True)
@@ -398,6 +399,7 @@ class AppSettings:
                 directory=_path(values, "LOG_DIR", "logs"),
                 max_bytes=_int(values, "LOG_MAX_BYTES", 10485760, 1),
                 backups=_int(values, "LOG_BACKUPS", 5, 0),
+                retention_days=_int(values, "LOG_RETENTION_DAYS", 30, 1),
             ),
             telegram=TelegramSettings(
                 bot_token=_raw(values, "BOT_TOKEN"),

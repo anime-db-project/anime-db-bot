@@ -2,8 +2,10 @@ from __future__ import annotations
 
 import logging
 import os
-from datetime import datetime
+import re
+from datetime import datetime, timedelta
 from pathlib import Path
+from typing import TextIO
 
 _LOG_STREAMS = frozenset({"bot", "users", "api"})
 
@@ -31,20 +33,67 @@ class DailySplitFileHandler(logging.Handler):
         *,
         max_bytes: int = 10 * 1024 * 1024,
         backups: int = 5,
+        retention_days: int = 30,
     ) -> None:
         super().__init__()
         self.directory = Path(directory)
         self.max_bytes = max(1, int(max_bytes))
         self.backups = max(0, int(backups))
+        self.retention_days = max(1, int(retention_days))
+        self._handles: dict[Path, TextIO] = {}
+        self._sizes: dict[Path, int] = {}
+        self._open_day: str | None = None
+
+    def _close_files(self) -> None:
+        for handle in self._handles.values():
+            handle.close()
+        self._handles.clear()
+        self._sizes.clear()
+
+    def _expire_old_files(self, local_day: datetime) -> None:
+        cutoff = local_day.date() - timedelta(days=self.retention_days)
+        if not self.directory.is_dir():
+            return
+        for folder in self.directory.iterdir():
+            if not folder.is_dir() or folder.is_symlink():
+                continue
+            if re.fullmatch(r"\d{4}\.\d{2}\.\d{2}", folder.name) is None:
+                continue
+            try:
+                folder_date = datetime.strptime(folder.name, "%Y.%m.%d").date()
+            except ValueError:
+                continue
+            if folder_date >= cutoff:
+                continue
+            for file in folder.iterdir():
+                if (
+                    file.is_file()
+                    and not file.is_symlink()
+                    and re.fullmatch(
+                        r"(?:bot|users|api|errors)\.log(?:\.\d+)?", file.name
+                    )
+                ):
+                    file.unlink()
+            if not any(folder.iterdir()):
+                folder.rmdir()
+
+    def close(self) -> None:
+        try:
+            self._close_files()
+        finally:
+            super().close()
 
     def emit(self, record: logging.LogRecord) -> None:
         try:
             rendered = self.format(record)
-            day = (
-                datetime.fromtimestamp(record.created).astimezone().strftime("%Y.%m.%d")
-            )
+            local_time = datetime.fromtimestamp(record.created).astimezone()
+            day = local_time.strftime("%Y.%m.%d")
             day_dir = self.directory / day
-            day_dir.mkdir(parents=True, exist_ok=True)
+            if self._open_day != day:
+                self._close_files()
+                self._open_day = day
+                day_dir.mkdir(parents=True, exist_ok=True)
+                self._expire_old_files(local_time)
 
             stream = classify_log_stream(record)
             self._write(day_dir / f"{stream}.log", rendered)
@@ -56,9 +105,22 @@ class DailySplitFileHandler(logging.Handler):
     def _write(self, path: Path, rendered: str) -> None:
         line = f"{rendered}\n"
         encoded_size = len(line.encode("utf-8"))
-        self._rotate_if_needed(path, encoded_size)
-        with path.open("a", encoding="utf-8") as handle:
-            handle.write(line)
+        size = self._sizes.get(path)
+        if size is None:
+            size = path.stat().st_size if path.exists() else 0
+        if size + encoded_size > self.max_bytes:
+            handle = self._handles.pop(path, None)
+            if handle is not None:
+                handle.close()
+            self._rotate_if_needed(path, encoded_size)
+            size = path.stat().st_size if path.exists() else 0
+        handle = self._handles.get(path)
+        if handle is None:
+            handle = path.open("a", encoding="utf-8")
+            self._handles[path] = handle
+        handle.write(line)
+        handle.flush()
+        self._sizes[path] = size + encoded_size
 
     def _rotate_if_needed(self, path: Path, incoming_bytes: int) -> None:
         try:
