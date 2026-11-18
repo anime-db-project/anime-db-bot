@@ -65,7 +65,8 @@ Redis stores only *successful* search pages and consolidated search result
 sets using JSON, with the same configured TTL as local search caches.
 Every instance uses a namespace including the configured provider identities.
 Redis errors do **not** block search: queries proceed using the process-local
-cache and upstream providers.
+cache and upstream providers. A failing Redis connection is temporarily
+skipped for 20 seconds to avoid adding timeout delays to every request.
 
 Redis is **not** an authoritative database. Restart/eviction may invalidate
 search cache entries without losing user data. Keep Redis private, require
@@ -82,3 +83,24 @@ Adding Redis or PostgreSQL is optional, not automatically faster than SQLite.
 For a single-process bot with a small number of users, the local defaults
 typically have lower latency and fewer failure modes. Use Redis mainly for a
 shared cache and PostgreSQL for concurrency or external database management.
+
+## Optional local containers
+
+The standalone optional file `compose.backends.yml` runs PostgreSQL and
+Redis bound **only to 127.0.0.1**. It is not included in the default compose
+file (which only runs Jikan). Set `POSTGRES_PASSWORD` in your shell or a
+private compose environment file before starting:
+
+```sh
+POSTGRES_PASSWORD='choose-a-long-secret' docker compose -f compose.backends.yml up -d
+```
+
+To stop the optional containers without deleting PostgreSQL data:
+
+```sh
+docker compose -f compose.backends.yml down
+```
+
+Do not run `down --volumes` unless you intentionally want to delete your
+PostgreSQL database. Redis is an ephemeral cache with a fixed 256 MiB
+container memory policy, not a place for durable data.

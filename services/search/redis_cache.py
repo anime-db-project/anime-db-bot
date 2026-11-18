@@ -35,6 +35,7 @@ class RedisSearchCache:
         ).hexdigest()[:16]
         self._prefix = settings.redis_key_prefix
         self._last_failure = 0.0
+        self._unavailable_until = 0.0
         if client is None:
             try:
                 from redis import asyncio as redis_async
@@ -61,15 +62,22 @@ class RedisSearchCache:
         )
 
     async def _call(self, operation: str, *args: Any, **kwargs: Any) -> Any:
+        if time.monotonic() < self._unavailable_until:
+            return None
         try:
             from asyncio import wait_for
 
             method = getattr(self._redis, operation)
-            return await wait_for(
+            value = await wait_for(
                 method(*args, **kwargs), timeout=self._timeout
             )
+            self._unavailable_until = 0.0
+            return value
         except Exception as exc:
             now = time.monotonic()
+            # An unavailable cache must not impose its socket timeout on
+            # every bot request. Retry after a short cooling-off period.
+            self._unavailable_until = now + 20.0
             if now - self._last_failure >= 60.0:
                 logging.warning(
                     "Redis search cache unavailable, using local/upstream fallback",
