@@ -33,8 +33,10 @@ class SQLiteUserSettingsStore:
         cache_max_entries: int = 20000,
         cache_ttl_seconds: float = 120.0,
         touch_interval_seconds: float = 300.0,
+        default_locale: str = DEFAULT_LOCALE,
     ) -> None:
         self._path = str(path)
+        self._default_locale = normalize_locale(default_locale)
         self._cache_max_entries = max(1, int(cache_max_entries))
         self._cache_ttl_seconds = max(0.0, float(cache_ttl_seconds))
         self._touch_interval_seconds = max(0.0, float(touch_interval_seconds))
@@ -139,7 +141,7 @@ class SQLiteUserSettingsStore:
         platform: str = _DEFAULT_PLATFORM,
     ) -> UserSettings:
         if user_id is None:
-            return UserSettings()
+            return UserSettings(locale=self._default_locale)
         platform_key = self._platform_key(platform)
         cache_key = (platform_key, int(user_id))
         now = time.monotonic()
@@ -161,7 +163,7 @@ class SQLiteUserSettingsStore:
         result = (
             UserSettings(locale=normalize_locale(str(row[0])))
             if row is not None
-            else UserSettings()
+            else UserSettings(locale=self._default_locale)
         )
         with self._cache_lock:
             self._locales[cache_key] = (time.monotonic() + self._cache_ttl_seconds, result)
@@ -266,8 +268,20 @@ def _default_user_settings_store() -> SQLiteUserSettingsStore:
         from services.storage.postgres import default_postgres_pool
         from services.storage.postgres_repositories import PostgresUserSettingsStore
 
-        return PostgresUserSettingsStore(default_postgres_pool())
-    return SQLiteUserSettingsStore(storage.user_settings_db_path)
+        return PostgresUserSettingsStore(
+            default_postgres_pool(),
+            cache_max_entries=storage.user_locale_cache_max_entries,
+            cache_ttl_seconds=storage.user_locale_cache_ttl_seconds,
+            touch_interval_seconds=storage.user_seen_write_interval_seconds,
+            default_locale=storage.default_user_locale,
+        )
+    return SQLiteUserSettingsStore(
+        storage.user_settings_db_path,
+        cache_max_entries=storage.user_locale_cache_max_entries,
+        cache_ttl_seconds=storage.user_locale_cache_ttl_seconds,
+        touch_interval_seconds=storage.user_seen_write_interval_seconds,
+        default_locale=storage.default_user_locale,
+    )
 
 
 def get_user_settings_store() -> SQLiteUserSettingsStore:

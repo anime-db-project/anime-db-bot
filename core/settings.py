@@ -230,6 +230,13 @@ class RichMediaSettings:
     disk_prune_interval_seconds: float = 60.0
 
 
+def _default_locale(env: Mapping[str, str]) -> str:
+    locale = _raw(env, "USER_DEFAULT_LOCALE", "en").casefold()
+    if locale not in {"en", "ru", "ja", "de", "es", "fr", "it"}:
+        raise ValueError("USER_DEFAULT_LOCALE must be en, ru, ja, de, es, fr, or it")
+    return locale
+
+
 def _search_providers(env: Mapping[str, str]) -> tuple[str, ...]:
     raw = _raw(
         env, "SEARCH_DEFAULT_PROVIDERS", "shikimori,mal,anilist,kitsu"
@@ -302,6 +309,7 @@ class StorageSettings:
     user_locale_cache_max_entries: int = 20000
     user_locale_cache_ttl_seconds: float = 120.0
     user_seen_write_interval_seconds: float = 300.0
+    default_user_locale: str = "en"
 
 
 @dataclass(frozen=True, slots=True)
@@ -707,6 +715,7 @@ class AppSettings:
                 user_seen_write_interval_seconds=_strict_float(
                     values, "USER_SEEN_WRITE_INTERVAL_SECONDS", 300.0, 0.0, 86400.0
                 ),
+                default_user_locale=_default_locale(values),
             ),
             cache=CacheBackendSettings(
                 backend=cache_backend,

@@ -21,12 +21,14 @@ class PostgresUserSettingsStore(SQLiteUserSettingsStore):
         cache_max_entries: int = 20000,
         cache_ttl_seconds: float = 120.0,
         touch_interval_seconds: float = 300.0,
+        default_locale: str = "en",
     ) -> None:
         super().__init__(
             ":memory:",
             cache_max_entries=cache_max_entries,
             cache_ttl_seconds=cache_ttl_seconds,
             touch_interval_seconds=touch_interval_seconds,
+            default_locale=default_locale,
         )
         self._pool = pool
 

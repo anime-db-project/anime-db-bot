@@ -252,7 +252,7 @@ class AppSettingsTests(unittest.TestCase):
                     encoding="utf-8",
                 )
             values = project_env_values(root)
-        self.assertEqual(len(values), 204)
+        self.assertEqual(len(values), 205)
         self.assertIn("RICH_MEDIA_MAX_LOCAL_DELIVERIES", values)
         self.assertIn("BOT_TOKEN", values)
         self.assertIn("TELEGRAM_MAX_CARD_SESSIONS", values)
@@ -315,6 +315,15 @@ class AppSettingsTests(unittest.TestCase):
             {"UPSTREAM_RATE_LIMIT_ANIME_SKIP_PER_MINUTE": "999"}
         )
         self.assertEqual(settings.rate_limits.source_limit("anime_skip"), 60)
+
+    def test_user_default_locale_config(self) -> None:
+        self.assertEqual(
+            AppSettings.from_env({"USER_DEFAULT_LOCALE": "ru"})
+            .storage.default_user_locale,
+            "ru",
+        )
+        with self.assertRaisesRegex(ValueError, "USER_DEFAULT_LOCALE"):
+            AppSettings.from_env({"USER_DEFAULT_LOCALE": "invalid"})
 
     def test_search_default_providers_from_env(self) -> None:
         values = AppSettings.from_env({

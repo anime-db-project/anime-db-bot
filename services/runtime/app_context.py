@@ -198,6 +198,7 @@ class AppContext:
                     cache_max_entries=settings.storage.user_locale_cache_max_entries,
                     cache_ttl_seconds=settings.storage.user_locale_cache_ttl_seconds,
                     touch_interval_seconds=settings.storage.user_seen_write_interval_seconds,
+                    default_locale=settings.storage.default_user_locale,
                 )
                 ban_store = PostgresBanStore(postgres_pool)
                 image_search_quota_store = PostgresImageSearchQuotaStore(postgres_pool)
@@ -210,6 +211,7 @@ class AppContext:
                 cache_max_entries=settings.storage.user_locale_cache_max_entries,
                 cache_ttl_seconds=settings.storage.user_locale_cache_ttl_seconds,
                 touch_interval_seconds=settings.storage.user_seen_write_interval_seconds,
+                default_locale=settings.storage.default_user_locale,
             )
             ban_store = SQLiteBanStore(settings.storage.bans_db_path)
             image_search_quota_store = SQLiteImageSearchQuotaStore(
