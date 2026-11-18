@@ -14,7 +14,6 @@ from typing import Awaitable, Callable
 from aiogram import Bot, Dispatcher, F
 from aiogram.filters import BaseFilter, Command
 from aiogram.filters.command import CommandObject
-from PIL import Image, ImageOps, UnidentifiedImageError
 
 from aiogram.types import (
     CallbackQuery,
@@ -465,6 +464,9 @@ def _image_match_text(match: ImageSearchMatch, locale: str) -> str:
 
 def _normalize_uploaded_image(content: bytes) -> bytes:
     """Decode a Telegram image and re-encode one safe raster frame as JPEG."""
+    # Only image-search uploads need Pillow and its native image codecs.
+    from PIL import Image, ImageOps, UnidentifiedImageError
+
     try:
         with Image.open(BytesIO(content)) as source:
             source.seek(0)
