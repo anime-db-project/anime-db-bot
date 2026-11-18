@@ -30,6 +30,7 @@ class RedisSearchCache:
     ) -> None:
         self._ttl = max(0, int(ttl_seconds))
         self._timeout = settings.redis_timeout_seconds
+        self._failure_cooldown_seconds = settings.redis_failure_cooldown_seconds
         self._provider_hash = hashlib.sha256(
             json.dumps(provider_names, ensure_ascii=False).encode("utf-8")
         ).hexdigest()[:16]
@@ -49,7 +50,7 @@ class RedisSearchCache:
                 decode_responses=True,
                 socket_connect_timeout=self._timeout,
                 socket_timeout=self._timeout,
-                max_connections=10,
+                max_connections=settings.redis_max_connections,
             )
         self._redis = client
 
@@ -77,7 +78,9 @@ class RedisSearchCache:
             now = time.monotonic()
             # An unavailable cache must not impose its socket timeout on
             # every bot request. Retry after a short cooling-off period.
-            self._unavailable_until = now + 20.0
+            self._unavailable_until = (
+                now + self._failure_cooldown_seconds
+            )
             if now - self._last_failure >= 60.0:
                 logging.warning(
                     "Redis search cache unavailable, using local/upstream fallback",

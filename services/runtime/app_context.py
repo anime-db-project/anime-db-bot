@@ -180,7 +180,7 @@ class AppContext:
         settings = settings or get_settings()
         proxy_settings = proxy_settings or load_proxy_settings()
         user_agent_settings = user_agent_settings or load_user_agent_settings()
-        http = HttpClientPool(proxy_settings, user_agent_settings)
+        http = HttpClientPool(proxy_settings, user_agent_settings, settings.http)
         source_health = SourceHealthRegistry(
             failure_threshold=settings.source_health.failure_threshold,
             cooldown_seconds=settings.source_health.cooldown_seconds,
@@ -193,7 +193,12 @@ class AppContext:
                 max_size=settings.storage.postgres_pool_size,
             )
             try:
-                user_settings_store = PostgresUserSettingsStore(postgres_pool)
+                user_settings_store = PostgresUserSettingsStore(
+                    postgres_pool,
+                    cache_max_entries=settings.storage.user_locale_cache_max_entries,
+                    cache_ttl_seconds=settings.storage.user_locale_cache_ttl_seconds,
+                    touch_interval_seconds=settings.storage.user_seen_write_interval_seconds,
+                )
                 ban_store = PostgresBanStore(postgres_pool)
                 image_search_quota_store = PostgresImageSearchQuotaStore(postgres_pool)
             except BaseException:
@@ -201,7 +206,10 @@ class AppContext:
                 raise
         else:
             user_settings_store = SQLiteUserSettingsStore(
-                settings.storage.user_settings_db_path
+                settings.storage.user_settings_db_path,
+                cache_max_entries=settings.storage.user_locale_cache_max_entries,
+                cache_ttl_seconds=settings.storage.user_locale_cache_ttl_seconds,
+                touch_interval_seconds=settings.storage.user_seen_write_interval_seconds,
             )
             ban_store = SQLiteBanStore(settings.storage.bans_db_path)
             image_search_quota_store = SQLiteImageSearchQuotaStore(
@@ -278,6 +286,8 @@ class AppContext:
                 sources,
                 aggregator,
                 portrait_batch_size=settings.sources.people_portrait_batch_size,
+                manifest_concurrency=settings.sources.people_manifest_concurrency,
+                portrait_concurrency=settings.sources.people_portrait_concurrency,
             ),
             related_anime_service=RelatedAnimeService(
                 sources, identity_resolver.mapping_resolver

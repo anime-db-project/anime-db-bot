@@ -498,10 +498,12 @@ def register_admin_handlers(
     source_health: SourceHealthRegistry | None = None,
     runtime_metrics: RuntimeMetricsRegistry | None = None,
     source_descriptors: tuple[RuntimeSourceDescriptor, ...] = (),
+    max_pending_sessions: int = 128,
+    pending_ttl_seconds: int = 300,
 ) -> None:
     pending_mapping_mutations = ExpiringSessionStore[_PendingMappingMutation](
-        max_entries=128,
-        ttl_seconds=300,
+        max_entries=max_pending_sessions,
+        ttl_seconds=pending_ttl_seconds,
         name="admin_mapping_mutation",
     )
 

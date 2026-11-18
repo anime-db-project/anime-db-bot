@@ -524,7 +524,7 @@ async def _paced_request(
 
     async with _NETWORK_LOCK:
         wait_for = _LAST_NETWORK_REQUEST_AT + min_interval - time.monotonic()
-        if wait_for > _MAX_INTERACTIVE_PACE_WAIT_SECONDS:
+        if wait_for > settings.anisearch_interactive_wait_seconds:
             raise SourceUnavailable(
                 "AniSearch pacing window is still active; skipping this interactive call",
                 source="anisearch",
@@ -591,6 +591,7 @@ async def _fetch_item(
     if item is None:
         return None
     ttl = _cache_ttl(settings)
+    _FULL_CACHE.max_entries = settings.anisearch_cache_max_entries
     if ttl > 0 and settings.anisearch_cache_max_bytes > 0:
         # Cache compressed JSON bytes, not the nested Python dict; a 64 MiB
         # JSON budget previously retained much more than 64 MiB of RAM.

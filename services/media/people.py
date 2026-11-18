@@ -48,12 +48,14 @@ class PeopleProgressService:
         aggregator: AnimeAggregator,
         *,
         portrait_batch_size: int = 50,
+        manifest_concurrency: int = 12,
+        portrait_concurrency: int = 8,
     ) -> None:
         self._sources = tuple(sources)
         self._aggregator = aggregator
         self._portrait_batch_size = max(1, min(int(portrait_batch_size), 200))
-        self._manifest_slots = asyncio.Semaphore(12)
-        self._remote_portrait_slots = asyncio.Semaphore(8)
+        self._manifest_slots = asyncio.Semaphore(max(1, manifest_concurrency))
+        self._remote_portrait_slots = asyncio.Semaphore(max(1, portrait_concurrency))
 
     def build_progress(
         self, anime: AggregatedAnime, section: str

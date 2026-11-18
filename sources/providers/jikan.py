@@ -197,13 +197,13 @@ class JikanSource:
     def __init__(self, settings: SourceSettings | None = None) -> None:
         self._settings = _settings(settings)
         self._licensors_cache = BoundedTTLCache[str, dict[str, Any]](
-            max_entries=1000, name="jikan_licensors"
+            max_entries=self._settings.jikan_cache_max_entries, name="jikan_licensors"
         )
         self._popularity_cache = BoundedTTLCache[str, dict[str, Any]](
-            max_entries=1000, name="jikan_popularity"
+            max_entries=self._settings.jikan_cache_max_entries, name="jikan_popularity"
         )
         self._people_cache = BoundedTTLCache[str, dict[str, Any]](
-            max_entries=1000, name="jikan_people"
+            max_entries=self._settings.jikan_cache_max_entries, name="jikan_people"
         )
 
     @staticmethod

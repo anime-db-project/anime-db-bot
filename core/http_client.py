@@ -13,6 +13,7 @@ import httpx
 from httpx_socks import AsyncProxyTransport
 
 from core.http_config import USER_AGENT
+from core.settings import HttpSettings
 from core.proxy_config import ProxyEntry, ProxySettings
 from core.source_errors import error_for_response, normalize_source_error
 from core.user_agent_config import UserAgentEntry, UserAgentSettings
@@ -33,7 +34,11 @@ class HttpClientPool:
         self,
         proxy_settings: ProxySettings | None = None,
         user_agent_settings: UserAgentSettings | None = None,
+        http_settings: HttpSettings | None = None,
     ) -> None:
+        self._limits = http_settings or HttpSettings()
+        if self._limits.max_keepalive_connections > self._limits.max_connections:
+            raise ValueError("HTTP_MAX_KEEPALIVE_CONNECTIONS cannot exceed HTTP_MAX_CONNECTIONS")
         self._proxy_settings = proxy_settings or ProxySettings.empty()
         self._user_agent_settings = user_agent_settings or UserAgentSettings.empty()
         self._clients: dict[tuple[str, str], httpx.AsyncClient] = {}
@@ -41,7 +46,7 @@ class HttpClientPool:
         self._user_agent_cursor: dict[str, int] = {}
         self._closed = False
         # Limit total outgoing traffic even when many card handlers expand at once.
-        self._request_slots = asyncio.Semaphore(48)
+        self._request_slots = asyncio.Semaphore(self._limits.max_concurrent_requests)
 
     def _client(
         self,
@@ -62,7 +67,11 @@ class HttpClientPool:
         kwargs: dict[str, Any] = {
             "follow_redirects": True,
             "headers": {"User-Agent": USER_AGENT},
-            "limits": httpx.Limits(max_connections=48, max_keepalive_connections=24),
+            "limits": httpx.Limits(
+                max_connections=self._limits.max_connections,
+                max_keepalive_connections=self._limits.max_keepalive_connections,
+                keepalive_expiry=self._limits.keepalive_expiry_seconds,
+            ),
         }
         if proxy is not None:
             kwargs["transport"] = AsyncProxyTransport.from_url(proxy.url)

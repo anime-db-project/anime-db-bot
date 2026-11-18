@@ -27,9 +27,11 @@ class TelegramAllowlistMiddleware(BaseMiddleware):
         reply_cooldown_seconds: float = 60.0,
         global_replies_per_minute: int = 20,
         max_tracked_users: int = 4096,
+        denial_message: str = _ACCESS_DENIED,
         clock: Callable[[], float] = time.monotonic,
     ) -> None:
         self._allowed = frozenset(allowed_user_ids)
+        self._denial_message = denial_message or _ACCESS_DENIED
         self._cooldown = max(0.0, reply_cooldown_seconds)
         self._global_limit = max(0, global_replies_per_minute)
         self._max_tracked = max(1, max_tracked_users)
@@ -77,9 +79,9 @@ class TelegramAllowlistMiddleware(BaseMiddleware):
 
         try:
             if isinstance(inner, CallbackQuery):
-                await inner.answer(_ACCESS_DENIED, show_alert=True)
+                await inner.answer(self._denial_message, show_alert=True)
             elif isinstance(inner, Message):
-                await inner.answer(_ACCESS_DENIED)
+                await inner.answer(self._denial_message)
         except Exception:
             # A blocked/invalid chat must not turn a denied update into a
             # dispatcher exception or an unlimited retry loop.

@@ -286,6 +286,7 @@ async def run_bot(
                         settings.telegram.denied_global_replies_per_minute
                     ),
                     max_tracked_users=settings.telegram.denied_max_tracked_users,
+                    denial_message=settings.telegram.denied_message,
                 )
             )
             observability = _ObservabilityMiddleware()
@@ -304,6 +305,8 @@ async def run_bot(
                 source_health=context.source_health,
                 runtime_metrics=context.runtime_metrics,
                 source_descriptors=context.runtime_source_descriptors(),
+                max_pending_sessions=settings.telegram.admin_pending_sessions,
+                pending_ttl_seconds=settings.telegram.admin_pending_ttl_seconds,
             )
 
             async def aggregate_search_result(
@@ -331,6 +334,17 @@ async def run_bot(
                 image_search_max_bytes=context.settings.sources.image_search_max_bytes,
                 input_ttl_seconds=context.settings.telegram.anime_input_ttl_seconds,
                 max_search_sessions=context.settings.telegram.max_search_sessions,
+                max_scope_sessions=context.settings.telegram.max_scope_sessions,
+                max_pending_inputs=context.settings.telegram.max_pending_inputs,
+                max_image_inputs=context.settings.telegram.max_image_inputs,
+                image_download_timeout_seconds=(
+                    context.settings.telegram.image_download_timeout_seconds
+                ),
+                image_max_pixels=context.settings.telegram.image_max_pixels,
+                image_max_dimension=context.settings.telegram.image_max_dimension,
+                search_expansion_timeout_seconds=(
+                    context.settings.telegram.search_expansion_timeout_seconds
+                ),
                 telegram_local_file_root=context.settings.telegram.bot_api_local_file_root,
             )
 

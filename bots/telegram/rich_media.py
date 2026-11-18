@@ -182,17 +182,21 @@ class RichMediaDelivery:
         # individual downloads, or many simultaneous users can exhaust RAM.
         self._local_deliveries = asyncio.Semaphore(settings.max_local_deliveries)
         self._memory = BoundedTTLCache[str, bytes](
-            max_entries=2048,
+            max_entries=settings.ram_cache_max_entries,
             ttl_seconds=float(settings.cache_ttl_seconds),
             max_weight=max(1, settings.ram_cache_bytes),
             weigher=len,
             name="rich_media_ram",
         )
         self._bad_urls = BoundedTTLCache[str, bool](
-            max_entries=2048, ttl_seconds=120.0, name="rich_media_bad_urls"
+            max_entries=settings.failure_cache_max_entries,
+            ttl_seconds=settings.failure_url_ttl_seconds,
+            name="rich_media_bad_urls"
         )
         self._bad_strategies = BoundedTTLCache[tuple[str, tuple[str, ...]], bool](
-            max_entries=2048, ttl_seconds=180.0, name="rich_media_failures"
+            max_entries=settings.failure_cache_max_entries,
+            ttl_seconds=settings.failure_method_ttl_seconds,
+            name="rich_media_failures"
         )
         self._disk_last_prune = 0.0
 
@@ -222,7 +226,7 @@ class RichMediaDelivery:
                         trust_env=False,
                     ) as client:
                         current = url
-                        for _ in range(4):
+                        for _ in range(max(1, self.settings.max_redirects)):
                             await asyncio.to_thread(_verify_public_host, current)
                             async with client.stream("GET", current) as response:
                                 if response.status_code in (301, 302, 303, 307, 308):
@@ -276,7 +280,7 @@ class RichMediaDelivery:
 
     def _prune_disk(self, directory: Path) -> None:
         now = time.time()
-        if now - self._disk_last_prune < 60:
+        if now - self._disk_last_prune < self.settings.disk_prune_interval_seconds:
             return
         self._disk_last_prune = now
         items = []
