@@ -7,7 +7,7 @@ from aiogram.types import InputMediaPhoto, InputRichMessage, InputRichMessageMed
 
 # Rich-message media links are explicitly bound to photo entries. Passing an
 # external URL directly in <img src> can fail in the local Telegram Bot API.
-_IMAGE_URL = re.compile(r'(<img\\s+[^>]*?\\bsrc=")(https?://[^"]+)(")', re.IGNORECASE)
+_IMAGE_URL = re.compile(r'(<img\s+[^>]*?\bsrc=")(https?://[^"]+)(")', re.IGNORECASE)
 
 
 def bind_remote_photos(rich_message: InputRichMessage) -> InputRichMessage:
