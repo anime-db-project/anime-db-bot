@@ -106,7 +106,7 @@ async def _render_people_view(
     try:
         await message.edit_text(
             rich_message=bind_remote_photos(_rich(text_value, urls)),
-            reply_markup=keyboard
+            reply_markup=keyboard,
         )
     except Exception:
         logging.exception(

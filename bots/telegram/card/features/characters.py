@@ -450,7 +450,7 @@ async def edit_characters_view(
         try:
             await message.edit_text(
                 rich_message=bind_remote_photos(_rich(content, urls)),
-                reply_markup=keyboard
+                reply_markup=keyboard,
             )
             return
         except Exception:

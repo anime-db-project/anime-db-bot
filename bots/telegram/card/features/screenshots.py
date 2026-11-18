@@ -194,9 +194,7 @@ async def edit_screenshots_view(
     try:
         await message.edit_text(
             rich_message=bind_remote_photos(
-                screenshot_rich_message(
-                    anime, source=source, page=page, locale=locale
-                )
+                screenshot_rich_message(anime, source=source, page=page, locale=locale)
             ),
             reply_markup=keyboard,
         )

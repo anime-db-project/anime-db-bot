@@ -41,7 +41,7 @@ def bind_remote_photos(rich_message: InputRichMessage) -> InputRichMessage:
                     media=InputMediaPhoto(media=url),
                 )
             )
-        return f'{match.group(1)}tg://photo?id={identifier}{match.group(3)}'
+        return f"{match.group(1)}tg://photo?id={identifier}{match.group(3)}"
 
     rewritten = _IMAGE_URL.sub(resolve, source)
     if not identifiers:

@@ -11,12 +11,12 @@ class RichMediaBindingTests(unittest.TestCase):
     def test_remote_urls_are_bound_as_tg_photo_media(self) -> None:
         original = InputRichMessage(
             html=(
-                '<tg-slideshow>'
+                "<tg-slideshow>"
                 '<img src="https://example.org/a.jpg?foo=1&amp;bar=2"/>'
                 '<img src="https://example.org/b.png"/>'
                 '<img src="https://example.org/a.jpg?foo=1&amp;bar=2"/>'
-                '</tg-slideshow><table><tr><td>Data</td></tr></table>'
-                '<tg-button-row><tg-button>Info</tg-button></tg-button-row>'
+                "</tg-slideshow><table><tr><td>Data</td></tr></table>"
+                "<tg-button-row><tg-button>Info</tg-button></tg-button-row>"
             )
         )
         updated = bind_remote_photos(original)
@@ -33,7 +33,7 @@ class RichMediaBindingTests(unittest.TestCase):
         )
         self.assertIn("<table>", updated.html or "")
         self.assertIn("<tg-button-row>", updated.html or "")
-        self.assertIn('https://example.org/a.jpg?foo=1&amp;bar=2', original.html)
+        self.assertIn("https://example.org/a.jpg?foo=1&amp;bar=2", original.html)
 
     def test_media_bindings_preserve_existing_media_ids(self) -> None:
         original = InputRichMessage(
