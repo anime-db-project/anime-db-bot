@@ -131,7 +131,13 @@ class SearchUiState:
 
     @classmethod
     def create(
-        cls, input_ttl_seconds: int, *, max_sessions: int = MAX_SEARCH_SESSIONS
+        cls,
+        input_ttl_seconds: int,
+        *,
+        max_sessions: int = MAX_SEARCH_SESSIONS,
+        max_scope_sessions: int = MAX_SCOPE_SESSIONS,
+        max_pending_inputs: int = MAX_PENDING_INPUTS,
+        max_image_inputs: int = MAX_IMAGE_INPUTS,
     ) -> "SearchUiState":
         input_ttl = max(60, int(input_ttl_seconds))
         return cls(
@@ -139,17 +145,17 @@ class SearchUiState:
                 max_entries=max_sessions, name="search_results"
             ),
             scope_sessions=ExpiringSessionStore(
-                max_entries=MAX_SCOPE_SESSIONS,
+                max_entries=max_scope_sessions,
                 ttl_seconds=input_ttl,
                 name="search_scope",
             ),
             pending_inputs=ExpiringSessionStore(
-                max_entries=MAX_PENDING_INPUTS,
+                max_entries=max_pending_inputs,
                 ttl_seconds=input_ttl,
                 name="search_input",
             ),
             image_inputs=ExpiringSessionStore(
-                max_entries=MAX_IMAGE_INPUTS,
+                max_entries=max_image_inputs,
                 ttl_seconds=input_ttl,
                 name="image_search_input",
             ),
@@ -462,7 +468,12 @@ def _image_match_text(match: ImageSearchMatch, locale: str) -> str:
     return " · ".join([base, *details])
 
 
-def _normalize_uploaded_image(content: bytes) -> bytes:
+def _normalize_uploaded_image(
+    content: bytes,
+    *,
+    max_pixels: int = 50000000,
+    max_dimension: int = 4096,
+) -> bytes:
     """Decode a Telegram image and re-encode one safe raster frame as JPEG."""
     # Only image-search uploads need Pillow and its native image codecs.
     from PIL import Image, ImageOps, UnidentifiedImageError
@@ -470,10 +481,10 @@ def _normalize_uploaded_image(content: bytes) -> bytes:
     try:
         with Image.open(BytesIO(content)) as source:
             source.seek(0)
-            if int(source.width) * int(source.height) > 50_000_000:
+            if int(source.width) * int(source.height) > max_pixels:
                 raise ValueError("image_dimensions_too_large")
             frame = ImageOps.exif_transpose(source.copy())
-            frame.thumbnail((4096, 4096))
+            frame.thumbnail((max_dimension, max_dimension))
             if frame.mode != "RGB":
                 frame = frame.convert("RGB")
             output = BytesIO()
@@ -527,6 +538,9 @@ async def _materialize_image_input(
     *,
     max_bytes: int,
     telegram_local_file_root: Path | None = None,
+    download_timeout_seconds: float = 45.0,
+    max_pixels: int = 50000000,
+    max_dimension: int = 4096,
 ) -> ImageSearchInput:
     if value.url:
         return ImageSearchInput(url=value.url)
@@ -549,14 +563,21 @@ async def _materialize_image_input(
         content = await asyncio.to_thread(local_path.read_bytes)
     else:
         target = BytesIO()
-        await bot.download_file(file_path, destination=target, timeout=45)
+        await bot.download_file(
+            file_path, destination=target, timeout=download_timeout_seconds
+        )
         content = target.getvalue()
     if not content:
         raise RuntimeError("Downloaded Telegram image is empty")
     if len(content) > max_bytes:
         raise ValueError("image_too_large")
     try:
-        normalized = await asyncio.to_thread(_normalize_uploaded_image, content)
+        normalized = await asyncio.to_thread(
+            _normalize_uploaded_image,
+            content,
+            max_pixels=max_pixels,
+            max_dimension=max_dimension,
+        )
     except ValueError:
         # Pillow covers the common raster formats (including animated formats via
         # their first frame). For an uncommon image codec, preserve the original
@@ -965,6 +986,7 @@ async def _execute_query(
     direct_lookup: DirectIdLookupService,
     provider_map: Mapping[str, AnimeSearchProvider],
     state: SearchUiState,
+    search_expansion_timeout_seconds: float = 8.0,
 ) -> None:
     locale = get_user_locale(owner_user_id)
     parsed_direct = _parse_direct_query(query, direct_lookup.source_keys)
@@ -1006,7 +1028,7 @@ async def _execute_query(
                             query=query,
                             initial=result_set,
                         ),
-                        timeout=8.0,
+                        timeout=search_expansion_timeout_seconds,
                     )
                 except TimeoutError:
                     # Optional cross-language expansion must not delay an
@@ -1038,6 +1060,9 @@ async def _execute_image_search(
     image_search_max_bytes: int,
     telegram_local_file_root: Path | None,
     state: SearchUiState,
+    image_download_timeout_seconds: float = 45.0,
+    image_max_pixels: int = 50000000,
+    image_max_dimension: int = 4096,
 ) -> None:
     locale = get_user_locale(owner_user_id)
     stored = state.image_inputs.get(input_token)
@@ -1050,6 +1075,9 @@ async def _execute_image_search(
             stored,
             max_bytes=max(1024, int(image_search_max_bytes)),
             telegram_local_file_root=telegram_local_file_root,
+            download_timeout_seconds=image_download_timeout_seconds,
+            max_pixels=image_max_pixels,
+            max_dimension=image_max_dimension,
         )
     except ValueError as exc:
         key = "image_too_large" if str(exc) == "image_too_large" else "image_invalid"
@@ -1088,10 +1116,23 @@ def register_search_handlers(
     input_ttl_seconds: int,
     telegram_local_file_root: Path | None = None,
     max_search_sessions: int = MAX_SEARCH_SESSIONS,
+    max_scope_sessions: int = MAX_SCOPE_SESSIONS,
+    max_pending_inputs: int = MAX_PENDING_INPUTS,
+    max_image_inputs: int = MAX_IMAGE_INPUTS,
+    image_download_timeout_seconds: float = 45.0,
+    image_max_pixels: int = 50000000,
+    image_max_dimension: int = 4096,
+    search_expansion_timeout_seconds: float = 8.0,
 ) -> SearchUiState:
     """Register the single public anime-search command and its interactive flow."""
     provider_map = {str(key): provider for key, provider in provider_map.items()}
-    state = SearchUiState.create(input_ttl_seconds, max_sessions=max_search_sessions)
+    state = SearchUiState.create(
+        input_ttl_seconds,
+        max_sessions=max_search_sessions,
+        max_scope_sessions=max_scope_sessions,
+        max_pending_inputs=max_pending_inputs,
+        max_image_inputs=max_image_inputs,
+    )
 
     @dp.message(Command("anime"))
     async def anime_handler(message: Message, command: CommandObject) -> None:
@@ -1121,6 +1162,7 @@ def register_search_handlers(
                 direct_lookup=direct_lookup,
                 provider_map=provider_map,
                 state=state,
+                search_expansion_timeout_seconds=search_expansion_timeout_seconds,
             )
             return
 
@@ -1254,6 +1296,7 @@ def register_search_handlers(
             direct_lookup=direct_lookup,
             provider_map=provider_map,
             state=state,
+            search_expansion_timeout_seconds=search_expansion_timeout_seconds,
         )
 
     @dp.callback_query(F.data.startswith("is:"))
@@ -1315,6 +1358,9 @@ def register_search_handlers(
             image_search_max_bytes=image_search_max_bytes,
             telegram_local_file_root=telegram_local_file_root,
             state=state,
+            image_download_timeout_seconds=image_download_timeout_seconds,
+            image_max_pixels=image_max_pixels,
+            image_max_dimension=image_max_dimension,
         )
 
     @dp.callback_query(F.data.startswith("ix:"))
