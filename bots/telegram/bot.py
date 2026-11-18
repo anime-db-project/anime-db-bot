@@ -208,9 +208,7 @@ async def run_bot(
         )
 
     logging.info("Bot platform: Telegram")
-    logging.info(
-        "Persistent user storage backend: %s", settings.storage.backend
-    )
+    logging.info("Persistent user storage backend: %s", settings.storage.backend)
     logging.info("Search cache backend: %s", settings.cache.backend)
     logging.info("Telegram transport: %s", transport.mode_name)
     logging.info(

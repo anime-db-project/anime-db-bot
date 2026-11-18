@@ -192,9 +192,13 @@ class AppContext:
                 settings.storage.postgres_dsn,
                 max_size=settings.storage.postgres_pool_size,
             )
-            user_settings_store = PostgresUserSettingsStore(postgres_pool)
-            ban_store = PostgresBanStore(postgres_pool)
-            image_search_quota_store = PostgresImageSearchQuotaStore(postgres_pool)
+            try:
+                user_settings_store = PostgresUserSettingsStore(postgres_pool)
+                ban_store = PostgresBanStore(postgres_pool)
+                image_search_quota_store = PostgresImageSearchQuotaStore(postgres_pool)
+            except BaseException:
+                postgres_pool.close()
+                raise
         else:
             user_settings_store = SQLiteUserSettingsStore(
                 settings.storage.user_settings_db_path

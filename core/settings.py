@@ -544,9 +544,8 @@ class AppSettings:
             cache=CacheBackendSettings(
                 backend=cache_backend,
                 redis_url=redis_url,
-                redis_key_prefix=_raw(
-                    values, "REDIS_KEY_PREFIX", "anime-db-bot"
-                ) or "anime-db-bot",
+                redis_key_prefix=_raw(values, "REDIS_KEY_PREFIX", "anime-db-bot")
+                or "anime-db-bot",
                 redis_timeout_seconds=_float(
                     values, "REDIS_TIMEOUT_SECONDS", 0.25, 0.05
                 ),

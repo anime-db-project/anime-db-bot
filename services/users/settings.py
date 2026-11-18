@@ -251,7 +251,13 @@ _CURRENT_USER_SETTINGS_STORE: ContextVar[SQLiteUserSettingsStore | None] = Conte
 @lru_cache(maxsize=1)
 def _default_user_settings_store() -> SQLiteUserSettingsStore:
     """Compatibility store for standalone calls outside an active AppContext."""
-    return SQLiteUserSettingsStore(get_settings().storage.user_settings_db_path)
+    storage = get_settings().storage
+    if storage.backend == "postgres":
+        from services.storage.postgres import default_postgres_pool
+        from services.storage.postgres_repositories import PostgresUserSettingsStore
+
+        return PostgresUserSettingsStore(default_postgres_pool())
+    return SQLiteUserSettingsStore(storage.user_settings_db_path)
 
 
 def get_user_settings_store() -> SQLiteUserSettingsStore:

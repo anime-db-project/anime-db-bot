@@ -193,7 +193,13 @@ _CURRENT_BAN_STORE: ContextVar[SQLiteBanStore | None] = ContextVar(
 @lru_cache(maxsize=1)
 def _default_ban_store() -> SQLiteBanStore:
     """Compatibility store for standalone calls outside an active AppContext."""
-    return SQLiteBanStore(get_settings().storage.bans_db_path)
+    storage = get_settings().storage
+    if storage.backend == "postgres":
+        from services.storage.postgres import default_postgres_pool
+        from services.storage.postgres_repositories import PostgresBanStore
+
+        return PostgresBanStore(default_postgres_pool())
+    return SQLiteBanStore(storage.bans_db_path)
 
 
 def get_ban_store() -> SQLiteBanStore:

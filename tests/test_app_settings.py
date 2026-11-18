@@ -252,9 +252,13 @@ class AppSettingsTests(unittest.TestCase):
                     encoding="utf-8",
                 )
             values = project_env_values(root)
-        self.assertEqual(len(values), 158)
+        self.assertEqual(len(values), 165)
         self.assertIn("RICH_MEDIA_MAX_LOCAL_DELIVERIES", values)
         self.assertIn("BOT_TOKEN", values)
+        self.assertIn("DATABASE_BACKEND", values)
+        self.assertIn("DATABASE_URL", values)
+        self.assertIn("CACHE_BACKEND", values)
+        self.assertIn("REDIS_URL", values)
         self.assertIn("TELEGRAM_ALLOWED_USER_IDS", values)
         self.assertIn("TELEGRAM_DENIED_REPLY_COOLDOWN_SECONDS", values)
         self.assertIn("TELEGRAM_DENIED_GLOBAL_REPLIES_PER_MINUTE", values)
@@ -308,6 +312,36 @@ class AppSettingsTests(unittest.TestCase):
             {"UPSTREAM_RATE_LIMIT_ANIME_SKIP_PER_MINUTE": "999"}
         )
         self.assertEqual(settings.rate_limits.source_limit("anime_skip"), 60)
+
+    def test_database_backend_selection_validation(self) -> None:
+        defaults = AppSettings.from_env({})
+        self.assertEqual(defaults.storage.backend, "sqlite")
+        self.assertEqual(defaults.cache.backend, "memory")
+        self.assertEqual(defaults.storage.postgres_pool_size, 5)
+        self.assertEqual(defaults.cache.redis_key_prefix, "anime-db-bot")
+        selected = AppSettings.from_env(
+            {
+                "DATABASE_BACKEND": "postgres",
+                "DATABASE_URL": "postgresql://test:test@127.0.0.1:5432/testdb",
+                "DATABASE_POOL_SIZE": "8",
+                "CACHE_BACKEND": "redis",
+                "REDIS_URL": "redis://127.0.0.1:6379/1",
+                "REDIS_KEY_PREFIX": "test-cache",
+                "REDIS_TIMEOUT_SECONDS": "0.15",
+            }
+        )
+        self.assertEqual(selected.storage.backend, "postgres")
+        self.assertEqual(selected.storage.postgres_pool_size, 8)
+        self.assertEqual(selected.cache.backend, "redis")
+        self.assertEqual(selected.cache.redis_timeout_seconds, 0.15)
+        with self.assertRaisesRegex(ValueError, "DATABASE_BACKEND"):
+            AppSettings.from_env({"DATABASE_BACKEND": "mysql"})
+        with self.assertRaisesRegex(ValueError, "DATABASE_URL"):
+            AppSettings.from_env({"DATABASE_BACKEND": "postgres"})
+        with self.assertRaisesRegex(ValueError, "CACHE_BACKEND"):
+            AppSettings.from_env({"CACHE_BACKEND": "memcached"})
+        with self.assertRaisesRegex(ValueError, "REDIS_URL"):
+            AppSettings.from_env({"CACHE_BACKEND": "redis"})
 
     def test_invalid_admin_id_fails_fast(self) -> None:
         with self.assertRaises(ValueError):
