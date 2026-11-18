@@ -912,7 +912,7 @@ async def edit_episodes_view(
     if initial_tasks:
         done, _pending = await asyncio.wait(
             initial_tasks,
-            timeout=_INITIAL_TIMECODE_WAIT_SECONDS,
+            timeout=get_settings().telegram.initial_timecode_wait_seconds,
         )
         if timecode_task is not None and timecode_task in done:
             timecode_values = await timecode_task

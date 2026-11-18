@@ -649,7 +649,7 @@ class AppSettings:
                         values, "RICH_MEDIA_RAM_CACHE_ENTRIES", 2048, 1, 100000
                     ),
                     max_redirects=_strict_int(
-                        values, "RICH_MEDIA_MAX_REDIRECTS", 4, 0, 10
+                        values, "RICH_MEDIA_MAX_REDIRECTS", 4, 1, 10
                     ),
                     disk_prune_interval_seconds=_strict_float(
                         values, "RICH_MEDIA_DISK_PRUNE_INTERVAL_SECONDS", 60.0, 0.0, 3600.0

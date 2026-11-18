@@ -14,8 +14,20 @@ from .postgres import PostgresConnection, PostgresPool
 class PostgresUserSettingsStore(SQLiteUserSettingsStore):
     """PostgreSQL-backed users and settings; keeps same caching semantics."""
 
-    def __init__(self, pool: PostgresPool) -> None:
-        super().__init__(":memory:")
+    def __init__(
+        self,
+        pool: PostgresPool,
+        *,
+        cache_max_entries: int = 20000,
+        cache_ttl_seconds: float = 120.0,
+        touch_interval_seconds: float = 300.0,
+    ) -> None:
+        super().__init__(
+            ":memory:",
+            cache_max_entries=cache_max_entries,
+            cache_ttl_seconds=cache_ttl_seconds,
+            touch_interval_seconds=touch_interval_seconds,
+        )
         self._pool = pool
 
     def _connect(self) -> PostgresConnection:

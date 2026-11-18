@@ -26,8 +26,18 @@ class UserSettings:
 class SQLiteUserSettingsStore:
     """Persistent repository for platform-scoped user preferences and known IDs."""
 
-    def __init__(self, path: str | Path) -> None:
+    def __init__(
+        self,
+        path: str | Path,
+        *,
+        cache_max_entries: int = 20000,
+        cache_ttl_seconds: float = 120.0,
+        touch_interval_seconds: float = 300.0,
+    ) -> None:
         self._path = str(path)
+        self._cache_max_entries = max(1, int(cache_max_entries))
+        self._cache_ttl_seconds = max(0.0, float(cache_ttl_seconds))
+        self._touch_interval_seconds = max(0.0, float(touch_interval_seconds))
         self._initialized = False
         self._init_lock = threading.Lock()
         self._cache_lock = threading.RLock()
@@ -154,9 +164,9 @@ class SQLiteUserSettingsStore:
             else UserSettings()
         )
         with self._cache_lock:
-            self._locales[cache_key] = (time.monotonic() + 120.0, result)
+            self._locales[cache_key] = (time.monotonic() + self._cache_ttl_seconds, result)
             self._locales.move_to_end(cache_key)
-            while len(self._locales) > 20000:
+            while len(self._locales) > self._cache_max_entries:
                 self._locales.popitem(last=False)
         return result
 
@@ -184,7 +194,7 @@ class SQLiteUserSettingsStore:
         result = UserSettings(locale=normalized)
         with self._cache_lock:
             key = (platform_key, int(user_id))
-            self._locales[key] = (time.monotonic() + 120.0, result)
+            self._locales[key] = (time.monotonic() + self._cache_ttl_seconds, result)
             self._locales.move_to_end(key)
         return result
 
@@ -200,7 +210,7 @@ class SQLiteUserSettingsStore:
         now = time.monotonic()
         with self._cache_lock:
             last_touch = self._touches.get(key)
-            if last_touch is not None and now - last_touch < 300.0:
+            if last_touch is not None and now - last_touch < self._touch_interval_seconds:
                 self._touches.move_to_end(key)
                 return
         self._ensure_schema()
@@ -217,7 +227,7 @@ class SQLiteUserSettingsStore:
         with self._cache_lock:
             self._touches[key] = now
             self._touches.move_to_end(key)
-            while len(self._touches) > 20000:
+            while len(self._touches) > self._cache_max_entries:
                 self._touches.popitem(last=False)
 
     def list_user_ids(self, platform: str) -> list[int]:
