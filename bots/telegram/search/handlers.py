@@ -189,7 +189,6 @@ def _service_for(
     service = SearchService(
         tuple(provider_map[key] for key in provider_keys),
         settings=default_service.settings,
-        shared_cache=default_service._shared_cache,
     )
     service_cache[provider_keys] = service
     capacity = max(1, min(32, default_service.settings.provider_service_cache_entries))

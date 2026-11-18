@@ -84,6 +84,17 @@ class UnifiedSearchUiTests(unittest.TestCase):
         self.assertNotIn(("anilist",), cache)
         self.assertIsNot(first, second)
 
+    def test_provider_services_do_not_share_default_redis_namespace(self) -> None:
+        default = SearchService(get_search_providers())
+        # Redis keys are provider-scoped. A subset must not use the shared
+        # default cache, which could return results from other providers.
+        default._shared_cache = object()
+        provider_map = {
+            str(key): provider for key, provider in get_search_provider_map().items()
+        }
+        subset = search_ui._service_for(("mal",), default, provider_map, {})
+        self.assertIsNone(subset._shared_cache)
+
     def test_direct_id_parser_supports_plain_and_explicit_ids(self) -> None:
         supported = ("mal", "anilist", "shikimori", "kitsu")
         self.assertEqual(
