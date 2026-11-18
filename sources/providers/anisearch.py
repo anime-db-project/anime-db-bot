@@ -6,6 +6,7 @@ import json
 import math
 import re
 import time
+import zlib
 from typing import Any
 
 from core.cache import BoundedTTLCache
@@ -56,12 +57,10 @@ _NETWORK_LOCK = asyncio.Lock()
 _LAST_NETWORK_REQUEST_AT = 0.0
 _MAX_INTERACTIVE_PACE_WAIT_SECONDS = 0.75
 
-_FULL_CACHE: BoundedTTLCache[tuple[str, str], dict[str, Any]] = BoundedTTLCache(
+_FULL_CACHE: BoundedTTLCache[tuple[str, str], bytes] = BoundedTTLCache(
     max_entries=750,
-    max_weight=64 * 1024 * 1024,
-    weigher=lambda data: len(
-        json.dumps(data, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
-    ),
+    max_weight=16 * 1024 * 1024,
+    weigher=len,
     name="anisearch_full",
 )
 _INFLIGHT_LOCK = asyncio.Lock()
@@ -592,10 +591,17 @@ async def _fetch_item(
     if item is None:
         return None
     ttl = _cache_ttl(settings)
-    if ttl > 0:
+    if ttl > 0 and settings.anisearch_cache_max_bytes > 0:
+        # Cache compressed JSON bytes, not the nested Python dict; a 64 MiB
+        # JSON budget previously retained much more than 64 MiB of RAM.
+        payload = json.dumps(
+            item, ensure_ascii=False, separators=(",", ":")
+        ).encode("utf-8")
+        compressed = zlib.compress(payload, level=1)
+        _FULL_CACHE.max_weight = max(1, settings.anisearch_cache_max_bytes)
         _FULL_CACHE.set(
             (_api_url(settings), anisearch_id),
-            item,
+            compressed,
             ttl_seconds=ttl,
         )
     return item
@@ -609,7 +615,10 @@ async def _load_item(
     cache_key = (_api_url(settings), anisearch_id)
     cached = _FULL_CACHE.get(cache_key)
     if cached is not None:
-        return cached
+        try:
+            return json.loads(zlib.decompress(cached))
+        except (TypeError, ValueError, zlib.error):
+            _FULL_CACHE.pop(cache_key)
 
     task_key = (_api_url(settings), anisearch_id, "full")
     async with _INFLIGHT_LOCK:

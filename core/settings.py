@@ -178,7 +178,7 @@ class RichMediaSettings:
     disk_enabled: bool = True
     max_images: int = 8
     max_image_bytes: int = 4 * 1024 * 1024
-    ram_cache_bytes: int = 64 * 1024 * 1024
+    ram_cache_bytes: int = 16 * 1024 * 1024
     disk_cache_bytes: int = 256 * 1024 * 1024
     cache_ttl_seconds: int = 86400
     download_timeout_seconds: float = 3.0
@@ -334,6 +334,7 @@ class SourceSettings:
     imdb_aws_session_token: str
     imdb_aws_region: str
     imdb_request_timeout_seconds: float
+    anisearch_cache_max_bytes: int = 16 * 1024 * 1024
 
 
 @dataclass(frozen=True, slots=True)
@@ -506,7 +507,7 @@ class AppSettings:
                         values, "RICH_MEDIA_MAX_IMAGE_BYTES", 4194304, 65536
                     ),
                     ram_cache_bytes=_int(
-                        values, "RICH_MEDIA_RAM_CACHE_BYTES", 67108864, 0
+                        values, "RICH_MEDIA_RAM_CACHE_BYTES", 16777216, 0
                     ),
                     disk_cache_bytes=_int(
                         values, "RICH_MEDIA_DISK_CACHE_BYTES", 268435456, 0
@@ -674,6 +675,9 @@ class AppSettings:
                     values,
                     "ANISEARCH_CACHE_TTL_SECONDS",
                     21600.0,
+                ),
+                anisearch_cache_max_bytes=_int(
+                    values, "ANISEARCH_CACHE_MAX_BYTES", 16777216, 1024
                 ),
                 skipdb_api_url=_raw(
                     values,

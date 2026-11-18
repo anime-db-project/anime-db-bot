@@ -427,6 +427,14 @@ class AniSearchSourceTests(unittest.IsolatedAsyncioTestCase):
             staff = await source.load_staff(identity)
             voices = await source.load_voices(identity)
         self.assertIsNotNone(record)
+        self.assertEqual(len(anisearch._FULL_CACHE), 1)
+        self.assertIsInstance(
+            next(iter(anisearch._FULL_CACHE._items.values())).value, bytes
+        )
+        self.assertLess(
+            anisearch._FULL_CACHE._weight,
+            len(str(_payload()).encode("utf-8")),
+        )
         self.assertEqual(len(characters), 2)
         self.assertEqual(len(staff), 1)
         self.assertEqual(len(voices), 6)
