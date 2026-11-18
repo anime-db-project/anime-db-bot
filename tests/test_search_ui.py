@@ -13,6 +13,7 @@ from PIL import Image
 
 from bots.telegram.search import handlers as search_ui
 from core.models import SearchCandidate
+from core.settings import AppSettings
 from search.registry import get_search_provider_map, get_search_providers
 from services.identity.direct_lookup import DirectIdLookupService
 from services.search.service import SearchService
@@ -62,6 +63,26 @@ class UnifiedSearchUiTests(unittest.TestCase):
         )
 
         self.assertIs(service, default_service)
+
+    def test_provider_service_cache_evicts_oldest_service(self) -> None:
+        settings = AppSettings.from_env(
+            {"SEARCH_PROVIDER_SERVICE_CACHE_ENTRIES": "2"}
+        ).search
+        provider_map = {
+            str(key): provider for key, provider in get_search_provider_map().items()
+        }
+        default = SearchService(get_search_providers(), settings=settings)
+        cache = {}
+        first = search_ui._service_for(("mal",), default, provider_map, cache)
+        second = search_ui._service_for(("anilist",), default, provider_map, cache)
+        self.assertIs(
+            search_ui._service_for(("mal",), default, provider_map, cache), first
+        )
+        search_ui._service_for(("shikimori",), default, provider_map, cache)
+        self.assertEqual(len(cache), 2)
+        self.assertIs(cache[("mal",)], first)
+        self.assertNotIn(("anilist",), cache)
+        self.assertIsNot(first, second)
 
     def test_direct_id_parser_supports_plain_and_explicit_ids(self) -> None:
         supported = ("mal", "anilist", "shikimori", "kitsu")

@@ -247,6 +247,8 @@ class SearchSettings:
     expansion_max_seeds: int
     expansion_max_queries: int
     expansion_max_pages: int
+    cache_max_bytes: int = 4 * 1024 * 1024
+    provider_service_cache_entries: int = 6
 
 
 @dataclass(frozen=True, slots=True)
@@ -553,6 +555,12 @@ class AppSettings:
             search=SearchSettings(
                 cache_ttl_seconds=_float(values, "SEARCH_CACHE_TTL_SECONDS", 21600.0),
                 cache_max_entries=_int(values, "SEARCH_CACHE_MAX_ENTRIES", 500, 1),
+                cache_max_bytes=_int(
+                    values, "SEARCH_CACHE_MAX_BYTES", 4194304, 1024
+                ),
+                provider_service_cache_entries=_int(
+                    values, "SEARCH_PROVIDER_SERVICE_CACHE_ENTRIES", 6, 1
+                ),
                 collection_page_size=_int(values, "SEARCH_COLLECTION_PAGE_SIZE", 20, 1),
                 collection_max_pages=_int(values, "SEARCH_COLLECTION_MAX_PAGES", 4, 1),
                 collection_max_items=_int(

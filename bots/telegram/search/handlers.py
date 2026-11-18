@@ -175,14 +175,24 @@ def _service_for(
         return default_service
 
     service = service_cache.get(provider_keys)
-    if service is None:
-        if not provider_keys:
-            raise ValueError("No search providers selected")
-        service = SearchService(
-            tuple(provider_map[key] for key in provider_keys),
-            settings=default_service.settings,
-        )
+    if service is not None:
+        # dicts preserve insertion order. Promote hits to the most-recent
+        # position, so seldom-used provider combinations can be reclaimed.
+        service_cache.pop(provider_keys)
         service_cache[provider_keys] = service
+        return service
+
+    if not provider_keys:
+        raise ValueError("No search providers selected")
+    service = SearchService(
+        tuple(provider_map[key] for key in provider_keys),
+        settings=default_service.settings,
+        shared_cache=default_service._shared_cache,
+    )
+    service_cache[provider_keys] = service
+    capacity = max(1, min(32, default_service.settings.provider_service_cache_entries))
+    while len(service_cache) > capacity:
+        service_cache.pop(next(iter(service_cache)))
     return service
 
 

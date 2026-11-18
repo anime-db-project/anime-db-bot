@@ -4,6 +4,7 @@ import os
 import unittest
 
 from core.models import SearchCandidate, SearchPage
+from core.settings import AppSettings
 from services.search.service import SearchService
 
 
@@ -43,6 +44,21 @@ class SearchServiceTests(unittest.IsolatedAsyncioTestCase):
             os.environ.pop("SEARCH_CACHE_TTL_SECONDS", None)
         else:
             os.environ["SEARCH_CACHE_TTL_SECONDS"] = self.old_ttl
+
+    async def test_search_cache_is_byte_bounded_without_losing_results(self) -> None:
+        settings = AppSettings.from_env(
+            {"SEARCH_CACHE_MAX_BYTES": "2048", "SEARCH_CACHE_MAX_ENTRIES": "200"}
+        ).search
+        provider = FakeProvider(
+            "AniList",
+            [SearchCandidate(title="A" * 80, aliases=["B" * 80],
+                             posters=["https://example.org/" + "p" * 200])],
+        )
+        service = SearchService((provider,), settings=settings)
+        for index in range(25):
+            await service.search(f"anime-{index}")
+        self.assertLessEqual(service._cache._weight, 2048)
+        self.assertLessEqual(service._result_set_cache._weight, 2048)
 
     async def test_merged_page_never_exceeds_page_size(self) -> None:
         first = FakeProvider(

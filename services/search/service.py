@@ -19,6 +19,26 @@ from core.settings import SearchSettings, get_settings
 from services.search.redis_cache import RedisSearchCache
 
 
+def _search_candidate_weight(candidate: SearchCandidate) -> int:
+    """Cheap conservative weight estimate; avoids copying/serializing payloads."""
+    strings = [candidate.title, candidate.romaji_title or "", *candidate.aliases]
+    strings.extend(candidate.posters)
+    size = 640 + sum(80 + len(value) * 2 for value in strings)
+    size += sum(
+        120 + 2 * (len(str(key)) + len(str(value)))
+        for key, value in (*candidate.external_ids.items(), *candidate.scores.items())
+    )
+    return size
+
+
+def _search_page_weight(page: SearchPage) -> int:
+    return 256 + sum(_search_candidate_weight(item) for item in page.items)
+
+
+def _search_results_weight(results: SearchResultSet) -> int:
+    return 256 + sum(_search_candidate_weight(item) for item in results.items)
+
+
 _LOW_SIGNAL_TOKENS = frozenset(
     {
         "the",
@@ -81,11 +101,21 @@ class SearchService:
         cache_ttl = max(0.0, float(self._settings.cache_ttl_seconds))
         cache_max = max(10, int(self._settings.cache_max_entries))
         self._cache = BoundedTTLCache[tuple[str, int, int], SearchPage](
-            max_entries=cache_max, ttl_seconds=cache_ttl, name="search_page"
+            max_entries=cache_max,
+            ttl_seconds=cache_ttl,
+            max_weight=self._settings.cache_max_bytes,
+            weigher=_search_page_weight,
+            name="search_page",
         )
         self._result_set_cache = BoundedTTLCache[
             tuple[str, int, int, int, int], SearchResultSet
-        ](max_entries=cache_max, ttl_seconds=cache_ttl, name="search_result_set")
+        ](
+            max_entries=cache_max,
+            ttl_seconds=cache_ttl,
+            max_weight=self._settings.cache_max_bytes,
+            weigher=_search_results_weight,
+            name="search_result_set",
+        )
         self._page_flight: SingleFlight[tuple[str, int, int], SearchPage] = (
             SingleFlight()
         )
