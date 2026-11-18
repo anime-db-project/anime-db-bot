@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import os
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from functools import lru_cache
 from pathlib import Path
 from typing import Mapping, MutableMapping
@@ -167,6 +167,36 @@ class LoggingSettings:
 
 
 @dataclass(frozen=True, slots=True)
+class RichMediaSettings:
+    # Strategies are attempted in this exact order. Removing a strategy
+    # disables it; "text_only" is an unconditional final rich fallback.
+    order: tuple[str, ...] = ("direct", "url", "ram", "disk")
+    ram_enabled: bool = True
+    disk_enabled: bool = True
+    max_images: int = 8
+    max_image_bytes: int = 4 * 1024 * 1024
+    ram_cache_bytes: int = 64 * 1024 * 1024
+    disk_cache_bytes: int = 256 * 1024 * 1024
+    cache_ttl_seconds: int = 86400
+    download_timeout_seconds: float = 3.0
+    total_timeout_seconds: float = 7.0
+    max_downloads: int = 8
+    disk_dir: Path = ROOT_DIR / "data/runtime/rich-media"
+
+
+def _rich_media_order(env: Mapping[str, str]) -> tuple[str, ...]:
+    raw = _raw(env, "RICH_MEDIA_ORDER", "direct,url,ram,disk")
+    values = [value.strip().casefold() for value in raw.split(",") if value.strip()]
+    allowed = {"direct", "url", "ram", "disk"}
+    unknown = set(values) - allowed
+    if unknown:
+        raise ValueError(
+            f"RICH_MEDIA_ORDER: unsupported strategies: {', '.join(sorted(unknown))}"
+        )
+    return tuple(dict.fromkeys(values))
+
+
+@dataclass(frozen=True, slots=True)
 class TelegramSettings:
     bot_token: str
     bot_api_url: str
@@ -176,6 +206,7 @@ class TelegramSettings:
     admin_user_ids: tuple[int, ...]
     bot_api_local_file_root: Path | None = None
     max_concurrent_updates: int = 64
+    rich_media: RichMediaSettings = field(default_factory=RichMediaSettings)
 
 
 @dataclass(frozen=True, slots=True)
@@ -417,6 +448,34 @@ class AppSettings:
                 ),
                 max_concurrent_updates=_int(
                     values, "TELEGRAM_MAX_CONCURRENT_UPDATES", 64, 1
+                ),
+                rich_media=RichMediaSettings(
+                    order=_rich_media_order(values),
+                    ram_enabled=_bool(values, "RICH_MEDIA_RAM_ENABLED", True),
+                    disk_enabled=_bool(values, "RICH_MEDIA_DISK_ENABLED", True),
+                    max_images=_int(values, "RICH_MEDIA_MAX_IMAGES", 8, 1),
+                    max_image_bytes=_int(
+                        values, "RICH_MEDIA_MAX_IMAGE_BYTES", 4194304, 65536
+                    ),
+                    ram_cache_bytes=_int(
+                        values, "RICH_MEDIA_RAM_CACHE_BYTES", 67108864, 0
+                    ),
+                    disk_cache_bytes=_int(
+                        values, "RICH_MEDIA_DISK_CACHE_BYTES", 268435456, 0
+                    ),
+                    cache_ttl_seconds=_int(
+                        values, "RICH_MEDIA_CACHE_TTL_SECONDS", 86400, 60
+                    ),
+                    download_timeout_seconds=_float(
+                        values, "RICH_MEDIA_DOWNLOAD_TIMEOUT_SECONDS", 3.0, 0.1
+                    ),
+                    total_timeout_seconds=_float(
+                        values, "RICH_MEDIA_TOTAL_TIMEOUT_SECONDS", 7.0, 0.5
+                    ),
+                    max_downloads=_int(values, "RICH_MEDIA_MAX_DOWNLOADS", 8, 1),
+                    disk_dir=_path(
+                        values, "RICH_MEDIA_DISK_DIR", "data/runtime/rich-media"
+                    ),
                 ),
             ),
             storage=StorageSettings(
