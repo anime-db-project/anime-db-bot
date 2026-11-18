@@ -137,7 +137,7 @@ def _optional_path(env: Mapping[str, str], name: str) -> Path | None:
     return path if path.is_absolute() else ROOT_DIR / path
 
 
-def _admin_ids(value: str) -> tuple[int, ...]:
+def _user_ids(value: str, *, setting: str) -> tuple[int, ...]:
     result: list[int] = []
     seen: set[int] = set()
     for token in _ADMIN_SPLIT_RE.split((value or "").strip()):
@@ -145,7 +145,7 @@ def _admin_ids(value: str) -> tuple[int, ...]:
             continue
         if not token.isdecimal() or int(token) <= 0:
             raise ValueError(
-                "ADMIN_TELEGRAM_USER_IDS must contain positive numeric account IDs; "
+                f"{setting} must contain positive numeric account IDs; "
                 f"got {token!r}"
             )
         user_id = int(token)
@@ -153,6 +153,10 @@ def _admin_ids(value: str) -> tuple[int, ...]:
             seen.add(user_id)
             result.append(user_id)
     return tuple(result)
+
+
+def _admin_ids(value: str) -> tuple[int, ...]:
+    return _user_ids(value, setting="ADMIN_TELEGRAM_USER_IDS")
 
 
 @dataclass(frozen=True, slots=True)
@@ -206,6 +210,7 @@ class TelegramSettings:
     anime_input_ttl_seconds: int
     admin_user_ids: tuple[int, ...]
     bot_api_local_file_root: Path | None = None
+    allowed_user_ids: tuple[int, ...] = ()
     max_concurrent_updates: int = 64
     rich_media: RichMediaSettings = field(default_factory=RichMediaSettings)
 
@@ -444,6 +449,10 @@ class AppSettings:
                     values, "ANIME_INPUT_TTL_SECONDS", 300, 30
                 ),
                 admin_user_ids=_admin_ids(_raw(values, "ADMIN_TELEGRAM_USER_IDS")),
+                allowed_user_ids=_user_ids(
+                    _raw(values, "TELEGRAM_ALLOWED_USER_IDS"),
+                    setting="TELEGRAM_ALLOWED_USER_IDS",
+                ),
                 bot_api_local_file_root=_optional_path(
                     values, "TELEGRAM_BOT_API_LOCAL_FILE_ROOT"
                 ),

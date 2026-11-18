@@ -8,6 +8,7 @@ from aiogram import BaseMiddleware
 from aiogram.types import CallbackQuery, Message
 
 from bots.telegram.admin import TelegramModerationMiddleware, register_admin_handlers
+from bots.telegram.allowlist import TelegramAllowlistMiddleware
 from bots.telegram.card.runtime.handlers import build_dispatcher
 from bots.telegram.card.runtime.service import aggregate_and_send
 from bots.telegram.card.runtime.state import TelegramCardState
@@ -230,6 +231,12 @@ async def run_bot(
     )
     logging.info("Configured Telegram administrators: %d", len(telegram_admin_ids()))
     logging.info(
+        "Telegram user allowlist: %s",
+        f"{len(settings.telegram.allowed_user_ids)} allowed users"
+        if settings.telegram.allowed_user_ids
+        else "disabled (all users allowed)",
+    )
+    logging.info(
         "Personal rate limit: %d/min/user, %d/hour/user (admins bypass personal limit)",
         context.personal_rate_limiter.per_minute,
         context.personal_rate_limiter.per_hour,
@@ -259,6 +266,11 @@ async def run_bot(
                 )
 
             dp = build_dispatcher(mode_name=transport.mode_name, state=card_state)
+            # Filter updates before moderation SQLite queries, callbacks,
+            # logging, search or any other application middleware.
+            dp.update.outer_middleware(
+                TelegramAllowlistMiddleware(settings.telegram.allowed_user_ids)
+            )
             observability = _ObservabilityMiddleware()
             moderation = TelegramModerationMiddleware()
             rate_limit = TelegramRateLimitMiddleware(context.personal_rate_limiter)

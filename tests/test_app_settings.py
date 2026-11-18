@@ -30,6 +30,7 @@ class AppSettingsTests(unittest.TestCase):
                 "TELEGRAM_BOT_API_LOCAL_FILE_ROOT": "telegram-local-files",
                 "TELEGRAM_SESSION_TTL_SECONDS": "90",
                 "ADMIN_TELEGRAM_USER_IDS": "1, 2;3\n2",
+                "TELEGRAM_ALLOWED_USER_IDS": "5, 7;8\n7",
                 "MAPPINGS_AUTO_UPDATE": "0",
                 "MAPPINGS_CHECK_INTERVAL_SECONDS": "600",
                 "MAPPINGS_RELEASE_REPOSITORY": "example/mappings",
@@ -90,6 +91,7 @@ class AppSettingsTests(unittest.TestCase):
         )
         self.assertEqual(settings.telegram.session_ttl_seconds, 90)
         self.assertEqual(settings.telegram.admin_user_ids, (1, 2, 3))
+        self.assertEqual(settings.telegram.allowed_user_ids, (5, 7, 8))
         self.assertFalse(settings.mappings.auto_update)
         self.assertEqual(settings.mappings.check_interval_seconds, 600.0)
         self.assertEqual(settings.mappings.release_repository, "example/mappings")
@@ -244,9 +246,10 @@ class AppSettingsTests(unittest.TestCase):
                     encoding="utf-8",
                 )
             values = project_env_values(root)
-        self.assertEqual(len(values), 154)
+        self.assertEqual(len(values), 155)
         self.assertIn("RICH_MEDIA_MAX_LOCAL_DELIVERIES", values)
         self.assertIn("BOT_TOKEN", values)
+        self.assertIn("TELEGRAM_ALLOWED_USER_IDS", values)
         self.assertIn("TELEGRAM_BOT_API_LOCAL_FILE_ROOT", values)
         self.assertIn("KITSU_API_URL", values)
         self.assertIn("TRACE_MOE_API_KEY", values)
@@ -300,6 +303,20 @@ class AppSettingsTests(unittest.TestCase):
     def test_invalid_admin_id_fails_fast(self) -> None:
         with self.assertRaises(ValueError):
             AppSettings.from_env({"ADMIN_TELEGRAM_USER_IDS": "1,nope"})
+
+    def test_user_allowlist_is_optional_and_validated(self) -> None:
+        self.assertEqual(
+            AppSettings.from_env({}).telegram.allowed_user_ids, ()
+        )
+        self.assertEqual(
+            AppSettings.from_env({"TELEGRAM_ALLOWED_USER_IDS": ""})
+            .telegram.allowed_user_ids,
+            (),
+        )
+        with self.assertRaisesRegex(ValueError, "TELEGRAM_ALLOWED_USER_IDS"):
+            AppSettings.from_env({"TELEGRAM_ALLOWED_USER_IDS": "1,nope"})
+        with self.assertRaisesRegex(ValueError, "TELEGRAM_ALLOWED_USER_IDS"):
+            AppSettings.from_env({"TELEGRAM_ALLOWED_USER_IDS": "-2"})
 
     def test_required_bot_token_validation(self) -> None:
         with self.assertRaises(RuntimeError):
