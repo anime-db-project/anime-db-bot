@@ -1117,10 +1117,7 @@ class AppSettings:
                 upstream_per_operation=upstream_per_operation,
             ),
         )
-        if (
-            config.http.max_keepalive_connections
-            > config.http.max_connections
-        ):
+        if config.http.max_keepalive_connections > config.http.max_connections:
             raise ValueError(
                 "HTTP_MAX_KEEPALIVE_CONNECTIONS cannot exceed HTTP_MAX_CONNECTIONS"
             )

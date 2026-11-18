@@ -201,6 +201,8 @@ class SQLiteUserSettingsStore:
             key = (platform_key, int(user_id))
             self._locales[key] = (time.monotonic() + self._cache_ttl_seconds, result)
             self._locales.move_to_end(key)
+            while len(self._locales) > self._cache_max_entries:
+                self._locales.popitem(last=False)
         return result
 
     def touch_user(self, platform: str, user_id: int) -> None:
