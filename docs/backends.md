@@ -34,10 +34,26 @@ converted. PostgreSQL tables are initialized automatically. Credentials are
 never written to the repo.
 
 Switching to PostgreSQL **does not automatically migrate existing SQLite
-records**. Back up the SQLite databases before changing the backend. Migrate
-existing records explicitly before switching a populated deployment, or they
-will not appear in PostgreSQL. Database write failures fail closed: the bot
-does not silently write mutable data to a different local database.
+records**. Back up the SQLite databases before changing the backend. Database
+write failures fail closed: the bot does not silently write mutable data to
+another database.
+
+For existing installations, leave `DATABASE_BACKEND=sqlite` until migration
+is complete. Set `DATABASE_URL` to the *destination* (without switching the
+backend yet), then **stop the bot and make backups** of all three SQLite
+databases. Inspect source counts, then apply the explicit migration:
+
+```sh
+python scripts/migrate_sqlite_to_postgres.py
+python scripts/migrate_sqlite_to_postgres.py --apply
+```
+
+The migration runs all inserts in a PostgreSQL transaction, does not modify
+SQLite files, and can be rerun while the bot is stopped. After verifying
+row counts, change `DATABASE_BACKEND=postgres` and restart. If a legacy
+non-platform-scoped user settings schema is detected, run the newer bot in
+SQLite mode to upgrade it before migration. Never run both backends actively
+against different replicas of the same bot.
 
 Use a non-superuser PostgreSQL role with privileges only on its application
 schema, enable TLS when connecting to a remote host, and secure the DSN as
