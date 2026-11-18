@@ -192,6 +192,24 @@ class AggregatorIdentityTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(source.identities[0].external_ids, enriched.external_ids)
         self.assertEqual(candidate.external_ids, {"mal": "123"})
         self.assertEqual(anime.external_ids["shikimori"], "456")
+
+    async def test_no_new_identity_skips_second_resolver_call(self) -> None:
+        source = _MALSecondPassSource()
+        resolver = AsyncMock(spec=IdentityResolver)
+        resolver.anchor_for.return_value = None
+
+        async def passthrough(
+            identity: AnimeIdentity, titles: list[str]
+        ) -> AnimeIdentity:
+            return identity.copy()
+
+        resolver.enrich = AsyncMock(side_effect=passthrough)
+        aggregator = AnimeAggregator((source,), identity_resolver=resolver)
+        anime = await aggregator.aggregate(
+            SearchCandidate(title="Stable", external_ids={"mal": "20"})
+        )
+
+        self.assertEqual(anime.external_ids["mal"], "20")
         resolver.enrich.assert_awaited_once()
 
     async def test_initial_aggregation_defers_screenshots(self) -> None:
