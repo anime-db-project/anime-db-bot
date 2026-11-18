@@ -59,9 +59,11 @@ class ScreenshotGalleryTests(unittest.IsolatedAsyncioTestCase):
             page=0,
             locale="ru",
         )
-        all_html = message.edit_text.await_args.kwargs["rich_message"].html or ""
+        all_rich = message.edit_text.await_args.kwargs["rich_message"]
+        all_html = all_rich.html or ""
         self.assertIn("<tg-slideshow>", all_html)
-        self.assertIn("screenshot-1.jpg", all_html)
+        self.assertIn('src="tg://photo?id=adb_photo_0"', all_html)
+        self.assertIn("screenshot-1.jpg", all_rich.media[0].media.media)
 
         message.reset_mock()
         await edit_screenshots_view(
@@ -72,10 +74,11 @@ class ScreenshotGalleryTests(unittest.IsolatedAsyncioTestCase):
             page=0,
             locale="ru",
         )
-        source_html = message.edit_text.await_args.kwargs["rich_message"].html or ""
+        source_rich = message.edit_text.await_args.kwargs["rich_message"]
+        source_html = source_rich.html or ""
         self.assertIn("<tg-slideshow>", source_html)
         self.assertIn("Скриншоты — Shikimori", source_html)
-        self.assertIn("screenshot-1.jpg", source_html)
+        self.assertIn("screenshot-1.jpg", source_rich.media[0].media.media)
 
     async def test_source_page_navigation_keeps_the_gallery(self) -> None:
         session = self._session(17)
@@ -88,9 +91,10 @@ class ScreenshotGalleryTests(unittest.IsolatedAsyncioTestCase):
             page=1,
             locale="ru",
         )
-        html = message.edit_text.await_args.kwargs["rich_message"].html or ""
-        self.assertIn("screenshot-9.jpg", html)
-        self.assertNotIn("screenshot-1.jpg", html)
+        rich = message.edit_text.await_args.kwargs["rich_message"]
+        urls = [item.media.media for item in rich.media]
+        self.assertIn("screenshot-9.jpg", urls[0])
+        self.assertTrue(all("screenshot-1.jpg" not in url for url in urls))
 
     async def test_all_screenshots_put_pagination_above_sources(self) -> None:
         session = self._session(17)
