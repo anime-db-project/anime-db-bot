@@ -308,11 +308,13 @@ def main_rich(
     text_value: str,
     *,
     locale: str,
+    include_posters: bool = True,
 ) -> InputRichMessage:
+    poster = poster_html(anime) if include_posters else ""
     full_main = _main_text(anime, locale=locale)
     if text_value.strip() != full_main.strip():
         return InputRichMessage(
-            html=poster_html(anime) + plain_text_to_rich_html(text_value)
+            html=poster + plain_text_to_rich_html(text_value)
         )
 
     block_html: list[str] = []
@@ -352,4 +354,4 @@ def main_rich(
         block_html.append(_block_actions_html(token, actions, locale=locale))
 
     title_html = f"<h2>{html.escape(display_anime_title(anime, locale))}</h2>"
-    return InputRichMessage(html=poster_html(anime) + title_html + "".join(block_html))
+    return InputRichMessage(html=poster + title_html + "".join(block_html))

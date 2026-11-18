@@ -167,9 +167,13 @@ def rich_view(
     text_value: str,
     *,
     locale: str,
+    include_posters: bool = True,
 ) -> InputRichMessage:
     if section == "main":
-        return main_rich(token, anime, text_value, locale=locale)
+        return main_rich(
+            token, anime, text_value, locale=locale,
+            include_posters=include_posters,
+        )
     if section == "titles":
         full_titles = format_titles(anime.titles, anime.synonyms, locale=locale)
         if text_value.strip() == full_titles.strip():
