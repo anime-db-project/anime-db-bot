@@ -269,7 +269,16 @@ async def run_bot(
             # Filter updates before moderation SQLite queries, callbacks,
             # logging, search or any other application middleware.
             dp.update.outer_middleware(
-                TelegramAllowlistMiddleware(settings.telegram.allowed_user_ids)
+                TelegramAllowlistMiddleware(
+                    settings.telegram.allowed_user_ids,
+                    reply_cooldown_seconds=(
+                        settings.telegram.denied_reply_cooldown_seconds
+                    ),
+                    global_replies_per_minute=(
+                        settings.telegram.denied_global_replies_per_minute
+                    ),
+                    max_tracked_users=settings.telegram.denied_max_tracked_users,
+                )
             )
             observability = _ObservabilityMiddleware()
             moderation = TelegramModerationMiddleware()

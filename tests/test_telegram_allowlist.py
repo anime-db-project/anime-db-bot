@@ -48,11 +48,78 @@ class TelegramAllowlistTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(await gate(handler, update, {}), "ok")
         handler.assert_awaited_once()
 
-    async def test_blocked_user_does_not_reach_handlers(self) -> None:
+    async def test_blocked_user_gets_message_without_reaching_handlers(self) -> None:
         gate = TelegramAllowlistMiddleware((101,))
         handler = AsyncMock()
         update = Update(update_id=2, message=_message(202))
-        self.assertIsNone(await gate(handler, update, {}))
+        with patch.object(Message, "answer", new_callable=AsyncMock) as answer:
+            self.assertIsNone(await gate(handler, update, {}))
+        answer.assert_awaited_once_with("Доступ к боту ограничен.")
+        handler.assert_not_awaited()
+
+    async def test_repeated_denied_messages_are_rate_limited(self) -> None:
+        now = [100.0]
+        gate = TelegramAllowlistMiddleware(
+            (101,), reply_cooldown_seconds=60.0, clock=lambda: now[0]
+        )
+        handler = AsyncMock()
+        update = Update(update_id=2, message=_message(202, text="/anime"))
+        with patch.object(Message, "answer", new_callable=AsyncMock) as answer:
+            for _ in range(40):
+                self.assertIsNone(await gate(handler, update, {}))
+            answer.assert_awaited_once()
+            now[0] = 159.9
+            await gate(handler, update, {})
+            answer.assert_awaited_once()
+            now[0] = 160.0
+            await gate(handler, update, {})
+            self.assertEqual(answer.await_count, 2)
+        handler.assert_not_awaited()
+
+    async def test_global_reply_limit_applies_to_different_users(self) -> None:
+        now = [10.0]
+        gate = TelegramAllowlistMiddleware(
+            (101,),
+            reply_cooldown_seconds=0.0,
+            global_replies_per_minute=2,
+            clock=lambda: now[0],
+        )
+        handler = AsyncMock()
+        with patch.object(Message, "answer", new_callable=AsyncMock) as answer:
+            for user_id in range(200, 260):
+                await gate(
+                    handler, Update(update_id=user_id, message=_message(user_id)), {}
+                )
+            self.assertEqual(answer.await_count, 2)
+            now[0] = 70.0
+            await gate(handler, Update(update_id=501, message=_message(500)), {})
+            self.assertEqual(answer.await_count, 3)
+        handler.assert_not_awaited()
+
+    async def test_denied_user_cache_is_bounded(self) -> None:
+        gate = TelegramAllowlistMiddleware(
+            (101,), max_tracked_users=3, global_replies_per_minute=100
+        )
+        handler = AsyncMock()
+        with patch.object(Message, "answer", new_callable=AsyncMock):
+            for user_id in range(200, 220):
+                await gate(
+                    handler, Update(update_id=user_id, message=_message(user_id)), {}
+                )
+        self.assertEqual(len(gate._last_notice), 3)
+        self.assertLessEqual(len(gate._global_notices), 100)
+        handler.assert_not_awaited()
+
+    async def test_blocked_message_delivery_errors_are_not_retried(self) -> None:
+        gate = TelegramAllowlistMiddleware((101,))
+        handler = AsyncMock()
+        update = Update(update_id=2, message=_message(202))
+        with patch.object(
+            Message, "answer", new_callable=AsyncMock, side_effect=RuntimeError("API")
+        ) as answer:
+            self.assertIsNone(await gate(handler, update, {}))
+            self.assertIsNone(await gate(handler, update, {}))
+        answer.assert_awaited_once()
         handler.assert_not_awaited()
 
     async def test_anonymous_message_is_blocked_when_restricted(self) -> None:
@@ -72,6 +139,19 @@ class TelegramAllowlistTests(unittest.IsolatedAsyncioTestCase):
         answer.assert_awaited_once_with(
             "Доступ к боту ограничен.", show_alert=True
         )
+        handler.assert_not_awaited()
+
+    async def test_callback_uses_same_per_user_cooldown_as_messages(self) -> None:
+        gate = TelegramAllowlistMiddleware((101,))
+        handler = AsyncMock()
+        with (
+            patch.object(CallbackQuery, "answer", new_callable=AsyncMock) as callback_answer,
+            patch.object(Message, "answer", new_callable=AsyncMock) as message_answer,
+        ):
+            await gate(handler, Update(update_id=2, message=_message(202)), {})
+            await gate(handler, Update(update_id=3, callback_query=_callback(202)), {})
+        message_answer.assert_awaited_once()
+        callback_answer.assert_not_awaited()
         handler.assert_not_awaited()
 
     async def test_callback_from_allowed_user_is_processed(self) -> None:

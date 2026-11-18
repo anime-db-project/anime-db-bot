@@ -31,6 +31,9 @@ class AppSettingsTests(unittest.TestCase):
                 "TELEGRAM_SESSION_TTL_SECONDS": "90",
                 "ADMIN_TELEGRAM_USER_IDS": "1, 2;3\n2",
                 "TELEGRAM_ALLOWED_USER_IDS": "5, 7;8\n7",
+                "TELEGRAM_DENIED_REPLY_COOLDOWN_SECONDS": "15.5",
+                "TELEGRAM_DENIED_GLOBAL_REPLIES_PER_MINUTE": "12",
+                "TELEGRAM_DENIED_MAX_TRACKED_USERS": "100",
                 "MAPPINGS_AUTO_UPDATE": "0",
                 "MAPPINGS_CHECK_INTERVAL_SECONDS": "600",
                 "MAPPINGS_RELEASE_REPOSITORY": "example/mappings",
@@ -92,6 +95,9 @@ class AppSettingsTests(unittest.TestCase):
         self.assertEqual(settings.telegram.session_ttl_seconds, 90)
         self.assertEqual(settings.telegram.admin_user_ids, (1, 2, 3))
         self.assertEqual(settings.telegram.allowed_user_ids, (5, 7, 8))
+        self.assertEqual(settings.telegram.denied_reply_cooldown_seconds, 15.5)
+        self.assertEqual(settings.telegram.denied_global_replies_per_minute, 12)
+        self.assertEqual(settings.telegram.denied_max_tracked_users, 100)
         self.assertFalse(settings.mappings.auto_update)
         self.assertEqual(settings.mappings.check_interval_seconds, 600.0)
         self.assertEqual(settings.mappings.release_repository, "example/mappings")
@@ -246,10 +252,13 @@ class AppSettingsTests(unittest.TestCase):
                     encoding="utf-8",
                 )
             values = project_env_values(root)
-        self.assertEqual(len(values), 155)
+        self.assertEqual(len(values), 158)
         self.assertIn("RICH_MEDIA_MAX_LOCAL_DELIVERIES", values)
         self.assertIn("BOT_TOKEN", values)
         self.assertIn("TELEGRAM_ALLOWED_USER_IDS", values)
+        self.assertIn("TELEGRAM_DENIED_REPLY_COOLDOWN_SECONDS", values)
+        self.assertIn("TELEGRAM_DENIED_GLOBAL_REPLIES_PER_MINUTE", values)
+        self.assertIn("TELEGRAM_DENIED_MAX_TRACKED_USERS", values)
         self.assertIn("TELEGRAM_BOT_API_LOCAL_FILE_ROOT", values)
         self.assertIn("KITSU_API_URL", values)
         self.assertIn("TRACE_MOE_API_KEY", values)

@@ -210,6 +210,9 @@ class TelegramSettings:
     admin_user_ids: tuple[int, ...]
     bot_api_local_file_root: Path | None = None
     allowed_user_ids: tuple[int, ...] = ()
+    denied_reply_cooldown_seconds: float = 60.0
+    denied_global_replies_per_minute: int = 20
+    denied_max_tracked_users: int = 4096
     max_concurrent_updates: int = 64
     rich_media: RichMediaSettings = field(default_factory=RichMediaSettings)
 
@@ -451,6 +454,15 @@ class AppSettings:
                 allowed_user_ids=_user_ids(
                     _raw(values, "TELEGRAM_ALLOWED_USER_IDS"),
                     setting="TELEGRAM_ALLOWED_USER_IDS",
+                ),
+                denied_reply_cooldown_seconds=_float(
+                    values, "TELEGRAM_DENIED_REPLY_COOLDOWN_SECONDS", 60.0
+                ),
+                denied_global_replies_per_minute=_int(
+                    values, "TELEGRAM_DENIED_GLOBAL_REPLIES_PER_MINUTE", 20
+                ),
+                denied_max_tracked_users=_int(
+                    values, "TELEGRAM_DENIED_MAX_TRACKED_USERS", 4096, 1
                 ),
                 bot_api_local_file_root=_optional_path(
                     values, "TELEGRAM_BOT_API_LOCAL_FILE_ROOT"
