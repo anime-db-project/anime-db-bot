@@ -6,8 +6,12 @@ Run: python -m scripts.config_report --list
 from __future__ import annotations
 
 import argparse
+import ast
+import math
+import os
 import re
 from pathlib import Path
+from typing import Mapping
 
 from core.settings import (
     AppSettings,
@@ -41,13 +45,73 @@ def example_groups(root_dir: Path = ROOT_DIR) -> dict[str, tuple[str, ...]]:
     return groups
 
 
-def validate_config(root_dir: Path = ROOT_DIR) -> list[str]:
+
+def _invalid_scalar_keys(values: Mapping[str, str]) -> list[str]:
+    """Flag invalid scalar env values even where legacy parsers use defaults."""
+    tree = ast.parse(
+        (ROOT_DIR / "core/settings.py").read_text(encoding="utf-8")
+    )
+    parsers = {"_int", "_float", "_bool", "_strict_int", "_strict_float"}
+    types: dict[str, str] = {}
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Call) or not isinstance(node.func, ast.Name):
+            continue
+        kind = node.func.id
+        if kind not in parsers or len(node.args) < 2:
+            continue
+        key = node.args[1]
+        if isinstance(key, ast.Constant) and isinstance(key.value, str):
+            types[key.value] = (
+                "boolean" if kind == "_bool"
+                else "float" if "float" in kind
+                else "integer"
+            )
+
+    invalid: set[str] = set()
+    for key, kind in types.items():
+        if key not in values:
+            continue
+        raw = str(values[key]).strip()
+        try:
+            if kind == "boolean":
+                if raw.casefold() not in {
+                    "0", "1", "true", "false", "yes", "no", "on", "off"
+                }:
+                    raise ValueError("invalid boolean")
+            elif kind == "integer":
+                int(raw)
+            else:
+                if not math.isfinite(float(raw)):
+                    raise ValueError("non-finite")
+        except ValueError:
+            invalid.add(key)
+    for key, raw in values.items():
+        if key.startswith("UPSTREAM_RATE_LIMIT_") and key.endswith("_PER_MINUTE"):
+            try:
+                if int(str(raw)) <= 0:
+                    raise ValueError("not positive")
+            except ValueError:
+                invalid.add(key)
+    return sorted(invalid)
+
+
+def validate_config(
+    root_dir: Path = ROOT_DIR,
+    *,
+    environment: Mapping[str, str] | None = None,
+) -> list[str]:
     """Validate settings and report keys missing from the shipped examples.
 
     No secret values appear in the return value, even when parsing fails.
     """
     values = project_env_values(root_dir)
-    AppSettings.from_env(values)
+    effective = dict(values)
+    effective.update(os.environ if environment is None else environment)
+    invalid = _invalid_scalar_keys(effective)
+    if invalid:
+        # Only key names are reported. Never render active secrets or IDs.
+        raise ConfigFileError("Invalid numeric/boolean keys: " + ", ".join(invalid))
+    AppSettings.from_env(effective)
     documented = {key for keys in example_groups(root_dir).values() for key in keys}
     return sorted(set(values) - documented)
 
@@ -75,7 +139,12 @@ def main() -> int:
             unexpected = validate_config()
         except (ValueError, ConfigFileError) as error:
             # Never print raw environment values or connection strings.
-            print(f"Configuration validation failed: {type(error).__name__}")
+            if isinstance(error, ConfigFileError) and str(error).startswith(
+                "Invalid numeric/boolean keys:"
+            ):
+                print(f"Configuration validation failed: {error}")
+            else:
+                print(f"Configuration validation failed: {type(error).__name__}")
             return 2
         files = project_env_files()
         print(f"Configuration parsed successfully ({len(files)} project files).")
