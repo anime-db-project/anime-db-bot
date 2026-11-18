@@ -195,13 +195,13 @@ class RichMediaDelivery:
     async def _fetch(self, url: str, deadline: float) -> bytes | None:
         if self._bad_urls.get(url):
             return None
-        if self.settings.ram_cache_bytes:
+        if self.settings.ram_enabled and self.settings.ram_cache_bytes:
             cached = self._memory.get(url)
             if cached is not None:
                 return cached
         try:
             async with self._slots:
-                if self.settings.ram_cache_bytes:
+                if self.settings.ram_enabled and self.settings.ram_cache_bytes:
                     cached = self._memory.get(url)
                     if cached is not None:
                         return cached
@@ -241,7 +241,7 @@ class RichMediaDelivery:
                             payload = bytes(data)
                             if not _extension(payload):
                                 raise ValueError("unsupported or invalid image bytes")
-                            if self.settings.ram_cache_bytes:
+                            if self.settings.ram_enabled and self.settings.ram_cache_bytes:
                                 self._memory.set(url, payload)
                             return payload
                     raise ValueError("too many image redirects")

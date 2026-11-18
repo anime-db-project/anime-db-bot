@@ -12,6 +12,7 @@ from aiogram.types import (
 
 from bots.telegram.callbacks import KeyedPageCallback, resolve_key_or_legacy_index
 from bots.telegram.pagination import card_picker_callback
+from bots.telegram.rich_media import deliver_rich_media
 from bots.telegram.card.views.renderer import (
     edit_standard_text,
     plain_text_to_rich_html,
@@ -289,9 +290,11 @@ async def edit_trailers_view(
 
     rich_item = items[0] if source_key is not None and items else None
     try:
-        await message.edit_text(
-            rich_message=_trailer_rich(content, rich_item),
-            reply_markup=keyboard,
+        await deliver_rich_media(
+            lambda rich: message.edit_text(
+                rich_message=rich, reply_markup=keyboard
+            ),
+            _trailer_rich(content, rich_item),
         )
     except Exception:
         logging.exception("Rich trailer view edit failed; falling back to text")
