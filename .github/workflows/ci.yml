@@ -6,6 +6,53 @@ on:
   pull_request:
 
 jobs:
+  optional-backends:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_DB: anime_test
+          POSTGRES_USER: anime_test
+          POSTGRES_PASSWORD: integration_secret
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U anime_test -d anime_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      TEST_POSTGRES_DSN: postgresql://anime_test:integration_secret@127.0.0.1:5432/anime_test
+      TEST_REDIS_URL: redis://127.0.0.1:6379/15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: Install runtime and optional backend drivers
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.lock -r requirements-backends.txt
+          python -m pip check
+      - name: Integration tests against PostgreSQL and Redis
+        run: python -m unittest tests.test_external_backends -v
+
   unit:
     runs-on: ubuntu-latest
     strategy:
