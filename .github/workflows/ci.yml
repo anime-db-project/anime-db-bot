@@ -36,6 +36,7 @@ jobs:
     env:
       TEST_POSTGRES_DSN: postgresql://anime_test:integration_secret@127.0.0.1:5432/anime_test
       TEST_REDIS_URL: redis://127.0.0.1:6379/15
+      TEST_BACKENDS_ALLOW_DESTRUCTIVE: "1"
 
     steps:
       - name: Checkout

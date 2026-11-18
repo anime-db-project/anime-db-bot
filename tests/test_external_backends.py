@@ -26,8 +26,8 @@ class PostgreSQLIntegrationTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
         dsn = os.environ.get("TEST_POSTGRES_DSN", "")
-        if not dsn:
-            raise unittest.SkipTest("TEST_POSTGRES_DSN not configured")
+        if not dsn or os.environ.get("TEST_BACKENDS_ALLOW_DESTRUCTIVE") != "1":
+            raise unittest.SkipTest("isolated PostgreSQL test services not configured")
         cls.pool = PostgresPool(dsn, max_size=3)
 
     @classmethod
@@ -183,8 +183,8 @@ class _FakeSource:
 class RedisIntegrationTests(unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self) -> None:
         url = os.environ.get("TEST_REDIS_URL", "")
-        if not url:
-            self.skipTest("TEST_REDIS_URL not configured")
+        if not url or os.environ.get("TEST_BACKENDS_ALLOW_DESTRUCTIVE") != "1":
+            self.skipTest("isolated Redis test services not configured")
         import redis.asyncio as redis
 
         self.client = redis.from_url(url, decode_responses=True)
