@@ -178,7 +178,7 @@ def _service_for(
     service_cache: dict[tuple[str, ...], SearchService],
 ) -> SearchService:
     provider_keys = _normalize_provider_keys(provider_keys)
-    if provider_keys == default_service.settings.default_provider_keys:
+    if set(provider_keys) == set(default_service.settings.default_provider_keys):
         return default_service
 
     service = service_cache.get(provider_keys)

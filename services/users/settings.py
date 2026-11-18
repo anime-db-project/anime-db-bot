@@ -166,7 +166,10 @@ class SQLiteUserSettingsStore:
             else UserSettings(locale=self._default_locale)
         )
         with self._cache_lock:
-            self._locales[cache_key] = (time.monotonic() + self._cache_ttl_seconds, result)
+            self._locales[cache_key] = (
+                time.monotonic() + self._cache_ttl_seconds,
+                result,
+            )
             self._locales.move_to_end(cache_key)
             while len(self._locales) > self._cache_max_entries:
                 self._locales.popitem(last=False)
@@ -212,7 +215,10 @@ class SQLiteUserSettingsStore:
         now = time.monotonic()
         with self._cache_lock:
             last_touch = self._touches.get(key)
-            if last_touch is not None and now - last_touch < self._touch_interval_seconds:
+            if (
+                last_touch is not None
+                and now - last_touch < self._touch_interval_seconds
+            ):
                 self._touches.move_to_end(key)
                 return
         self._ensure_schema()

@@ -932,8 +932,10 @@ class EpisodeProjectionUiTests(unittest.IsolatedAsyncioTestCase):
                 return_value=context,
             ),
             patch(
-                "bots.telegram.card.features.episodes._INITIAL_TIMECODE_WAIT_SECONDS",
-                0.005,
+                "bots.telegram.card.features.episodes.get_settings",
+                return_value=SimpleNamespace(
+                    telegram=SimpleNamespace(initial_timecode_wait_seconds=0.005)
+                ),
             ),
         ):
             await edit_episodes_view(

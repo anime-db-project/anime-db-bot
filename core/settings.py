@@ -238,9 +238,7 @@ def _default_locale(env: Mapping[str, str]) -> str:
 
 
 def _search_providers(env: Mapping[str, str]) -> tuple[str, ...]:
-    raw = _raw(
-        env, "SEARCH_DEFAULT_PROVIDERS", "shikimori,mal,anilist,kitsu"
-    )
+    raw = _raw(env, "SEARCH_DEFAULT_PROVIDERS", "shikimori,mal,anilist,kitsu")
     requested = tuple(
         token.strip().casefold() for token in raw.split(",") if token.strip()
     )
@@ -344,9 +342,7 @@ class SearchSettings:
     expansion_max_pages: int
     cache_max_bytes: int = 4 * 1024 * 1024
     provider_service_cache_entries: int = 6
-    default_provider_keys: tuple[str, ...] = (
-        "shikimori", "mal", "anilist", "kitsu"
-    )
+    default_provider_keys: tuple[str, ...] = ("shikimori", "mal", "anilist", "kitsu")
     expansion_enabled: bool = True
 
 
@@ -599,7 +595,8 @@ class AppSettings:
                 ),
                 denied_message=_raw(
                     values, "TELEGRAM_DENIED_MESSAGE", "Доступ к боту ограничен."
-                ) or "Доступ к боту ограничен.",
+                )
+                or "Доступ к боту ограничен.",
                 bot_api_local_file_root=_optional_path(
                     values, "TELEGRAM_BOT_API_LOCAL_FILE_ROOT"
                 ),
@@ -674,7 +671,11 @@ class AppSettings:
                         values, "RICH_MEDIA_FAILED_URL_TTL_SECONDS", 120.0, 0.0, 86400.0
                     ),
                     failure_method_ttl_seconds=_strict_float(
-                        values, "RICH_MEDIA_FAILED_METHOD_TTL_SECONDS", 180.0, 0.0, 86400.0
+                        values,
+                        "RICH_MEDIA_FAILED_METHOD_TTL_SECONDS",
+                        180.0,
+                        0.0,
+                        86400.0,
                     ),
                     failure_cache_max_entries=_strict_int(
                         values, "RICH_MEDIA_FAILURE_CACHE_ENTRIES", 2048, 1, 100000
@@ -686,7 +687,11 @@ class AppSettings:
                         values, "RICH_MEDIA_MAX_REDIRECTS", 4, 1, 10
                     ),
                     disk_prune_interval_seconds=_strict_float(
-                        values, "RICH_MEDIA_DISK_PRUNE_INTERVAL_SECONDS", 60.0, 0.0, 3600.0
+                        values,
+                        "RICH_MEDIA_DISK_PRUNE_INTERVAL_SECONDS",
+                        60.0,
+                        0.0,
+                        3600.0,
                     ),
                     disk_dir=_path(
                         values, "RICH_MEDIA_DISK_DIR", "data/runtime/rich-media"

@@ -38,7 +38,9 @@ class HttpClientPool:
     ) -> None:
         self._limits = http_settings or HttpSettings()
         if self._limits.max_keepalive_connections > self._limits.max_connections:
-            raise ValueError("HTTP_MAX_KEEPALIVE_CONNECTIONS cannot exceed HTTP_MAX_CONNECTIONS")
+            raise ValueError(
+                "HTTP_MAX_KEEPALIVE_CONNECTIONS cannot exceed HTTP_MAX_CONNECTIONS"
+            )
         self._proxy_settings = proxy_settings or ProxySettings.empty()
         self._user_agent_settings = user_agent_settings or UserAgentSettings.empty()
         self._clients: dict[tuple[str, str], httpx.AsyncClient] = {}
