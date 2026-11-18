@@ -559,7 +559,7 @@ class AppSettings:
         if cache_backend == "redis" and not redis_url:
             raise ValueError("REDIS_URL is required when CACHE_BACKEND=redis")
 
-        return cls(
+        config = cls(
             logging=LoggingSettings(
                 level=(_raw(values, "LOG_LEVEL", "INFO") or "INFO").upper(),
                 structured=_bool(values, "LOG_STRUCTURED", True),
@@ -1117,6 +1117,16 @@ class AppSettings:
                 upstream_per_operation=upstream_per_operation,
             ),
         )
+        if (
+            config.http.max_keepalive_connections
+            > config.http.max_connections
+        ):
+            raise ValueError(
+                "HTTP_MAX_KEEPALIVE_CONNECTIONS cannot exceed HTTP_MAX_CONNECTIONS"
+            )
+        if len(config.telegram.denied_message) > 256:
+            raise ValueError("TELEGRAM_DENIED_MESSAGE must not exceed 256 characters")
+        return config
 
     def require_bot_token(self) -> str:
         if not self.telegram.bot_token:
