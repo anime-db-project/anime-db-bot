@@ -244,7 +244,7 @@ class AppSettingsTests(unittest.TestCase):
                     encoding="utf-8",
                 )
             values = project_env_values(root)
-        self.assertEqual(len(values), 141)
+        self.assertEqual(len(values), 153)
         self.assertIn("BOT_TOKEN", values)
         self.assertIn("TELEGRAM_BOT_API_LOCAL_FILE_ROOT", values)
         self.assertIn("KITSU_API_URL", values)

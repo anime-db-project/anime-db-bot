@@ -127,6 +127,7 @@ async def _deliver_rich_card(
         rich_view(token, anime, section, text_value, locale=locale),
     )
 
+
 async def send_anime_view(
     message: Message,
     token: str,
