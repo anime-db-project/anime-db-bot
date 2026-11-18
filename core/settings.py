@@ -145,8 +145,7 @@ def _user_ids(value: str, *, setting: str) -> tuple[int, ...]:
             continue
         if not token.isdecimal() or int(token) <= 0:
             raise ValueError(
-                f"{setting} must contain positive numeric account IDs; "
-                f"got {token!r}"
+                f"{setting} must contain positive numeric account IDs; got {token!r}"
             )
         user_id = int(token)
         if user_id not in seen:
