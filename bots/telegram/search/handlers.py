@@ -178,7 +178,7 @@ def _service_for(
     service_cache: dict[tuple[str, ...], SearchService],
 ) -> SearchService:
     provider_keys = _normalize_provider_keys(provider_keys)
-    if provider_keys == DEFAULT_SEARCH_PROVIDER_KEYS:
+    if provider_keys == default_service.settings.default_provider_keys:
         return default_service
 
     service = service_cache.get(provider_keys)
@@ -1019,7 +1019,7 @@ async def _execute_query(
                 provider_keys, default_service, provider_map, state.service_cache
             )
             result_set = await service.collect(query)
-            if len(provider_keys) > 1:
+            if len(provider_keys) > 1 and default_service.settings.expansion_enabled:
                 try:
                     result_set = await asyncio.wait_for(
                         expand_text_search(
@@ -1156,7 +1156,7 @@ def register_search_handlers(
                 message,
                 query,
                 user_id,
-                provider_keys=DEFAULT_SEARCH_PROVIDER_KEYS,
+                provider_keys=default_service.settings.default_provider_keys,
                 direct_source_keys=None,
                 default_service=default_service,
                 direct_lookup=direct_lookup,

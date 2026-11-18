@@ -230,6 +230,24 @@ class RichMediaSettings:
     disk_prune_interval_seconds: float = 60.0
 
 
+def _search_providers(env: Mapping[str, str]) -> tuple[str, ...]:
+    raw = _raw(
+        env, "SEARCH_DEFAULT_PROVIDERS", "shikimori,mal,anilist,kitsu"
+    )
+    requested = tuple(
+        token.strip().casefold() for token in raw.split(",") if token.strip()
+    )
+    supported = {"shikimori", "mal", "anilist", "kitsu"}
+    if not requested or any(key not in supported for key in requested):
+        raise ValueError(
+            "SEARCH_DEFAULT_PROVIDERS must list at least one of "
+            "shikimori,mal,anilist,kitsu"
+        )
+    if len(set(requested)) != len(requested):
+        raise ValueError("SEARCH_DEFAULT_PROVIDERS cannot contain duplicates")
+    return requested
+
+
 def _rich_media_order(env: Mapping[str, str]) -> tuple[str, ...]:
     raw = _raw(env, "RICH_MEDIA_ORDER", "direct,url,ram,disk")
     values = [value.strip().casefold() for value in raw.split(",") if value.strip()]
@@ -318,6 +336,10 @@ class SearchSettings:
     expansion_max_pages: int
     cache_max_bytes: int = 4 * 1024 * 1024
     provider_service_cache_entries: int = 6
+    default_provider_keys: tuple[str, ...] = (
+        "shikimori", "mal", "anilist", "kitsu"
+    )
+    expansion_enabled: bool = True
 
 
 @dataclass(frozen=True, slots=True)
@@ -722,6 +744,8 @@ class AppSettings:
                 provider_service_cache_entries=_int(
                     values, "SEARCH_PROVIDER_SERVICE_CACHE_ENTRIES", 6, 1
                 ),
+                default_provider_keys=_search_providers(values),
+                expansion_enabled=_bool(values, "SEARCH_EXPANSION_ENABLED", True),
                 collection_page_size=_int(values, "SEARCH_COLLECTION_PAGE_SIZE", 20, 1),
                 collection_max_pages=_int(values, "SEARCH_COLLECTION_MAX_PAGES", 4, 1),
                 collection_max_items=_int(

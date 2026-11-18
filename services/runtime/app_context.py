@@ -218,7 +218,10 @@ class AppContext:
         personal_rate_limiter = PersonalRateLimiter(settings.rate_limits)
         upstream_rate_limiter = UpstreamRateLimiter(settings.rate_limits)
         search_provider_map = get_search_provider_map(settings.sources, source_health)
-        search_providers = tuple(search_provider_map.values())
+        search_providers = tuple(
+            search_provider_map[SourceKey(key)]
+            for key in settings.search.default_provider_keys
+        )
         redis_cache = (
             RedisSearchCache(
                 settings.cache,
