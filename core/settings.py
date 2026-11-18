@@ -222,6 +222,17 @@ class StorageSettings:
     user_settings_db_path: Path
     bans_db_path: Path
     image_search_db_path: Path
+    backend: str = "sqlite"
+    postgres_dsn: str = ""
+    postgres_pool_size: int = 5
+
+
+@dataclass(frozen=True, slots=True)
+class CacheBackendSettings:
+    backend: str = "memory"
+    redis_url: str = ""
+    redis_key_prefix: str = "anime-db-bot"
+    redis_timeout_seconds: float = 0.25
 
 
 @dataclass(frozen=True, slots=True)
@@ -359,6 +370,7 @@ class AppSettings:
     sources: SourceSettings
     source_health: SourceHealthSettings
     rate_limits: RateLimitSettings
+    cache: CacheBackendSettings = field(default_factory=CacheBackendSettings)
 
     @classmethod
     def from_env(cls, env: Mapping[str, str] | None = None) -> "AppSettings":
@@ -429,6 +441,19 @@ class AppSettings:
             )
             for (source, operation), default in operation_defaults.items()
         }
+
+        database_backend = _raw(values, "DATABASE_BACKEND", "sqlite").casefold()
+        if database_backend not in {"sqlite", "postgres"}:
+            raise ValueError("DATABASE_BACKEND must be sqlite or postgres")
+        postgres_dsn = _raw(values, "DATABASE_URL")
+        if database_backend == "postgres" and not postgres_dsn:
+            raise ValueError("DATABASE_URL is required when DATABASE_BACKEND=postgres")
+        cache_backend = _raw(values, "CACHE_BACKEND", "memory").casefold()
+        if cache_backend not in {"memory", "redis"}:
+            raise ValueError("CACHE_BACKEND must be memory or redis")
+        redis_url = _raw(values, "REDIS_URL")
+        if cache_backend == "redis" and not redis_url:
+            raise ValueError("REDIS_URL is required when CACHE_BACKEND=redis")
 
         return cls(
             logging=LoggingSettings(
@@ -511,6 +536,19 @@ class AppSettings:
                 bans_db_path=_path(values, "BANS_DB_PATH", "data/bans.sqlite3"),
                 image_search_db_path=_path(
                     values, "IMAGE_SEARCH_DB_PATH", "data/image_search.sqlite3"
+                ),
+                backend=database_backend,
+                postgres_dsn=postgres_dsn,
+                postgres_pool_size=_int(values, "DATABASE_POOL_SIZE", 5, 1),
+            ),
+            cache=CacheBackendSettings(
+                backend=cache_backend,
+                redis_url=redis_url,
+                redis_key_prefix=_raw(
+                    values, "REDIS_KEY_PREFIX", "anime-db-bot"
+                ) or "anime-db-bot",
+                redis_timeout_seconds=_float(
+                    values, "REDIS_TIMEOUT_SECONDS", 0.25, 0.05
                 ),
             ),
             search=SearchSettings(
