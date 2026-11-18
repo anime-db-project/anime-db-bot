@@ -291,9 +291,7 @@ async def edit_trailers_view(
     rich_item = items[0] if source_key is not None and items else None
     try:
         await deliver_rich_media(
-            lambda rich: message.edit_text(
-                rich_message=rich, reply_markup=keyboard
-            ),
+            lambda rich: message.edit_text(rich_message=rich, reply_markup=keyboard),
             _trailer_rich(content, rich_item),
         )
     except Exception:
