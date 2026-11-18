@@ -75,7 +75,8 @@ class SQLiteImageSearchQuotaStore:
                 """
                 INSERT INTO image_search_quota(provider, period, used, exhausted)
                 VALUES (?, ?, ?, 0)
-                ON CONFLICT(provider, period) DO UPDATE SET used=used + excluded.used
+                ON CONFLICT(provider, period) DO UPDATE SET
+                    used=image_search_quota.used + excluded.used
                 """,
                 (key, day, amount),
             )

@@ -91,6 +91,7 @@ class PostgresPool:
             min_size=0,
             max_size=max(1, max_size),
             timeout=5.0,
+            open=True,
         )
 
     def connection(self) -> PostgresConnection:
