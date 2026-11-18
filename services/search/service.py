@@ -16,6 +16,7 @@ from core.contracts import AnimeSearchProvider
 from core.identity import AnimeIdentity
 from core.models import SearchCandidate, SearchPage, SearchResultSet
 from core.settings import SearchSettings, get_settings
+from services.search.redis_cache import RedisSearchCache
 
 
 _LOW_SIGNAL_TOKENS = frozenset(
@@ -70,11 +71,13 @@ class SearchService:
         providers: tuple[AnimeSearchProvider, ...] | list[AnimeSearchProvider],
         *,
         settings: SearchSettings | None = None,
+        shared_cache: RedisSearchCache | None = None,
     ) -> None:
         self._providers = tuple(providers)
         if not self._providers:
             raise ValueError("SearchService requires at least one search provider")
         self._settings = settings or get_settings().search
+        self._shared_cache = shared_cache
         cache_ttl = max(0.0, float(self._settings.cache_ttl_seconds))
         cache_max = max(10, int(self._settings.cache_max_entries))
         self._cache = BoundedTTLCache[tuple[str, int, int], SearchPage](
@@ -133,6 +136,11 @@ class SearchService:
         cached = self._cache.get(cache_key)
         if cached is not None:
             return cached
+        if self._shared_cache is not None:
+            shared = await self._shared_cache.get_page(cache_key)
+            if shared is not None:
+                self._cache.set(cache_key, shared)
+                return shared
         return await self._page_flight.run(
             cache_key,
             lambda: self._search_uncached(query, page, page_size, cache_key),
@@ -160,6 +168,8 @@ class SearchService:
 
         if not merged.errors:
             self._cache.set(cache_key, merged)
+            if self._shared_cache is not None:
+                await self._shared_cache.set_page(cache_key, merged)
 
         return merged
 
@@ -192,6 +202,11 @@ class SearchService:
         cached = self._result_set_cache.get(cache_key)
         if cached is not None:
             return cached
+        if self._shared_cache is not None:
+            shared = await self._shared_cache.get_results(cache_key)
+            if shared is not None:
+                self._result_set_cache.set(cache_key, shared)
+                return shared
         return await self._collection_flight.run(
             cache_key,
             lambda: self._collect_uncached(
@@ -301,6 +316,8 @@ class SearchService:
 
         if not errors:
             self._result_set_cache.set(cache_key, result_set)
+            if self._shared_cache is not None:
+                await self._shared_cache.set_results(cache_key, result_set)
 
         return result_set
 

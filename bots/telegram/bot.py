@@ -183,6 +183,8 @@ async def run_bot(
         log_retention_days=settings.logging.retention_days,
         secrets=(
             settings.telegram.bot_token,
+            settings.storage.postgres_dsn,
+            settings.cache.redis_url,
             settings.sources.anilist_access_token,
             settings.sources.mal_client_id,
             settings.sources.trace_moe_api_key,
@@ -206,6 +208,10 @@ async def run_bot(
         )
 
     logging.info("Bot platform: Telegram")
+    logging.info(
+        "Persistent user storage backend: %s", settings.storage.backend
+    )
+    logging.info("Search cache backend: %s", settings.cache.backend)
     logging.info("Telegram transport: %s", transport.mode_name)
     logging.info(
         "Telegram proxy route: %s",

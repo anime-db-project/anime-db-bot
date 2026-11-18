@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 from contextlib import contextmanager
 from contextvars import ContextVar, Token
 from dataclasses import dataclass
@@ -40,6 +41,13 @@ from services.runtime.rate_limits import (
 )
 from services.runtime.source_health import SourceHealthRegistry
 from services.search.image_quota import SQLiteImageSearchQuotaStore
+from services.search.redis_cache import RedisSearchCache
+from services.storage.postgres import PostgresPool
+from services.storage.postgres_repositories import (
+    PostgresBanStore,
+    PostgresImageSearchQuotaStore,
+    PostgresUserSettingsStore,
+)
 from services.search.image_service import ImageSearchService
 from services.search.service import SearchService
 from services.users.bans import SQLiteBanStore, activate_ban_store
@@ -96,6 +104,8 @@ class AppContext:
     imdb_rating_service: IMDbRatingService
     direct_lookup: DirectIdLookupService
     image_search_service: ImageSearchService
+    postgres_pool: PostgresPool | None = None
+    redis_cache: RedisSearchCache | None = None
 
     def runtime_source_descriptors(self) -> tuple[RuntimeSourceDescriptor, ...]:
         """Describe active runtime sources for admin diagnostics."""
@@ -176,17 +186,36 @@ class AppContext:
             cooldown_seconds=settings.source_health.cooldown_seconds,
         )
         runtime_metrics = RuntimeMetricsRegistry()
-        user_settings_store = SQLiteUserSettingsStore(
-            settings.storage.user_settings_db_path
-        )
-        ban_store = SQLiteBanStore(settings.storage.bans_db_path)
-        image_search_quota_store = SQLiteImageSearchQuotaStore(
-            settings.storage.image_search_db_path
-        )
+        postgres_pool: PostgresPool | None = None
+        if settings.storage.backend == "postgres":
+            postgres_pool = PostgresPool(
+                settings.storage.postgres_dsn,
+                max_size=settings.storage.postgres_pool_size,
+            )
+            user_settings_store = PostgresUserSettingsStore(postgres_pool)
+            ban_store = PostgresBanStore(postgres_pool)
+            image_search_quota_store = PostgresImageSearchQuotaStore(postgres_pool)
+        else:
+            user_settings_store = SQLiteUserSettingsStore(
+                settings.storage.user_settings_db_path
+            )
+            ban_store = SQLiteBanStore(settings.storage.bans_db_path)
+            image_search_quota_store = SQLiteImageSearchQuotaStore(
+                settings.storage.image_search_db_path
+            )
         personal_rate_limiter = PersonalRateLimiter(settings.rate_limits)
         upstream_rate_limiter = UpstreamRateLimiter(settings.rate_limits)
         search_provider_map = get_search_provider_map(settings.sources, source_health)
         search_providers = tuple(search_provider_map.values())
+        redis_cache = (
+            RedisSearchCache(
+                settings.cache,
+                ttl_seconds=settings.search.cache_ttl_seconds,
+                provider_names=tuple(provider.name for provider in search_providers),
+            )
+            if settings.cache.backend == "redis"
+            else None
+        )
         sources = get_sources(source_health, settings.sources)
         identity_resolver = IdentityResolver(
             mapping_resolver=MappingResolver(settings.mappings.db_path),
@@ -219,7 +248,11 @@ class AppContext:
             search_provider_map=search_provider_map,
             search_providers=search_providers,
             sources=sources,
-            search_service=SearchService(search_providers, settings=settings.search),
+            search_service=SearchService(
+                search_providers,
+                settings=settings.search,
+                shared_cache=redis_cache,
+            ),
             aggregator=aggregator,
             character_service=CharacterService(sources),
             episode_service=EpisodeService(
@@ -252,6 +285,8 @@ class AppContext:
             ),
             direct_lookup=direct_lookup,
             image_search_service=image_search_service,
+            postgres_pool=postgres_pool,
+            redis_cache=redis_cache,
         )
 
     async def aclose(self) -> None:
@@ -271,6 +306,10 @@ class AppContext:
             if callable(close):
                 await close()
         await self.http.aclose()
+        if self.redis_cache is not None:
+            await self.redis_cache.aclose()
+        if self.postgres_pool is not None:
+            await asyncio.to_thread(self.postgres_pool.close)
 
 
 _CURRENT_CONTEXT: ContextVar[AppContext | None] = ContextVar(
