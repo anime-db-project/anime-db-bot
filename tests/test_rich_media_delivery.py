@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import tempfile
 import unittest
 from pathlib import Path
@@ -102,6 +103,34 @@ class RichMediaDeliveryTests(unittest.IsolatedAsyncioTestCase):
         self.assertNotIn("broken.jpg", result.html or "")
         self.assertIn("<table>", result.html or "")
         self.assertEqual(len(result.media or []), 1)
+
+    async def test_local_uploads_are_globally_bounded(self) -> None:
+        manager = RichMediaDelivery(
+            RichMediaSettings(order=("ram",), max_local_deliveries=2)
+        )
+        manager._fetch = AsyncMock(return_value=JPEG)
+        active = 0
+        peak = 0
+
+        async def deliver_slowly(_rich: InputRichMessage) -> None:
+            nonlocal active, peak
+            active += 1
+            peak = max(peak, active)
+            await asyncio.sleep(0.025)
+            active -= 1
+
+        await asyncio.gather(
+            *(
+                manager.deliver(
+                    deliver_slowly,
+                    InputRichMessage(
+                        html=f'<img src="https://example.org/photo-{i}.jpg"/>'
+                    ),
+                )
+                for i in range(12)
+            )
+        )
+        self.assertEqual(peak, 2)
 
     async def test_ram_and_disk_can_be_disabled_even_if_in_order(self) -> None:
         manager = RichMediaDelivery(

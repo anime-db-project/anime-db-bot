@@ -181,6 +181,7 @@ class RichMediaSettings:
     download_timeout_seconds: float = 3.0
     total_timeout_seconds: float = 7.0
     max_downloads: int = 8
+    max_local_deliveries: int = 2
     disk_dir: Path = ROOT_DIR / "data/runtime/rich-media"
 
 
@@ -473,6 +474,9 @@ class AppSettings:
                         values, "RICH_MEDIA_TOTAL_TIMEOUT_SECONDS", 7.0, 0.5
                     ),
                     max_downloads=_int(values, "RICH_MEDIA_MAX_DOWNLOADS", 8, 1),
+                    max_local_deliveries=_int(
+                        values, "RICH_MEDIA_MAX_LOCAL_DELIVERIES", 2, 1
+                    ),
                     disk_dir=_path(
                         values, "RICH_MEDIA_DISK_DIR", "data/runtime/rich-media"
                     ),

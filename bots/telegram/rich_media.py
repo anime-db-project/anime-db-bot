@@ -177,6 +177,10 @@ class RichMediaDelivery:
     def __init__(self, settings: RichMediaSettings) -> None:
         self.settings = settings
         self._slots = asyncio.Semaphore(settings.max_downloads)
+        # Sending a media-rich response retains all uploaded buffers until
+        # Telegram finishes the request. Cap whole local deliveries, not only
+        # individual downloads, or many simultaneous users can exhaust RAM.
+        self._local_deliveries = asyncio.Semaphore(settings.max_local_deliveries)
         self._memory = BoundedTTLCache[str, bytes](
             max_entries=2048,
             ttl_seconds=float(settings.cache_ttl_seconds),
@@ -401,9 +405,16 @@ class RichMediaDelivery:
                 elif mode == "url":
                     variant = bind_remote_photos(message)
                 elif mode in {"ram", "disk"}:
-                    variant = await self._prepare_local(message, mode, urls, deadline)
-                    if variant is None:
-                        continue
+                    # Keep the download buffers and outgoing multipart body
+                    # under one global semaphore until Telegram accepts them.
+                    async with self._local_deliveries:
+                        if asyncio.get_running_loop().time() >= deadline:
+                            break
+                        variant = await self._prepare_local(message, mode, urls, deadline)
+                        if variant is None:
+                            continue
+                        await send(variant)
+                        return
                 else:
                     continue
                 await send(variant)

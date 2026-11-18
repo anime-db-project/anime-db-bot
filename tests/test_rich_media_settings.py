@@ -10,6 +10,7 @@ class RichMediaConfigTests(unittest.TestCase):
         settings = AppSettings.from_env({}).telegram.rich_media
         self.assertEqual(settings.order, ("direct", "url", "ram", "disk"))
         self.assertEqual(settings.max_downloads, 8)
+        self.assertEqual(settings.max_local_deliveries, 2)
         self.assertEqual(settings.max_image_bytes, 4194304)
         self.assertTrue(settings.disk_dir.as_posix().endswith("data/runtime/rich-media"))
 
