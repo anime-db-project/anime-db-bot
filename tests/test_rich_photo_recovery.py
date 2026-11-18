@@ -46,7 +46,11 @@ class RichPhotoRecoveryTests(unittest.IsolatedAsyncioTestCase):
         await send_anime_view(message, "token", self.anime, locale="ru")
         self.assertEqual(message.answer_rich.await_count, 2)
         first, second = message.answer_rich.await_args_list
-        self.assertIn("<img", first.args[0].html)
+        self.assertIn('src="tg://photo?id=adb_photo_0"', first.args[0].html)
+        self.assertEqual(
+            first.args[0].media[0].media.media,
+            "https://example.invalid/cover.jpg",
+        )
         self.assertNotIn("<img", second.args[0].html)
         self.assertIn("<table", second.args[0].html)
         self.assertIn("<tg-button-row", second.args[0].html)

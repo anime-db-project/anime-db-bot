@@ -7,6 +7,7 @@ from aiogram.exceptions import TelegramBadRequest
 from aiogram.types import InlineKeyboardMarkup, InputRichMessage, Message
 
 from bots.telegram.callbacks import resolve_key_or_legacy_index
+from bots.telegram.rich_media import bind_remote_photos
 from bots.telegram.card.ui.constants import RICH_MESSAGE_LIMIT, STANDARD_MESSAGE_LIMIT
 from bots.telegram.card.ui.keyboards import (
     description_keyboard,
@@ -140,13 +141,15 @@ async def _deliver_rich_card(
     with_posters = not poster_key or _POSTER_FAILURES.get(poster_key) is not True
     try:
         await send(
-            rich_view(
-                token,
-                anime,
-                section,
-                text_value,
-                locale=locale,
-                include_posters=with_posters,
+            bind_remote_photos(
+                rich_view(
+                    token,
+                    anime,
+                    section,
+                    text_value,
+                    locale=locale,
+                    include_posters=with_posters,
+                )
             )
         )
     except TelegramBadRequest as exc:
@@ -162,13 +165,15 @@ async def _deliver_rich_card(
         )
         _POSTER_FAILURES.set(poster_key, True)
         await send(
-            rich_view(
-                token,
-                anime,
-                section,
-                text_value,
-                locale=locale,
-                include_posters=False,
+            bind_remote_photos(
+                rich_view(
+                    token,
+                    anime,
+                    section,
+                    text_value,
+                    locale=locale,
+                    include_posters=False,
+                )
             )
         )
 
