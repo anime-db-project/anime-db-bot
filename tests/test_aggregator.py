@@ -192,6 +192,7 @@ class AggregatorIdentityTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(source.identities[0].external_ids, enriched.external_ids)
         self.assertEqual(candidate.external_ids, {"mal": "123"})
         self.assertEqual(anime.external_ids["shikimori"], "456")
+        resolver.enrich.assert_awaited_once()
 
     async def test_initial_aggregation_defers_screenshots(self) -> None:
         source = _ScreenshotSource()

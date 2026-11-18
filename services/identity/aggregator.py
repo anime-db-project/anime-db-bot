@@ -134,13 +134,13 @@ class AnimeAggregator(AggregationMergeSupport):
             self._merge_record_identity(identity, record)
 
         identity_expanded = identity.fingerprint() != first_pass_fingerprint
-        before_enrichment = identity.fingerprint()
-        identity = (
-            await self._enrich_with_budget(identity, titles_for_resolution)
-        ).copy()
-        identity_expanded = (
-            identity_expanded or identity.fingerprint() != before_enrichment
-        )
+        if identity_expanded:
+            # The resolver already ran before the first metadata pass. Unless
+            # a source supplied a new identity, repeating the same live
+            # fallback can add seconds without finding anything new.
+            identity = (
+                await self._enrich_with_budget(identity, titles_for_resolution)
+            ).copy()
 
         if identity_expanded and unavailable:
             retry_sources = [
