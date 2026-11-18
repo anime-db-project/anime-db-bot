@@ -44,8 +44,8 @@ backend yet), then **stop the bot and make backups** of all three SQLite
 databases. Inspect source counts, then apply the explicit migration:
 
 ```sh
-python scripts/migrate_sqlite_to_postgres.py
-python scripts/migrate_sqlite_to_postgres.py --apply
+python -m scripts.migrate_sqlite_to_postgres
+python -m scripts.migrate_sqlite_to_postgres --apply
 ```
 
 The migration runs all inserts in a PostgreSQL transaction, does not modify

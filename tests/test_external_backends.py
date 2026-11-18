@@ -2,11 +2,15 @@ from __future__ import annotations
 
 import asyncio
 import os
+import sqlite3
 import unittest
+from pathlib import Path
+from tempfile import TemporaryDirectory
 from concurrent.futures import ThreadPoolExecutor
 
 from core.models import SearchCandidate, SearchPage, SearchResultSet
 from core.settings import CacheBackendSettings, SearchSettings
+from scripts.migrate_sqlite_to_postgres import count_rows, migrate
 from services.search.redis_cache import RedisSearchCache
 from services.search.service import SearchService
 from services.storage.postgres import PostgresPool
@@ -68,6 +72,84 @@ class PostgreSQLIntegrationTests(unittest.TestCase):
         self.assertEqual(state.used, 5)
         self.assertTrue(state.exhausted)
         self.assertEqual(store.state(provider, period="2099-12-30").used, 0)
+
+    def test_migration_from_sqlite_is_complete_and_idempotent(self) -> None:
+        with TemporaryDirectory() as directory:
+            root = Path(directory)
+            users_path = root / "users.db"
+            bans_path = root / "bans.db"
+            quota_path = root / "quota.db"
+            with sqlite3.connect(users_path) as conn:
+                conn.execute(
+                    "CREATE TABLE user_settings (platform TEXT, user_id INTEGER, "
+                    "locale TEXT, updated_at TEXT)"
+                )
+                conn.execute(
+                    "CREATE TABLE known_users (platform TEXT, user_id INTEGER, "
+                    "first_seen_at TEXT, last_seen_at TEXT)"
+                )
+                conn.execute(
+                    "INSERT INTO user_settings VALUES (?,?,?,?)",
+                    ("telegram", 9876543211, "ru", "2026-10-01 11:22:33"),
+                )
+                conn.execute(
+                    "INSERT INTO known_users VALUES (?,?,?,?)",
+                    (
+                        "telegram", 9876543211,
+                        "2026-10-01 11:22:33", "2026-11-01 11:22:33",
+                    ),
+                )
+            with sqlite3.connect(bans_path) as conn:
+                conn.execute(
+                    "CREATE TABLE bans (platform TEXT, user_id INTEGER, "
+                    "reason TEXT, banned_by INTEGER, created_at INTEGER, "
+                    "expires_at INTEGER)"
+                )
+                conn.execute(
+                    "INSERT INTO bans VALUES (?,?,?,?,?,?)",
+                    ("telegram", 9876543211, "test", 99, 500, None),
+                )
+            with sqlite3.connect(quota_path) as conn:
+                conn.execute(
+                    "CREATE TABLE image_search_quota "
+                    "(provider TEXT,period TEXT,used INTEGER,exhausted INTEGER)"
+                )
+                conn.execute(
+                    "INSERT INTO image_search_quota VALUES (?,?,?,?)",
+                    ("migration-test", "2099-12-31", 7, 1),
+                )
+            self.assertEqual(count_rows(users_path, "known_users"), 1)
+            for attempt in range(2):
+                migrated = migrate(
+                    self.pool, users_path, bans_path, quota_path
+                )
+                self.assertEqual(
+                    migrated,
+                    {
+                        "user_settings": 1,
+                        "known_users": 1,
+                        "bans": 1,
+                        "image_search_quota": 1,
+                    },
+                )
+            user_store = PostgresUserSettingsStore(self.pool)
+            self.assertEqual(user_store.get(9876543211).locale, "ru")
+            self.assertIn(9876543211, user_store.list_user_ids("telegram"))
+            self.assertEqual(
+                PostgresBanStore(self.pool)
+                .get_active("telegram", 9876543211, now=1000)
+                .reason,
+                "test",
+            )
+            self.assertEqual(
+                PostgresImageSearchQuotaStore(self.pool)
+                .state("migration-test", period="2099-12-31")
+                .used,
+                7,
+            )
+            # The SQLite sources have not been touched or deleted.
+            self.assertEqual(count_rows(users_path, "user_settings"), 1)
+            self.assertEqual(count_rows(bans_path, "bans"), 1)
 
     def test_concurrent_connection_pool_is_safe(self) -> None:
         store = PostgresUserSettingsStore(self.pool)
