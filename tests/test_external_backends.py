@@ -9,7 +9,8 @@ from tempfile import TemporaryDirectory
 from concurrent.futures import ThreadPoolExecutor
 
 from core.models import SearchCandidate, SearchPage, SearchResultSet
-from core.settings import CacheBackendSettings, SearchSettings
+from core.settings import AppSettings, CacheBackendSettings, SearchSettings
+from services.runtime.app_context import AppContext
 from scripts.migrate_sqlite_to_postgres import count_rows, migrate
 from services.search.redis_cache import RedisSearchCache
 from services.search.service import SearchService
@@ -198,6 +199,30 @@ class RedisIntegrationTests(unittest.IsolatedAsyncioTestCase):
         if hasattr(self, "client"):
             await self.client.flushdb()
             await self.client.aclose()
+
+    async def test_app_context_selects_real_optional_backends(self) -> None:
+        settings = AppSettings.from_env(
+            {
+                "BOT_TOKEN": "test-token",
+                "DATABASE_BACKEND": "postgres",
+                "DATABASE_URL": os.environ["TEST_POSTGRES_DSN"],
+                "DATABASE_POOL_SIZE": "2",
+                "CACHE_BACKEND": "redis",
+                "REDIS_URL": os.environ["TEST_REDIS_URL"],
+                "MAPPINGS_AUTO_UPDATE": "0",
+            }
+        )
+        context = AppContext.create(settings)
+        try:
+            self.assertIsInstance(context.user_settings_store, PostgresUserSettingsStore)
+            self.assertIsInstance(context.ban_store, PostgresBanStore)
+            self.assertIsInstance(
+                context.image_search_quota_store, PostgresImageSearchQuotaStore
+            )
+            self.assertIsInstance(context.redis_cache, RedisSearchCache)
+            self.assertIs(context.search_service._shared_cache, context.redis_cache)
+        finally:
+            await context.aclose()
 
     async def test_search_page_reused_between_instances(self) -> None:
         cache1 = RedisSearchCache(

@@ -267,3 +267,9 @@ python3 scripts/project.py check
 Source code is available under Apache-2.0. Third-party services and datasets retain their own licenses, attribution requirements, and API terms. Keep credentials outside version control. [Apache-2.0](LICENSE).
 
 [OpenAI Codex](https://github.com/apps/openai-codex) · [Issues](https://github.com/anime-db-project/anime-db-bot/issues)
+
+**Optional storage backends:** Redis search caching and PostgreSQL for
+mutable user records are supported without changing the SQLite default.
+Configuration, safe migration and optional local Docker services:
+[docs/backends.md](docs/backends.md).
+
