@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import math
 import os
 import re
 from dataclasses import dataclass, field
@@ -123,6 +124,37 @@ def _float(
         return max(minimum, float(default))
 
 
+def _strict_int(
+    env: Mapping[str, str], name: str, default: int, minimum: int = 0, maximum: int = 1000000
+) -> int:
+    """Reject malformed resource limits instead of silently changing them."""
+    raw = _raw(env, name, str(default))
+    try:
+        value = int(raw)
+    except ValueError as exc:
+        raise ValueError(f"{name} must be an integer") from exc
+    if not minimum <= value <= maximum:
+        raise ValueError(f"{name} must be between {minimum} and {maximum}")
+    return value
+
+
+def _strict_float(
+    env: Mapping[str, str],
+    name: str,
+    default: float,
+    minimum: float = 0.0,
+    maximum: float = 3600.0,
+) -> float:
+    raw = _raw(env, name, str(default))
+    try:
+        value = float(raw)
+    except ValueError as exc:
+        raise ValueError(f"{name} must be numeric") from exc
+    if not math.isfinite(value) or not minimum <= value <= maximum:
+        raise ValueError(f"{name} must be finite and between {minimum} and {maximum}")
+    return value
+
+
 def _path(env: Mapping[str, str], name: str, default: str) -> Path:
     value = _raw(env, name, default) or default
     path = Path(value)
@@ -186,6 +218,12 @@ class RichMediaSettings:
     max_downloads: int = 8
     max_local_deliveries: int = 2
     disk_dir: Path = ROOT_DIR / "data/runtime/rich-media"
+    failure_url_ttl_seconds: float = 120.0
+    failure_method_ttl_seconds: float = 180.0
+    failure_cache_max_entries: int = 2048
+    ram_cache_max_entries: int = 2048
+    max_redirects: int = 4
+    disk_prune_interval_seconds: float = 60.0
 
 
 def _rich_media_order(env: Mapping[str, str]) -> tuple[str, ...]:
@@ -218,6 +256,17 @@ class TelegramSettings:
     max_people_sessions: int = 256
     max_search_sessions: int = 192
     rich_media: RichMediaSettings = field(default_factory=RichMediaSettings)
+    max_scope_sessions: int = 400
+    max_pending_inputs: int = 500
+    max_image_inputs: int = 100
+    image_download_timeout_seconds: float = 45.0
+    image_max_pixels: int = 50000000
+    image_max_dimension: int = 4096
+    search_expansion_timeout_seconds: float = 8.0
+    initial_timecode_wait_seconds: float = 0.15
+    admin_pending_sessions: int = 128
+    admin_pending_ttl_seconds: int = 300
+    denied_message: str = "Доступ к боту ограничен."
 
 
 @dataclass(frozen=True, slots=True)
@@ -228,6 +277,9 @@ class StorageSettings:
     backend: str = "sqlite"
     postgres_dsn: str = ""
     postgres_pool_size: int = 5
+    user_locale_cache_max_entries: int = 20000
+    user_locale_cache_ttl_seconds: float = 120.0
+    user_seen_write_interval_seconds: float = 300.0
 
 
 @dataclass(frozen=True, slots=True)
@@ -236,6 +288,16 @@ class CacheBackendSettings:
     redis_url: str = ""
     redis_key_prefix: str = "anime-db-bot"
     redis_timeout_seconds: float = 0.25
+    redis_max_connections: int = 10
+    redis_failure_cooldown_seconds: float = 20.0
+
+
+@dataclass(frozen=True, slots=True)
+class HttpSettings:
+    max_concurrent_requests: int = 48
+    max_connections: int = 48
+    max_keepalive_connections: int = 24
+    keepalive_expiry_seconds: float = 5.0
 
 
 @dataclass(frozen=True, slots=True)
@@ -338,6 +400,11 @@ class SourceSettings:
     imdb_aws_region: str
     imdb_request_timeout_seconds: float
     anisearch_cache_max_bytes: int = 16 * 1024 * 1024
+    anisearch_cache_max_entries: int = 750
+    anisearch_interactive_wait_seconds: float = 0.75
+    jikan_cache_max_entries: int = 1000
+    people_manifest_concurrency: int = 12
+    people_portrait_concurrency: int = 8
 
 
 @dataclass(frozen=True, slots=True)
@@ -377,6 +444,7 @@ class AppSettings:
     source_health: SourceHealthSettings
     rate_limits: RateLimitSettings
     cache: CacheBackendSettings = field(default_factory=CacheBackendSettings)
+    http: HttpSettings = field(default_factory=HttpSettings)
 
     @classmethod
     def from_env(cls, env: Mapping[str, str] | None = None) -> "AppSettings":
@@ -495,6 +563,9 @@ class AppSettings:
                 denied_max_tracked_users=_int(
                     values, "TELEGRAM_DENIED_MAX_TRACKED_USERS", 4096, 1
                 ),
+                denied_message=_raw(
+                    values, "TELEGRAM_DENIED_MESSAGE", "Доступ к боту ограничен."
+                ) or "Доступ к боту ограничен.",
                 bot_api_local_file_root=_optional_path(
                     values, "TELEGRAM_BOT_API_LOCAL_FILE_ROOT"
                 ),
@@ -507,6 +578,36 @@ class AppSettings:
                 ),
                 max_search_sessions=_int(
                     values, "TELEGRAM_MAX_SEARCH_SESSIONS", 192, 1
+                ),
+                max_scope_sessions=_strict_int(
+                    values, "TELEGRAM_MAX_SCOPE_SESSIONS", 400, 1, 100000
+                ),
+                max_pending_inputs=_strict_int(
+                    values, "TELEGRAM_MAX_PENDING_INPUTS", 500, 1, 100000
+                ),
+                max_image_inputs=_strict_int(
+                    values, "TELEGRAM_MAX_IMAGE_INPUTS", 100, 1, 100000
+                ),
+                image_download_timeout_seconds=_strict_float(
+                    values, "TELEGRAM_IMAGE_DOWNLOAD_TIMEOUT_SECONDS", 45.0, 1.0, 300.0
+                ),
+                image_max_pixels=_strict_int(
+                    values, "TELEGRAM_IMAGE_MAX_PIXELS", 50000000, 100000, 100000000
+                ),
+                image_max_dimension=_strict_int(
+                    values, "TELEGRAM_IMAGE_MAX_DIMENSION", 4096, 256, 16384
+                ),
+                search_expansion_timeout_seconds=_strict_float(
+                    values, "TELEGRAM_SEARCH_EXPANSION_TIMEOUT_SECONDS", 8.0, 0.1, 120.0
+                ),
+                initial_timecode_wait_seconds=_strict_float(
+                    values, "TELEGRAM_INITIAL_TIMECODE_WAIT_SECONDS", 0.15, 0.0, 10.0
+                ),
+                admin_pending_sessions=_strict_int(
+                    values, "TELEGRAM_ADMIN_PENDING_SESSIONS", 128, 1, 10000
+                ),
+                admin_pending_ttl_seconds=_strict_int(
+                    values, "TELEGRAM_ADMIN_PENDING_TTL_SECONDS", 300, 30, 86400
                 ),
                 rich_media=RichMediaSettings(
                     order=_rich_media_order(values),
@@ -535,6 +636,24 @@ class AppSettings:
                     max_local_deliveries=_int(
                         values, "RICH_MEDIA_MAX_LOCAL_DELIVERIES", 2, 1
                     ),
+                    failure_url_ttl_seconds=_strict_float(
+                        values, "RICH_MEDIA_FAILED_URL_TTL_SECONDS", 120.0, 0.0, 86400.0
+                    ),
+                    failure_method_ttl_seconds=_strict_float(
+                        values, "RICH_MEDIA_FAILED_METHOD_TTL_SECONDS", 180.0, 0.0, 86400.0
+                    ),
+                    failure_cache_max_entries=_strict_int(
+                        values, "RICH_MEDIA_FAILURE_CACHE_ENTRIES", 2048, 1, 100000
+                    ),
+                    ram_cache_max_entries=_strict_int(
+                        values, "RICH_MEDIA_RAM_CACHE_ENTRIES", 2048, 1, 100000
+                    ),
+                    max_redirects=_strict_int(
+                        values, "RICH_MEDIA_MAX_REDIRECTS", 4, 0, 10
+                    ),
+                    disk_prune_interval_seconds=_strict_float(
+                        values, "RICH_MEDIA_DISK_PRUNE_INTERVAL_SECONDS", 60.0, 0.0, 3600.0
+                    ),
                     disk_dir=_path(
                         values, "RICH_MEDIA_DISK_DIR", "data/runtime/rich-media"
                     ),
@@ -553,6 +672,15 @@ class AppSettings:
                 backend=database_backend,
                 postgres_dsn=postgres_dsn,
                 postgres_pool_size=_int(values, "DATABASE_POOL_SIZE", 5, 1),
+                user_locale_cache_max_entries=_strict_int(
+                    values, "USER_LOCALE_CACHE_MAX_ENTRIES", 20000, 1, 1000000
+                ),
+                user_locale_cache_ttl_seconds=_strict_float(
+                    values, "USER_LOCALE_CACHE_TTL_SECONDS", 120.0, 0.0, 86400.0
+                ),
+                user_seen_write_interval_seconds=_strict_float(
+                    values, "USER_SEEN_WRITE_INTERVAL_SECONDS", 300.0, 0.0, 86400.0
+                ),
             ),
             cache=CacheBackendSettings(
                 backend=cache_backend,
@@ -561,6 +689,26 @@ class AppSettings:
                 or "anime-db-bot",
                 redis_timeout_seconds=_float(
                     values, "REDIS_TIMEOUT_SECONDS", 0.25, 0.05
+                ),
+                redis_max_connections=_strict_int(
+                    values, "REDIS_MAX_CONNECTIONS", 10, 1, 10000
+                ),
+                redis_failure_cooldown_seconds=_strict_float(
+                    values, "REDIS_FAILURE_COOLDOWN_SECONDS", 20.0, 0.0, 3600.0
+                ),
+            ),
+            http=HttpSettings(
+                max_concurrent_requests=_strict_int(
+                    values, "HTTP_MAX_CONCURRENT_REQUESTS", 48, 1, 10000
+                ),
+                max_connections=_strict_int(
+                    values, "HTTP_MAX_CONNECTIONS", 48, 1, 10000
+                ),
+                max_keepalive_connections=_strict_int(
+                    values, "HTTP_MAX_KEEPALIVE_CONNECTIONS", 24, 0, 10000
+                ),
+                keepalive_expiry_seconds=_strict_float(
+                    values, "HTTP_KEEPALIVE_EXPIRY_SECONDS", 5.0, 0.0, 3600.0
                 ),
             ),
             search=SearchSettings(
@@ -686,6 +834,21 @@ class AppSettings:
                 ),
                 anisearch_cache_max_bytes=_int(
                     values, "ANISEARCH_CACHE_MAX_BYTES", 16777216, 1024
+                ),
+                anisearch_cache_max_entries=_strict_int(
+                    values, "ANISEARCH_CACHE_MAX_ENTRIES", 750, 1, 100000
+                ),
+                anisearch_interactive_wait_seconds=_strict_float(
+                    values, "ANISEARCH_INTERACTIVE_WAIT_SECONDS", 0.75, 0.0, 10.0
+                ),
+                jikan_cache_max_entries=_strict_int(
+                    values, "JIKAN_CACHE_MAX_ENTRIES", 1000, 1, 100000
+                ),
+                people_manifest_concurrency=_strict_int(
+                    values, "PEOPLE_MANIFEST_CONCURRENCY", 12, 1, 128
+                ),
+                people_portrait_concurrency=_strict_int(
+                    values, "PEOPLE_PORTRAIT_CONCURRENCY", 8, 1, 128
                 ),
                 skipdb_api_url=_raw(
                     values,
