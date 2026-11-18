@@ -62,6 +62,42 @@ class ConfigReportTests(unittest.TestCase):
         fallback_aliases = {"AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY", "AWS_SESSION_TOKEN"}
         self.assertEqual(names - documented - fallback_aliases, set())
 
+    def test_bad_numeric_value_is_detected_without_printing_it(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / ".env.d").mkdir()
+            (root / ".env.d" / "runtime.env").write_text(
+                "SEARCH_CACHE_MAX_ENTRIES=not-a-valid-secret-value\n",
+                encoding="utf-8",
+            )
+            with self.assertRaisesRegex(
+                Exception, "SEARCH_CACHE_MAX_ENTRIES"
+            ) as caught:
+                validate_config(root, environment={})
+            self.assertNotIn("not-a-valid-secret-value", str(caught.exception))
+
+    def test_bad_boolean_value_is_rejected(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / ".env.d").mkdir()
+            (root / ".env.d" / "logging.env").write_text(
+                "LOG_STRUCTURED=truue\n", encoding="utf-8"
+            )
+            with self.assertRaisesRegex(Exception, "LOG_STRUCTURED"):
+                validate_config(root, environment={})
+
+    def test_process_environment_overrides_project_value_for_validation(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / ".env.d").mkdir()
+            (root / ".env.d" / "runtime.env").write_text(
+                "SEARCH_CACHE_MAX_ENTRIES=123\n", encoding="utf-8"
+            )
+            with self.assertRaisesRegex(Exception, "SEARCH_CACHE_MAX_ENTRIES"):
+                validate_config(
+                    root, environment={"SEARCH_CACHE_MAX_ENTRIES": "broken"}
+                )
+
     def test_duplicate_config_fails_before_validation(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

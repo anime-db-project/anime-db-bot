@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import argparse
 import ast
+import difflib
 import math
 import os
 import re
@@ -121,13 +122,27 @@ def main() -> int:
     parser.add_argument("--list", action="store_true", help="List documented key names")
     parser.add_argument("--check", action="store_true", help="Validate local .env files")
     parser.add_argument(
+        "--explain", metavar="KEY",
+        help="Find the example file for one setting without exposing active values",
+    )
+    parser.add_argument(
         "--strict",
         action="store_true",
         help="Treat undocumented local key names as configuration errors",
     )
     args = parser.parse_args()
-    if not args.list and not args.check:
+    if not args.list and not args.check and not args.explain:
         args.check = True
+    if args.explain:
+        matches = [
+            group for group, keys in example_groups().items()
+            if args.explain in keys
+        ]
+        if not matches:
+            print(f"Unknown setting: {args.explain}")
+            return 2
+        for group in matches:
+            print(f"{args.explain}: .env.example.d/{group}")
 
     if args.list:
         for group, keys in example_groups().items():
@@ -150,8 +165,13 @@ def main() -> int:
         print(f"Configuration parsed successfully ({len(files)} project files).")
         if unexpected:
             print("Undocumented keys (names only):")
+            known = {key for keys in example_groups().values() for key in keys}
             for key in unexpected:
-                print(f"  {key}")
+                suggestions = difflib.get_close_matches(
+                    key, known, n=1, cutoff=0.65
+                )
+                hint = f" (did you mean {suggestions[0]}?)" if suggestions else ""
+                print(f"  {key}{hint}")
             if args.strict:
                 return 2
     return 0

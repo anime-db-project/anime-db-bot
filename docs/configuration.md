@@ -111,3 +111,5 @@ than user-configurable knobs.
 
 Additional proxy and User-Agent profile settings use their existing profile
 config files (rather than a separate environment variable for each entry).
+
+The inspector also checks numeric/boolean values and suggests a likely spelling for unknown keys without displaying credentials. To locate one option, use `python -m scripts.config_report --explain TELEGRAM_MAX_CONCURRENT_UPDATES`.
