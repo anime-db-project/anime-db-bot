@@ -204,51 +204,52 @@ class RichMediaDelivery:
             if cached is not None:
                 return cached
         try:
-            async with self._slots:
-                if self.settings.ram_enabled and self.settings.ram_cache_bytes:
-                    cached = self._memory.get(url)
-                    if cached is not None:
-                        return cached
-                timeout = min(
-                    self.settings.download_timeout_seconds,
-                    max(0.05, deadline - asyncio.get_running_loop().time()),
-                )
-                if timeout < 0.1:
-                    return None
-                async with httpx.AsyncClient(
-                    timeout=timeout,
-                    follow_redirects=False,
-                    trust_env=False,
-                ) as client:
-                    current = url
-                    for _ in range(4):
-                        await asyncio.to_thread(_verify_public_host, current)
-                        async with client.stream("GET", current) as response:
-                            if response.status_code in (301, 302, 303, 307, 308):
-                                redirect = response.headers.get("location")
-                                if not redirect:
-                                    raise ValueError("missing redirect location")
-                                current = urljoin(current, redirect)
-                                continue
-                            response.raise_for_status()
-                            content_type = response.headers.get("content-type", "")
-                            if not content_type.casefold().startswith("image/"):
-                                raise ValueError("non-image content")
-                            size_header = response.headers.get("content-length", "")
-                            if size_header.isdigit() and int(size_header) > self.settings.max_image_bytes:
-                                raise ValueError("image is larger than configured limit")
-                            data = bytearray()
-                            async for chunk in response.aiter_bytes():
-                                if len(data) + len(chunk) > self.settings.max_image_bytes:
-                                    raise ValueError("image exceeds max image bytes")
-                                data.extend(chunk)
-                            payload = bytes(data)
-                            if not _extension(payload):
-                                raise ValueError("unsupported or invalid image bytes")
-                            if self.settings.ram_enabled and self.settings.ram_cache_bytes:
-                                self._memory.set(url, payload)
-                            return payload
-                    raise ValueError("too many image redirects")
+            async with asyncio.timeout_at(deadline):
+                async with self._slots:
+                    if self.settings.ram_enabled and self.settings.ram_cache_bytes:
+                        cached = self._memory.get(url)
+                        if cached is not None:
+                            return cached
+                    timeout = min(
+                        self.settings.download_timeout_seconds,
+                        max(0.05, deadline - asyncio.get_running_loop().time()),
+                    )
+                    if timeout < 0.1:
+                        return None
+                    async with httpx.AsyncClient(
+                        timeout=timeout,
+                        follow_redirects=False,
+                        trust_env=False,
+                    ) as client:
+                        current = url
+                        for _ in range(4):
+                            await asyncio.to_thread(_verify_public_host, current)
+                            async with client.stream("GET", current) as response:
+                                if response.status_code in (301, 302, 303, 307, 308):
+                                    redirect = response.headers.get("location")
+                                    if not redirect:
+                                        raise ValueError("missing redirect location")
+                                    current = urljoin(current, redirect)
+                                    continue
+                                response.raise_for_status()
+                                content_type = response.headers.get("content-type", "")
+                                if not content_type.casefold().startswith("image/"):
+                                    raise ValueError("non-image content")
+                                size_header = response.headers.get("content-length", "")
+                                if size_header.isdigit() and int(size_header) > self.settings.max_image_bytes:
+                                    raise ValueError("image is larger than configured limit")
+                                data = bytearray()
+                                async for chunk in response.aiter_bytes():
+                                    if len(data) + len(chunk) > self.settings.max_image_bytes:
+                                        raise ValueError("image exceeds max image bytes")
+                                    data.extend(chunk)
+                                payload = bytes(data)
+                                if not _extension(payload):
+                                    raise ValueError("unsupported or invalid image bytes")
+                                if self.settings.ram_enabled and self.settings.ram_cache_bytes:
+                                    self._memory.set(url, payload)
+                                return payload
+                        raise ValueError("too many image redirects")
         except (ValueError, httpx.HTTPError, OSError, TimeoutError) as exc:
             logging.debug(
                 "Rich media source failed",
@@ -432,6 +433,13 @@ class RichMediaDelivery:
                         "size": len(urls),
                         "error_type": type(exc).__name__,
                     },
+                )
+            except FileNotFoundError:
+                if mode != "disk":
+                    raise
+                logging.warning(
+                    "Disk media cache file disappeared before Telegram upload",
+                    extra={"event": "rich_media_fallback", "method": mode},
                 )
 
         # An image failure is NEVER a reason to downgrade the whole message
