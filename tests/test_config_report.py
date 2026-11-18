@@ -39,6 +39,29 @@ class ConfigReportTests(unittest.TestCase):
             )
             self.assertEqual(validate_config(root), ["UNKNOWN_KEY"])
 
+
+    def test_all_literal_typed_settings_are_in_sample_files(self) -> None:
+        import ast
+
+        from core.settings import ROOT_DIR
+
+        tree = ast.parse((ROOT_DIR / "core/settings.py").read_text(encoding="utf-8"))
+        names = set()
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.Call) or not isinstance(node.func, ast.Name):
+                continue
+            if node.func.id not in {
+                "_raw", "_int", "_float", "_bool", "_strict_int", "_strict_float",
+                "_path", "_optional_path",
+            } or len(node.args) < 2:
+                continue
+            key = node.args[1]
+            if isinstance(key, ast.Constant) and isinstance(key.value, str):
+                names.add(key.value)
+        documented = {name for group in example_groups().values() for name in group}
+        fallback_aliases = {"AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY", "AWS_SESSION_TOKEN"}
+        self.assertEqual(names - documented - fallback_aliases, set())
+
     def test_duplicate_config_fails_before_validation(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
