@@ -125,7 +125,11 @@ def _float(
 
 
 def _strict_int(
-    env: Mapping[str, str], name: str, default: int, minimum: int = 0, maximum: int = 1000000
+    env: Mapping[str, str],
+    name: str,
+    default: int,
+    minimum: int = 0,
+    maximum: int = 1000000,
 ) -> int:
     """Reject malformed resource limits instead of silently changing them."""
     raw = _raw(env, name, str(default))

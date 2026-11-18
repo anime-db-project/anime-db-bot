@@ -26,6 +26,7 @@ from bots.telegram.pagination import card_picker_callback
 from core.anime_themes import AnimeThemeEntry
 from core.episode_segments import AggregatedEpisodeSegment, EpisodeSegment
 from core.models import AggregatedAnime, EpisodeRecord, EpisodeReleaseProjection
+from core.settings import get_settings
 from localization import text
 from services.media.episode_segments import EpisodeSegmentService
 from services.media.episodes import EpisodeService
