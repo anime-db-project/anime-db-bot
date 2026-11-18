@@ -313,9 +313,7 @@ def main_rich(
     poster = poster_html(anime) if include_posters else ""
     full_main = _main_text(anime, locale=locale)
     if text_value.strip() != full_main.strip():
-        return InputRichMessage(
-            html=poster + plain_text_to_rich_html(text_value)
-        )
+        return InputRichMessage(html=poster + plain_text_to_rich_html(text_value))
 
     block_html: list[str] = []
     for index, (title_value, lines) in enumerate(_main_blocks(anime, locale=locale)):

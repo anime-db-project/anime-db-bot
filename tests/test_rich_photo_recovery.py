@@ -59,16 +59,12 @@ class RichPhotoRecoveryTests(unittest.IsolatedAsyncioTestCase):
         next_message.answer_rich = AsyncMock(return_value=None)
         await send_anime_view(next_message, "token", self.anime, locale="ru")
         next_message.answer_rich.assert_awaited_once()
-        self.assertNotIn(
-            "<img", next_message.answer_rich.await_args.args[0].html
-        )
+        self.assertNotIn("<img", next_message.answer_rich.await_args.args[0].html)
 
     async def test_edit_photo_error_keeps_rich_layout(self) -> None:
         message = MagicMock()
         message.edit_text = AsyncMock(side_effect=[self._missing_photo(), None])
-        await edit_anime_view(
-            message, "token", self.anime, "main", 0, locale="ru"
-        )
+        await edit_anime_view(message, "token", self.anime, "main", 0, locale="ru")
         self.assertEqual(message.edit_text.await_count, 2)
         second = message.edit_text.await_args_list[1].kwargs["rich_message"]
         self.assertIn("<table", second.html)

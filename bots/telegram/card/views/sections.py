@@ -171,7 +171,10 @@ def rich_view(
 ) -> InputRichMessage:
     if section == "main":
         return main_rich(
-            token, anime, text_value, locale=locale,
+            token,
+            anime,
+            text_value,
+            locale=locale,
             include_posters=include_posters,
         )
     if section == "titles":
