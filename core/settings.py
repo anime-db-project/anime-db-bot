@@ -214,6 +214,9 @@ class TelegramSettings:
     denied_global_replies_per_minute: int = 20
     denied_max_tracked_users: int = 4096
     max_concurrent_updates: int = 64
+    max_card_sessions: int = 256
+    max_people_sessions: int = 256
+    max_search_sessions: int = 192
     rich_media: RichMediaSettings = field(default_factory=RichMediaSettings)
 
 
@@ -497,6 +500,15 @@ class AppSettings:
                 ),
                 max_concurrent_updates=_int(
                     values, "TELEGRAM_MAX_CONCURRENT_UPDATES", 64, 1
+                ),
+                max_card_sessions=_int(
+                    values, "TELEGRAM_MAX_CARD_SESSIONS", 256, 1
+                ),
+                max_people_sessions=_int(
+                    values, "TELEGRAM_MAX_PEOPLE_SESSIONS", 256, 1
+                ),
+                max_search_sessions=_int(
+                    values, "TELEGRAM_MAX_SEARCH_SESSIONS", 192, 1
                 ),
                 rich_media=RichMediaSettings(
                     order=_rich_media_order(values),

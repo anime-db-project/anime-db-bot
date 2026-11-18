@@ -254,7 +254,11 @@ async def run_bot(
     )
 
     bot = transport.create_bot()
-    card_state = TelegramCardState.create(settings.telegram.session_ttl_seconds)
+    card_state = TelegramCardState.create(
+        settings.telegram.session_ttl_seconds,
+        max_anime_sessions=settings.telegram.max_card_sessions,
+        max_people_loads=settings.telegram.max_people_sessions,
+    )
     mapping_task = asyncio.create_task(periodic_mapping_updates())
     try:
         with activate_app_context(context):
@@ -326,6 +330,7 @@ async def run_bot(
                 image_search_service=context.image_search_service,
                 image_search_max_bytes=context.settings.sources.image_search_max_bytes,
                 input_ttl_seconds=context.settings.telegram.anime_input_ttl_seconds,
+                max_search_sessions=context.settings.telegram.max_search_sessions,
                 telegram_local_file_root=context.settings.telegram.bot_api_local_file_root,
             )
 

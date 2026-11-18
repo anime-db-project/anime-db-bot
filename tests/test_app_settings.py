@@ -252,9 +252,12 @@ class AppSettingsTests(unittest.TestCase):
                     encoding="utf-8",
                 )
             values = project_env_values(root)
-        self.assertEqual(len(values), 168)
+        self.assertEqual(len(values), 171)
         self.assertIn("RICH_MEDIA_MAX_LOCAL_DELIVERIES", values)
         self.assertIn("BOT_TOKEN", values)
+        self.assertIn("TELEGRAM_MAX_CARD_SESSIONS", values)
+        self.assertIn("TELEGRAM_MAX_PEOPLE_SESSIONS", values)
+        self.assertIn("TELEGRAM_MAX_SEARCH_SESSIONS", values)
         self.assertIn("DATABASE_BACKEND", values)
         self.assertIn("DATABASE_URL", values)
         self.assertIn("CACHE_BACKEND", values)

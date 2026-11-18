@@ -4,9 +4,23 @@ import unittest
 from unittest.mock import patch
 
 from bots.session_store import ExpiringSessionStore
+from bots.telegram.card.runtime.state import TelegramCardState
+from bots.telegram.search.handlers import SearchUiState
 
 
 class SessionStoreTests(unittest.TestCase):
+    def test_session_store_defaults_and_configured_caps(self) -> None:
+        card = TelegramCardState.create(
+            300, max_anime_sessions=3, max_people_loads=4
+        )
+        self.assertEqual(card.anime_sessions._max_entries, 3)
+        self.assertEqual(card.people_loads._max_entries, 4)
+        search = SearchUiState.create(120, max_sessions=5)
+        self.assertEqual(search.sessions._max_entries, 5)
+        self.assertEqual(TelegramCardState.create(300).anime_sessions._max_entries, 256)
+        self.assertEqual(SearchUiState.create(120).sessions._max_entries, 192)
+
+
     def test_session_expires_after_idle_ttl(self) -> None:
         store: ExpiringSessionStore[str] = ExpiringSessionStore(
             max_entries=5,

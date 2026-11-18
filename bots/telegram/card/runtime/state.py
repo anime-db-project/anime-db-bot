@@ -9,7 +9,7 @@ from core.models import AggregatedAnime, EpisodePage, EpisodeRecord, TrailerReco
 from core.related_anime import AggregatedAnimeReference
 from services.media.people import PeopleLoadProgress
 
-MAX_PEOPLE_LOADS = 800
+MAX_PEOPLE_LOADS = 256
 
 
 @dataclass(slots=True)
@@ -60,16 +60,22 @@ class TelegramCardState:
     people_loads: ExpiringSessionStore[PeopleLoadProgress]
 
     @classmethod
-    def create(cls, session_ttl_seconds: int) -> TelegramCardState:
+    def create(
+        cls,
+        session_ttl_seconds: int,
+        *,
+        max_anime_sessions: int = MAX_ANIME_SESSIONS,
+        max_people_loads: int = MAX_PEOPLE_LOADS,
+    ) -> TelegramCardState:
         ttl = max(1, int(session_ttl_seconds))
         return cls(
             anime_sessions=ExpiringSessionStore(
-                max_entries=MAX_ANIME_SESSIONS,
+                max_entries=max_anime_sessions,
                 ttl_seconds=ttl,
                 name="card_anime",
             ),
             people_loads=ExpiringSessionStore(
-                max_entries=MAX_PEOPLE_LOADS,
+                max_entries=max_people_loads,
                 ttl_seconds=ttl,
                 name="card_people",
             ),

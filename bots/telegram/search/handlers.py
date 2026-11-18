@@ -52,7 +52,7 @@ from services.search.image_service import ImageSearchService
 from services.search.expansion import expand_text_search
 from services.users.settings import get_user_locale
 
-MAX_SEARCH_SESSIONS = 400
+MAX_SEARCH_SESSIONS = 192
 MAX_SCOPE_SESSIONS = 400
 MAX_PENDING_INPUTS = 500
 MAX_IMAGE_INPUTS = 100
@@ -131,11 +131,13 @@ class SearchUiState:
     service_cache: dict[tuple[str, ...], SearchService] = field(default_factory=dict)
 
     @classmethod
-    def create(cls, input_ttl_seconds: int) -> "SearchUiState":
+    def create(
+        cls, input_ttl_seconds: int, *, max_sessions: int = MAX_SEARCH_SESSIONS
+    ) -> "SearchUiState":
         input_ttl = max(60, int(input_ttl_seconds))
         return cls(
             sessions=ExpiringSessionStore(
-                max_entries=MAX_SEARCH_SESSIONS, name="search_results"
+                max_entries=max_sessions, name="search_results"
             ),
             scope_sessions=ExpiringSessionStore(
                 max_entries=MAX_SCOPE_SESSIONS,
@@ -1084,10 +1086,13 @@ def register_search_handlers(
     image_search_max_bytes: int,
     input_ttl_seconds: int,
     telegram_local_file_root: Path | None = None,
+    max_search_sessions: int = MAX_SEARCH_SESSIONS,
 ) -> SearchUiState:
     """Register the single public anime-search command and its interactive flow."""
     provider_map = {str(key): provider for key, provider in provider_map.items()}
-    state = SearchUiState.create(input_ttl_seconds)
+    state = SearchUiState.create(
+        input_ttl_seconds, max_sessions=max_search_sessions
+    )
 
     @dp.message(Command("anime"))
     async def anime_handler(message: Message, command: CommandObject) -> None:
