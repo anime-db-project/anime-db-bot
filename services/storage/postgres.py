@@ -55,10 +55,13 @@ class PostgresConnection:
         return self
 
     def __exit__(self, typ: Any, exc: Any, tb: Any) -> None:
-        if typ is None:
-            self._connection.commit()
-        else:
-            self._connection.rollback()
+        try:
+            if typ is None:
+                self._connection.commit()
+            else:
+                self._connection.rollback()
+        finally:
+            self.close()
 
     def execute(
         self, statement: str, params: Sequence[object] = ()
