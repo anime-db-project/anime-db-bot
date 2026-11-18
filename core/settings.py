@@ -501,9 +501,7 @@ class AppSettings:
                 max_concurrent_updates=_int(
                     values, "TELEGRAM_MAX_CONCURRENT_UPDATES", 64, 1
                 ),
-                max_card_sessions=_int(
-                    values, "TELEGRAM_MAX_CARD_SESSIONS", 256, 1
-                ),
+                max_card_sessions=_int(values, "TELEGRAM_MAX_CARD_SESSIONS", 256, 1),
                 max_people_sessions=_int(
                     values, "TELEGRAM_MAX_PEOPLE_SESSIONS", 256, 1
                 ),
@@ -568,9 +566,7 @@ class AppSettings:
             search=SearchSettings(
                 cache_ttl_seconds=_float(values, "SEARCH_CACHE_TTL_SECONDS", 21600.0),
                 cache_max_entries=_int(values, "SEARCH_CACHE_MAX_ENTRIES", 500, 1),
-                cache_max_bytes=_int(
-                    values, "SEARCH_CACHE_MAX_BYTES", 4194304, 1024
-                ),
+                cache_max_bytes=_int(values, "SEARCH_CACHE_MAX_BYTES", 4194304, 1024),
                 provider_service_cache_entries=_int(
                     values, "SEARCH_PROVIDER_SERVICE_CACHE_ENTRIES", 6, 1
                 ),

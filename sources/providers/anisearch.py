@@ -594,9 +594,9 @@ async def _fetch_item(
     if ttl > 0 and settings.anisearch_cache_max_bytes > 0:
         # Cache compressed JSON bytes, not the nested Python dict; a 64 MiB
         # JSON budget previously retained much more than 64 MiB of RAM.
-        payload = json.dumps(
-            item, ensure_ascii=False, separators=(",", ":")
-        ).encode("utf-8")
+        payload = json.dumps(item, ensure_ascii=False, separators=(",", ":")).encode(
+            "utf-8"
+        )
         compressed = zlib.compress(payload, level=1)
         _FULL_CACHE.max_weight = max(1, settings.anisearch_cache_max_bytes)
         _FULL_CACHE.set(

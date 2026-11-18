@@ -1090,9 +1090,7 @@ def register_search_handlers(
 ) -> SearchUiState:
     """Register the single public anime-search command and its interactive flow."""
     provider_map = {str(key): provider for key, provider in provider_map.items()}
-    state = SearchUiState.create(
-        input_ttl_seconds, max_sessions=max_search_sessions
-    )
+    state = SearchUiState.create(input_ttl_seconds, max_sessions=max_search_sessions)
 
     @dp.message(Command("anime"))
     async def anime_handler(message: Message, command: CommandObject) -> None:
