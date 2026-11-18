@@ -9,7 +9,7 @@ from aiogram.types import (
     Message,
 )
 
-from bots.telegram.rich_media import bind_remote_photos
+from bots.telegram.rich_media import deliver_rich_media
 
 from bots.telegram.callbacks import (
     SectionSourceCallback,
@@ -104,9 +104,11 @@ async def _render_people_view(
     )
 
     try:
-        await message.edit_text(
-            rich_message=bind_remote_photos(_rich(text_value, urls)),
-            reply_markup=keyboard,
+        await deliver_rich_media(
+            lambda content: message.edit_text(
+                rich_message=content, reply_markup=keyboard
+            ),
+            _rich(text_value, urls),
         )
     except Exception:
         logging.exception(

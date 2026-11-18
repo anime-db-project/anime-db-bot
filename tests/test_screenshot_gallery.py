@@ -62,8 +62,8 @@ class ScreenshotGalleryTests(unittest.IsolatedAsyncioTestCase):
         all_rich = message.edit_text.await_args.kwargs["rich_message"]
         all_html = all_rich.html or ""
         self.assertIn("<tg-slideshow>", all_html)
-        self.assertIn('src="tg://photo?id=adb_photo_0"', all_html)
-        self.assertIn("screenshot-1.jpg", all_rich.media[0].media.media)
+        self.assertIn("screenshot-1.jpg", all_html)
+        self.assertIsNone(all_rich.media)
 
         message.reset_mock()
         await edit_screenshots_view(
@@ -78,7 +78,8 @@ class ScreenshotGalleryTests(unittest.IsolatedAsyncioTestCase):
         source_html = source_rich.html or ""
         self.assertIn("<tg-slideshow>", source_html)
         self.assertIn("Скриншоты — Shikimori", source_html)
-        self.assertIn("screenshot-1.jpg", source_rich.media[0].media.media)
+        self.assertIn("screenshot-1.jpg", source_html)
+        self.assertIsNone(source_rich.media)
 
     async def test_source_page_navigation_keeps_the_gallery(self) -> None:
         session = self._session(17)
@@ -92,9 +93,8 @@ class ScreenshotGalleryTests(unittest.IsolatedAsyncioTestCase):
             locale="ru",
         )
         rich = message.edit_text.await_args.kwargs["rich_message"]
-        urls = [item.media.media for item in rich.media]
-        self.assertIn("screenshot-9.jpg", urls[0])
-        self.assertTrue(all("screenshot-1.jpg" not in url for url in urls))
+        self.assertIn("screenshot-9.jpg", rich.html or "")
+        self.assertNotIn("screenshot-1.jpg", rich.html or "")
 
     async def test_all_screenshots_put_pagination_above_sources(self) -> None:
         session = self._session(17)

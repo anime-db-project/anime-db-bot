@@ -11,7 +11,7 @@ from aiogram.types import (
 )
 
 from bots.telegram.callbacks import KeyedPageCallback, resolve_key_or_legacy_index
-from bots.telegram.rich_media import bind_remote_photos
+from bots.telegram.rich_media import deliver_rich_media
 from bots.telegram.pagination import card_picker_callback
 from bots.telegram.card.views.renderer import (
     edit_standard_text,
@@ -448,9 +448,11 @@ async def edit_characters_view(
             first_page=first_page,
         )
         try:
-            await message.edit_text(
-                rich_message=bind_remote_photos(_rich(content, urls)),
-                reply_markup=keyboard,
+            await deliver_rich_media(
+                lambda rich: message.edit_text(
+                    rich_message=rich, reply_markup=keyboard
+                ),
+                _rich(content, urls),
             )
             return
         except Exception:

@@ -6,7 +6,7 @@ import logging
 from aiogram.types import InputRichMessage, Message
 
 from bots.telegram.callbacks import resolve_key_or_legacy_index
-from bots.telegram.rich_media import bind_remote_photos
+from bots.telegram.rich_media import deliver_rich_media
 from bots.telegram.card.runtime.state import AnimeCardSession
 from bots.telegram.card.ui.keyboards import navigation_keyboard, source_section_keyboard
 from bots.telegram.card.ui.selectors import (
@@ -192,11 +192,11 @@ async def edit_screenshots_view(
         )
 
     try:
-        await message.edit_text(
-            rich_message=bind_remote_photos(
-                screenshot_rich_message(anime, source=source, page=page, locale=locale)
+        await deliver_rich_media(
+            lambda content: message.edit_text(
+                rich_message=content, reply_markup=keyboard
             ),
-            reply_markup=keyboard,
+            screenshot_rich_message(anime, source=source, page=page, locale=locale),
         )
     except Exception:
         logger.exception(

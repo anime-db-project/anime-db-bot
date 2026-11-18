@@ -1,23 +1,27 @@
 from __future__ import annotations
 
 import unittest
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 from aiogram.exceptions import TelegramBadRequest
 from aiogram.methods import SendRichMessage
 from aiogram.types import InputRichMessage
 
-from bots.telegram.card.views.renderer import (
-    _POSTER_FAILURES,
-    edit_anime_view,
-    send_anime_view,
-)
+from bots.telegram.card.views.renderer import edit_anime_view, send_anime_view
+from bots.telegram.rich_media import RichMediaDelivery
+from core.settings import RichMediaSettings
 from core.models import AggregatedAnime
 
 
 class RichPhotoRecoveryTests(unittest.IsolatedAsyncioTestCase):
     def setUp(self) -> None:
-        _POSTER_FAILURES.clear()
+        self.delivery = RichMediaDelivery(RichMediaSettings(order=("direct",)))
+        self.mock_delivery = patch(
+            "bots.telegram.rich_media.get_rich_media_delivery",
+            return_value=self.delivery,
+        )
+        self.mock_delivery.start()
+        self.addCleanup(self.mock_delivery.stop)
         self.anime = AggregatedAnime(
             title="Example",
             sources=["AniList"],
@@ -25,9 +29,6 @@ class RichPhotoRecoveryTests(unittest.IsolatedAsyncioTestCase):
             amdb_id="amdb:123",
             posters=["https://example.invalid/cover.jpg"],
         )
-
-    def tearDown(self) -> None:
-        _POSTER_FAILURES.clear()
 
     @staticmethod
     def _missing_photo() -> TelegramBadRequest:
@@ -46,19 +47,14 @@ class RichPhotoRecoveryTests(unittest.IsolatedAsyncioTestCase):
         await send_anime_view(message, "token", self.anime, locale="ru")
         self.assertEqual(message.answer_rich.await_count, 2)
         first, second = message.answer_rich.await_args_list
-        self.assertIn('src="tg://photo?id=adb_photo_0"', first.args[0].html)
-        self.assertEqual(
-            first.args[0].media[0].media.media,
-            "https://example.invalid/cover.jpg",
-        )
+        self.assertIn('src="https://example.invalid/cover.jpg"', first.args[0].html)
         self.assertNotIn("<img", second.args[0].html)
         self.assertIn("<table", second.args[0].html)
         self.assertIn("<tg-button-row", second.args[0].html)
         self.assertIn('data="av:token:all_ids:0"', second.args[0].html)
         message.answer.assert_not_awaited()
 
-        # The same broken poster combination should not trigger a second
-        # failing request, even on another callback message instance.
+        # A recent failure skips the same failing strategy for this gallery.
         next_message = MagicMock()
         next_message.answer_rich = AsyncMock(return_value=None)
         await send_anime_view(next_message, "token", self.anime, locale="ru")

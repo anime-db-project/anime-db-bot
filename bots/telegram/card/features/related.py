@@ -11,7 +11,7 @@ from aiogram.types import (
 )
 
 from bots.telegram.callbacks import KeyedPageCallback
-from bots.telegram.rich_media import bind_remote_photos
+from bots.telegram.rich_media import deliver_rich_media
 from bots.telegram.pagination import card_picker_callback
 from bots.telegram.card.runtime.service import aggregate_and_send
 from bots.telegram.card.runtime.state import AnimeCardSession, TelegramCardState
@@ -339,9 +339,11 @@ async def edit_related_view(
 
     item = items[page]
     try:
-        await message.edit_text(
-            rich_message=bind_remote_photos(_detail_rich(item, section, locale=locale)),
-            reply_markup=keyboard,
+        await deliver_rich_media(
+            lambda content: message.edit_text(
+                rich_message=content, reply_markup=keyboard
+            ),
+            _detail_rich(item, section, locale=locale),
         )
     except Exception:
         logging.exception(

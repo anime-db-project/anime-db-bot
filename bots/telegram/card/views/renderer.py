@@ -3,11 +3,10 @@ from __future__ import annotations
 import logging
 from collections.abc import Awaitable, Callable
 
-from aiogram.exceptions import TelegramBadRequest
 from aiogram.types import InlineKeyboardMarkup, InputRichMessage, Message
 
 from bots.telegram.callbacks import resolve_key_or_legacy_index
-from bots.telegram.rich_media import bind_remote_photos
+from bots.telegram.rich_media import deliver_rich_media
 from bots.telegram.card.ui.constants import RICH_MESSAGE_LIMIT, STANDARD_MESSAGE_LIMIT
 from bots.telegram.card.ui.keyboards import (
     description_keyboard,
@@ -45,7 +44,6 @@ from bots.telegram.card.ui.selectors import (
     source_section_options,
 )
 from bots.telegram.card.views.titles import _titles_table_html, format_titles
-from core.cache import BoundedTTLCache
 from core.models import AggregatedAnime
 from localization import DEFAULT_LOCALE, text
 
@@ -115,14 +113,6 @@ async def send_standard_text(
         )
 
 
-_PHOTO_MEDIA_ERROR = "RICH_MESSAGE_PHOTO_NO_MEDIA_FOUND"
-_POSTER_FAILURES = BoundedTTLCache[tuple[str, ...], bool](
-    max_entries=512,
-    ttl_seconds=1800.0,
-    name="telegram_poster_media_failure",
-)
-
-
 async def _deliver_rich_card(
     send: Callable[[InputRichMessage], Awaitable[object]],
     token: str,
@@ -132,51 +122,10 @@ async def _deliver_rich_card(
     *,
     locale: str,
 ) -> None:
-    """Preserve rich tables/buttons when Telegram cannot fetch a remote poster.
-
-    Once a poster set fails, prefer the media-free rich card for half an hour,
-    avoiding an extra failing request on each repeated card opening.
-    """
-    poster_key = tuple(anime.posters[:50]) if section == "main" else ()
-    with_posters = not poster_key or _POSTER_FAILURES.get(poster_key) is not True
-    try:
-        await send(
-            bind_remote_photos(
-                rich_view(
-                    token,
-                    anime,
-                    section,
-                    text_value,
-                    locale=locale,
-                    include_posters=with_posters,
-                )
-            )
-        )
-    except TelegramBadRequest as exc:
-        if not poster_key or not with_posters or _PHOTO_MEDIA_ERROR not in str(exc):
-            raise
-        logging.warning(
-            "Telegram could not fetch card poster; retrying rich card without media",
-            extra={
-                "event": "telegram_rich_poster_retry",
-                "outcome": "retry",
-                "size": len(poster_key),
-            },
-        )
-        _POSTER_FAILURES.set(poster_key, True)
-        await send(
-            bind_remote_photos(
-                rich_view(
-                    token,
-                    anime,
-                    section,
-                    text_value,
-                    locale=locale,
-                    include_posters=False,
-                )
-            )
-        )
-
+    await deliver_rich_media(
+        send,
+        rich_view(token, anime, section, text_value, locale=locale),
+    )
 
 async def send_anime_view(
     message: Message,
@@ -369,9 +318,12 @@ async def edit_source_section_view(
         rich_message = rich(pages[page])
 
     try:
-        await message.edit_text(
-            rich_message=rich_message,
-            reply_markup=keyboard,
+        await deliver_rich_media(
+            lambda content: message.edit_text(
+                rich_message=content,
+                reply_markup=keyboard,
+            ),
+            rich_message,
         )
     except Exception:
         logging.exception(
