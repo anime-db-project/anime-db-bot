@@ -144,7 +144,12 @@ async def send_anime_view(
     pages = view_pages(anime, section, locale=locale)
     page = max(0, min(page, len(pages) - 1))
     keyboard = navigation_keyboard(
-        token, anime, section, page, len(pages), locale=locale,
+        token,
+        anime,
+        section,
+        page,
+        len(pages),
+        locale=locale,
         show_related=show_related,
     )
     text_value = pages[page]
@@ -173,7 +178,9 @@ async def send_anime_view(
         )
         fallback = (
             fallback_main_keyboard(
-                token, locale=locale, show_all_ids=bool(anime.amdb_id),
+                token,
+                locale=locale,
+                show_all_ids=bool(anime.amdb_id),
                 show_related=show_related,
             )
             if section == "main"
@@ -198,7 +205,12 @@ async def edit_anime_view(
     pages = view_pages(anime, section, locale=locale)
     page = max(0, min(page, len(pages) - 1))
     keyboard = navigation_keyboard(
-        token, anime, section, page, len(pages), locale=locale,
+        token,
+        anime,
+        section,
+        page,
+        len(pages),
+        locale=locale,
         show_related=show_related,
     )
     text_value = pages[page]
@@ -221,7 +233,9 @@ async def edit_anime_view(
         )
         fallback = (
             fallback_main_keyboard(
-                token, locale=locale, show_all_ids=bool(anime.amdb_id),
+                token,
+                locale=locale,
+                show_all_ids=bool(anime.amdb_id),
                 show_related=show_related,
             )
             if section == "main"
