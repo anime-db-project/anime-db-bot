@@ -2,15 +2,22 @@ from __future__ import annotations
 
 import unittest
 import xml.etree.ElementTree as ET
+from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
 
 from bots.telegram.card.features.related import related_keyboard
+from bots.telegram.card.runtime.service import _check_related_and_update_button
+from bots.telegram.card.runtime.state import TelegramCardState
 from bots.telegram.card.ui.keyboards import fallback_main_keyboard, navigation_keyboard
 from bots.telegram.card.views.main import main_rich
 from core.identity import AnimeIdentity
 from core.models import AggregatedAnime
-from core.related_anime import AnimeReference, canonical_relation_kind
-from services.media.related import RelatedAnimeService
+from core.related_anime import (
+    AggregatedAnimeReference,
+    AnimeReference,
+    canonical_relation_kind,
+)
+from services.media.related import RelatedAnimeLoadResult, RelatedAnimeService
 from sources.providers.anidb import AniDBSource
 from sources.providers.anilist import AniListSource
 from sources.providers.anisearch import AniSearchSource
@@ -410,6 +417,25 @@ class RelatedAnimeUiTests(unittest.TestCase):
         self.assertIn("av:token:related:0", callbacks)
         self.assertIn("av:token:recommendations:0", callbacks)
 
+    def test_empty_related_disappears_without_hiding_recommendations(self) -> None:
+        anime = AggregatedAnime(title="Standalone", external_ids={"mal": "1"})
+        for keyboard in (
+            navigation_keyboard(
+                "token", anime, "main", 0, 1, locale="en", show_related=False
+            ),
+            fallback_main_keyboard("token", locale="en", show_related=False),
+        ):
+            self.assertIsNotNone(keyboard)
+            assert keyboard is not None
+            callbacks = [
+                button.callback_data
+                for row in keyboard.inline_keyboard
+                for button in row
+                if button.callback_data
+            ]
+            self.assertNotIn("av:token:related:0", callbacks)
+            self.assertIn("av:token:recommendations:0", callbacks)
+
     def test_related_keyboard_uses_item_callbacks_and_pagination(self) -> None:
         items = [
             __import__(
@@ -443,6 +469,106 @@ class RelatedAnimeUiTests(unittest.TestCase):
         self.assertTrue(
             any(value.startswith("cp:token:ar~related~all:") for value in callbacks)
         )
+
+
+class RelatedAnimeAvailabilityTests(unittest.IsolatedAsyncioTestCase):
+    @staticmethod
+    def _setup() -> tuple[TelegramCardState, str]:
+        state = TelegramCardState.create(session_ttl_seconds=600)
+        token = state.remember_anime(
+            AggregatedAnime(title="Test", external_ids={"mal": "1"}),
+            owner_user_id=42,
+        )
+        return state, token
+
+    async def test_relations_present_reveal_main_button(self) -> None:
+        state, token = self._setup()
+        session = state.anime_sessions[token]
+        result = RelatedAnimeLoadResult(
+            items=[AggregatedAnimeReference(external_ids={"mal": "2"})]
+        )
+        service = SimpleNamespace(load_relations=AsyncMock(return_value=result))
+        message = SimpleNamespace(edit_reply_markup=AsyncMock())
+        with patch(
+            "bots.telegram.card.runtime.service.get_app_context",
+            return_value=SimpleNamespace(related_anime_service=service),
+        ):
+            await _check_related_and_update_button(
+                message, token, session, state, locale="en", plain_fallback=False
+            )
+        self.assertTrue(session.related_loaded)
+        self.assertEqual(session.related_items, result.items)
+        message.edit_reply_markup.assert_awaited_once()
+        markup = message.edit_reply_markup.await_args.kwargs["reply_markup"]
+        actions = [
+            button.callback_data
+            for row in markup.inline_keyboard
+            for button in row
+        ]
+        self.assertIn(f"av:{token}:related:0", actions)
+        self.assertIn(f"av:{token}:recommendations:0", actions)
+        service.load_relations.assert_awaited_once()
+
+    async def test_empty_or_failed_results_do_not_show_button(self) -> None:
+        for result in (
+            RelatedAnimeLoadResult(),
+            RelatedAnimeLoadResult(errors={"MAL": "TimeoutError"}),
+        ):
+            state, token = self._setup()
+            session = state.anime_sessions[token]
+            service = SimpleNamespace(load_relations=AsyncMock(return_value=result))
+            message = SimpleNamespace(edit_reply_markup=AsyncMock())
+            with patch(
+                "bots.telegram.card.runtime.service.get_app_context",
+                return_value=SimpleNamespace(related_anime_service=service),
+            ):
+                await _check_related_and_update_button(
+                    message, token, session, state,
+                    locale="en", plain_fallback=False,
+                )
+            self.assertTrue(session.related_loaded)
+            message.edit_reply_markup.assert_not_awaited()
+
+    async def test_not_editing_a_card_after_navigation_away(self) -> None:
+        state, token = self._setup()
+        session = state.anime_sessions[token]
+        session.main_view_active = False
+        result = RelatedAnimeLoadResult(
+            items=[AggregatedAnimeReference(external_ids={"mal": "2"})]
+        )
+        service = SimpleNamespace(load_relations=AsyncMock(return_value=result))
+        message = SimpleNamespace(edit_reply_markup=AsyncMock())
+        with patch(
+            "bots.telegram.card.runtime.service.get_app_context",
+            return_value=SimpleNamespace(related_anime_service=service),
+        ):
+            await _check_related_and_update_button(
+                message, token, session, state, locale="en", plain_fallback=False
+            )
+        self.assertTrue(session.related_loaded)
+        message.edit_reply_markup.assert_not_awaited()
+
+    async def test_plain_fallback_keeps_full_menu(self) -> None:
+        state, token = self._setup()
+        session = state.anime_sessions[token]
+        result = RelatedAnimeLoadResult(
+            items=[AggregatedAnimeReference(external_ids={"mal": "2"})]
+        )
+        service = SimpleNamespace(load_relations=AsyncMock(return_value=result))
+        message = SimpleNamespace(edit_reply_markup=AsyncMock())
+        with patch(
+            "bots.telegram.card.runtime.service.get_app_context",
+            return_value=SimpleNamespace(related_anime_service=service),
+        ):
+            await _check_related_and_update_button(
+                message, token, session, state, locale="en", plain_fallback=True
+            )
+        markup = message.edit_reply_markup.await_args.kwargs["reply_markup"]
+        actions = [
+            button.callback_data for row in markup.inline_keyboard for button in row
+        ]
+        self.assertIn(f"av:{token}:related:0", actions)
+        self.assertIn(f"av:{token}:description:0", actions)
 
 
 if __name__ == "__main__":
