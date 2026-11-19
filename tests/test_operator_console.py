@@ -13,6 +13,7 @@ from core.models import AggregatedAnime, SearchCandidate, SearchResultSet
 from scripts.operator_console import (
     ConsoleError,
     OperatorConsole,
+    run_console,
     _confirmed,
     _parse_source_id,
     build_parser,
@@ -230,6 +231,24 @@ class OperatorConsoleServicesTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("cancelled", result)
         with self.assertRaises(ConsoleError):
             await self.console.run_tokens(["/mapping_confirm"], self.parser)
+
+    async def test_help_does_not_initialize_database_backends(self) -> None:
+        with (
+            patch(
+                "services.runtime.app_context.AppContext.create",
+                side_effect=RuntimeError("DB offline"),
+            ),
+            redirect_stdout(io.StringIO()) as output,
+        ):
+            result = await run_console(["help"])
+        self.assertEqual(result, 0)
+        self.assertIn("search", output.getvalue())
+
+    async def test_json_slash_ping_alias(self) -> None:
+        with redirect_stdout(io.StringIO()) as output:
+            result = await run_console(["--json", "/ping"])
+        self.assertEqual(result, 0)
+        self.assertIn('"ok": true', output.getvalue())
 
     async def test_config_list_only_returns_example_names(self) -> None:
         result = await self.console.execute(
