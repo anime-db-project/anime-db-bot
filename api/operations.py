@@ -70,6 +70,7 @@ OPERATIONS: dict[str, OperationSpec] = {
     "raw.search": OperationSpec("read", "Unmerged, source-separated search data"),
     "raw.id": OperationSpec("read", "Unmerged, source-separated id data"),
     "raw.metadata": OperationSpec("read", "Unmerged, source-separated metadata data"),
+    "raw.wire": OperationSpec("read", "Original provider JSON/XML metadata payload"),
     "raw.staff": OperationSpec("read", "Unmerged, source-separated staff data"),
     "raw.voices": OperationSpec("read", "Unmerged, source-separated voices data"),
     "raw.characters": OperationSpec("read", "Unmerged, source-separated characters data"),
