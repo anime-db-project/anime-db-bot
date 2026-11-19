@@ -103,6 +103,23 @@ python3 scripts/project.py run
 
 Windows: use `py -3 scripts\project.py` instead of `python3 scripts/project.py`. Background operation uses `python3 scripts/project.py start` (`status`, `restart`, `stop` are also supported); Linux deployments may use `./start.sh`.
 
+## Ready-to-run releases and GHCR
+
+GitHub Releases include standalone console executables for Windows x64,
+Linux x64/ARM64, macOS Intel/Apple Silicon and a multiarch GHCR Docker image.
+Native releases bundle Python, dependencies and configuration templates;
+they do not require Python to be installed. Double-click the Windows binary,
+use the included `Run.command` on macOS, or run the Linux binary/`Run.sh`.
+
+Use `run` (foreground), `start` (background), `stop`, `restart`,
+`status`, `init`, `check`, or `doctor`. Docker runs in the foreground
+by default and is detached with `docker run -d`; persistent data lives in
+`/data`. See the [release setup guide](docs/releases.md) for environment
+variables, CLI flags, startup output and deployment examples.
+
+**[Download a release](https://github.com/anime-db-project/anime-db-bot/releases)** ·
+**[GHCR image](https://github.com/anime-db-project/anime-db-bot/pkgs/container/anime-db-bot)**
+
 ## Deployment and operation
 
 The cross-platform launcher manages virtual environments, checks, foreground/background execution and process status. For Linux, `start.sh` provides the existing tmux-based deployment path. Windows has `start.ps1`/`start.cmd`; macOS also includes `start.command`.
