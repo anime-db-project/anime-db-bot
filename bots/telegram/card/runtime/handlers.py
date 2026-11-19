@@ -494,6 +494,8 @@ def build_dispatcher(mode_name: str, state: TelegramCardState) -> Dispatcher:
             await callback.answer()
             return
 
+        # Keep the delayed related-button update on the main card only.
+        raw_session.main_view_active = section == "main"
         await callback.answer()
         if section == "all_ids":
             await edit_mapping_ids_view(
@@ -569,6 +571,7 @@ def build_dispatcher(mode_name: str, state: TelegramCardState) -> Dispatcher:
             section=section,
             page=data.page,
             locale=locale,
+            show_related=bool(raw_session.related_items),
         )
 
     return dp
