@@ -18,6 +18,7 @@ from core.settings import (
     AppSettings,
     ConfigFileError,
     ROOT_DIR,
+    RESOURCE_DIR,
     project_env_files,
     project_env_values,
 )
@@ -25,7 +26,7 @@ from core.settings import (
 _EXAMPLE_LINE = re.compile(r"^[ \t]*([A-Za-z_][A-Za-z0-9_]*)[ \t]*=")
 
 
-def example_groups(root_dir: Path = ROOT_DIR) -> dict[str, tuple[str, ...]]:
+def example_groups(root_dir: Path = RESOURCE_DIR) -> dict[str, tuple[str, ...]]:
     examples = root_dir / ".env.example.d"
     groups: dict[str, tuple[str, ...]] = {}
     for file in sorted(examples.glob("*.env")):
@@ -50,7 +51,7 @@ def example_groups(root_dir: Path = ROOT_DIR) -> dict[str, tuple[str, ...]]:
 def _invalid_scalar_keys(values: Mapping[str, str]) -> list[str]:
     """Flag invalid scalar env values even where legacy parsers use defaults."""
     tree = ast.parse(
-        (ROOT_DIR / "core/settings.py").read_text(encoding="utf-8")
+        (RESOURCE_DIR / "core/settings.py").read_text(encoding="utf-8")
     )
     parsers = {"_int", "_float", "_bool", "_strict_int", "_strict_float"}
     types: dict[str, str] = {}
@@ -113,7 +114,8 @@ def validate_config(
         # Only key names are reported. Never render active secrets or IDs.
         raise ConfigFileError("Invalid numeric/boolean keys: " + ", ".join(invalid))
     AppSettings.from_env(effective)
-    documented = {key for keys in example_groups(root_dir).values() for key in keys}
+    examples = root_dir if (root_dir / ".env.example.d").is_dir() else RESOURCE_DIR
+    documented = {key for keys in example_groups(examples).values() for key in keys}
     return sorted(set(values) - documented)
 
 
