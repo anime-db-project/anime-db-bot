@@ -183,6 +183,23 @@ def build_parser() -> argparse.ArgumentParser:
     delmap.add_argument("--reason", required=True)
     delmap.add_argument("--yes", action="store_true")
 
+    index = commands.add_parser("index", help="Build local IMDb/Baha indexes.")
+    indexers = index.add_subparsers(dest="index_kind", required=True)
+    imdb = indexers.add_parser("imdb", help="Build the filtered IMDb ratings index.")
+    imdb.add_argument("--source-file", type=Path, help="Local IMDb .tsv.gz dump.")
+    imdb.add_argument("--url", help="Override upstream IMDb dataset URL.")
+    imdb.add_argument("--mappings-db", type=Path)
+    imdb.add_argument("--output", type=Path)
+    imdb.add_argument("--yes", action="store_true")
+    baha = indexers.add_parser("baha", help="Build local Baha Anime Skip index.")
+    baha.add_argument("--mappings-db", type=Path)
+    baha.add_argument("--output", type=Path)
+    baha.add_argument("--data-url")
+    baha.add_argument("--bahamut-api-url")
+    baha.add_argument("--timeout", type=float)
+    baha.add_argument("--concurrency", type=_positive, default=12)
+    baha.add_argument("--yes", action="store_true")
+
     config = commands.add_parser("config", help="List/check settings (no secret values).")
     cp = config.add_subparsers(dest="config_action", required=True)
     cp.add_parser("list")
@@ -545,6 +562,56 @@ class OperatorConsole:
             "errors": results.errors,
         }
 
+    async def _index(self, args: Any) -> Any:
+        """Use the existing index builders without duplicating parsing code."""
+        import runpy
+        from core.settings import RESOURCE_DIR
+
+        _confirmed(
+            f"Rebuild the local {args.index_kind.upper()} index?",
+            yes=args.yes,
+            interactive=self.interactive,
+        )
+        filename = (
+            "update-imdb-ratings.py"
+            if args.index_kind == "imdb"
+            else "update-baha-anime-skip.py"
+        )
+        script = RESOURCE_DIR / "scripts" / filename
+        if not script.is_file():
+            raise ConsoleError(
+                f"Bundled index builder unavailable: {filename}"
+            )
+        module = runpy.run_path(str(script), run_name="operator_index_builder")
+        settings = self.context.settings
+        if args.index_kind == "imdb":
+            parameters = [
+                "--mappings-db",
+                str(args.mappings_db or settings.mappings.db_path),
+                "--output",
+                str(args.output or settings.sources.imdb_ratings_db_path),
+            ]
+            if args.source_file:
+                parameters.extend(["--source-file", str(args.source_file)])
+            if args.url:
+                parameters.extend(["--url", args.url])
+            result = await asyncio.to_thread(module["main"], parameters)
+        else:
+            parsed = argparse.Namespace(
+                mappings_db=str(args.mappings_db) if args.mappings_db else None,
+                output=str(args.output) if args.output else None,
+                data_url=args.data_url,
+                bahamut_api_url=args.bahamut_api_url,
+                timeout=args.timeout,
+                concurrency=args.concurrency,
+            )
+            result = await module["_run"](parsed)
+        return {
+            "index": args.index_kind,
+            "exit_code": result,
+            "note": "Index built through the original project indexing service.",
+        }
+
     async def _mapping(self, args: Any) -> Any:
         from mappings.resolver import (
             delete_mapping_override, list_mapping_override_history,
@@ -604,7 +671,7 @@ class OperatorConsole:
             return (
                 "Commands: ping, status, sources, source-health, metrics, search, "
                 "lookup, anime, open, view, image, image-providers, users, user, "
-                "language, ban, unban, mapping, config, logs, cancel.\n"
+                "language, ban, unban, mapping, index, config, logs, cancel.\n"
                 "Telegram aliases: /start, /ping, /anime, /users, /status, "
                 "/source_health, /ban, /unban, /settings, /cancel, "
                 "/mapping_overrides, /mapping_history, /mapping_set, "
@@ -731,6 +798,8 @@ class OperatorConsole:
             return await self.context.image_search_service.availability()
         if name == "mapping":
             return await self._mapping(args)
+        if name == "index":
+            return await self._index(args)
         if name == "config":
             from core.settings import RESOURCE_DIR
             from scripts.config_report import example_groups, validate_config
