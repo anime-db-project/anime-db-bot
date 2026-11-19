@@ -120,6 +120,35 @@ variables, CLI flags, startup output and deployment examples.
 **[Download a release](https://github.com/anime-db-project/anime-db-bot/releases)** ·
 **[GHCR image](https://github.com/anime-db-project/anime-db-bot/pkgs/container/anime-db-bot)**
 
+## Local operator console (native and Docker)
+
+The new operator console exposes the bot's anime search, full card sections,
+image recognition, episodes, timestamps, OP/ED themes, cast, recommendations,
+moderation, configuration and mapping maintenance using the same services
+as Telegram. Enter `console` for an interactive REPL or `cli COMMAND` for
+scripting; **neither command starts a second Telegram polling instance**.
+
+```sh
+./anime-db-bot console
+./anime-db-bot cli search Frieren
+./anime-db-bot cli anime mal:5114 --section related
+./anime-db-bot cli --json metrics
+
+# Against a running Docker container:
+docker exec -it anime-db-bot python -m scripts.release_entry console
+docker exec anime-db-bot python -m scripts.release_entry cli users
+docker exec anime-db-bot python -m scripts.release_entry cli source-health
+```
+
+A terminal-attached foreground `run` also opens the interactive operator
+prompt; `run --no-console` disables it. Commands such as `/anime`, `/users`,
+`/ban`, `/mapping_set` and `/mapping_confirm` work with familiar slash
+syntax. A private rolling status snapshot provides current worker metrics to
+separate console processes; secrets are not exported.
+
+See **[Operator console documentation](docs/operator-console.md)** for every
+command, flags, confirmation rules, JSON output and Docker examples.
+
 ## Deployment and operation
 
 The cross-platform launcher manages virtual environments, checks, foreground/background execution and process status. For Linux, `start.sh` provides the existing tmux-based deployment path. Windows has `start.ps1`/`start.cmd`; macOS also includes `start.command`.
