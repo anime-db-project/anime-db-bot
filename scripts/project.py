@@ -28,6 +28,7 @@ ENV_FILES = (
     "logging.env",
     "runtime.env",
     "lifecycle.env",
+    "api.env",
 )
 PROFILE_FILES = (
     "telegram.toml",
