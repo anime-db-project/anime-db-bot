@@ -85,6 +85,7 @@ type Query {
   rawSearch(query: String!, source: String = "all", page: Int = 1, limit: Int = 20): JSON
   rawId(source: String!, id: String!): JSON
   rawMetadata(source: String = "all", id: String, ids: JSON, resolve: Boolean = false): JSON
+  rawWire(source: String = "all", id: String, ids: JSON, resolve: Boolean = false): JSON
   rawVoices(source: String = "all", id: String, ids: JSON, resolve: Boolean = false, detail: String = "manifest"): JSON
   rawSeiyuu(source: String = "all", id: String, ids: JSON, resolve: Boolean = false, detail: String = "manifest"): JSON
   rawStaff(source: String = "all", id: String, ids: JSON, resolve: Boolean = false, detail: String = "manifest"): JSON
