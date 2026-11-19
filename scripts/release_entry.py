@@ -15,6 +15,7 @@ import shutil
 import signal
 import subprocess
 import sys
+import threading
 import time
 
 from scripts.build_version import VERSION
@@ -216,13 +217,19 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--restart-delay", type=float, metavar="SECONDS")
     parser.add_argument("--max-updates", type=int, metavar="COUNT")
     parser.add_argument("--no-mappings-update", action="store_true")
+    parser.add_argument(
+        "--no-console", action="store_true",
+        help="Disable the interactive command prompt while running in a terminal.",
+    )
     parser.add_argument("--version", action="version", version=f"anime-db-bot {VERSION}")
     parser.add_argument("--worker", action="store_true", help=argparse.SUPPRESS)
     parser.add_argument("--supervise", action="store_true", help=argparse.SUPPRESS)
     return parser
 
 
-def _run_supervisor(home: Path, settings: object, *, managed: bool) -> int:
+def _run_supervisor(
+    home: Path, settings: object, *, managed: bool, console: bool = False
+) -> int:
     from scripts.lifecycle import supervise_bot
 
     if not _register_process(home):
@@ -241,6 +248,21 @@ def _run_supervisor(home: Path, settings: object, *, managed: bool) -> int:
             f"Storage: {settings.storage.backend}; "
             f"search cache: {settings.cache.backend}"
         )
+        if console:
+            from scripts.operator_console import run_console
+
+            def operator_prompt() -> None:
+                # Input stays in a daemon thread: Ctrl+C/termination can
+                # stop the main supervisor even if the prompt is awaiting input.
+                try:
+                    asyncio.run(run_console(interactive=True))
+                except Exception as exc:
+                    info(f"Operator prompt closed: {type(exc).__name__}")
+
+            info("Interactive operator console enabled; type help for commands.")
+            threading.Thread(
+                target=operator_prompt, name="operator-console", daemon=True
+            ).start()
         return supervise_bot(settings.lifecycle, stop_file=_stop_path(home))
     finally:
         _remove_pid_if_owned(home)
@@ -417,7 +439,10 @@ def main(argv: list[str] | None = None) -> int:
             return _run_supervisor(home, settings, managed=True)
         if args.command in {"start", "restart"}:
             return _start_background(home)
-        return _run_supervisor(home, settings, managed=False)
+        return _run_supervisor(
+            home, settings, managed=False,
+            console=sys.stdin.isatty() and not args.no_console,
+        )
     except (OSError, RuntimeError, ValueError) as exc:
         # Never render raw dotenv values or exception details containing secrets.
         return error(f"Startup/configuration error: {type(exc).__name__}. "
