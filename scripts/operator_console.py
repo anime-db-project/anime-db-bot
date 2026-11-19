@@ -764,7 +764,7 @@ async def run_console(
             print("Type 'exit' or 'quit' to leave. This console does not start polling.")
             while True:
                 try:
-                    raw = await asyncio.to_thread(input, "anime-db-bot> ")
+                    raw = input("anime-db-bot> ")
                 except (KeyboardInterrupt, EOFError):
                     print("")
                     return 0
