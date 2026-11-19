@@ -252,7 +252,17 @@ class AppSettingsTests(unittest.TestCase):
                     encoding="utf-8",
                 )
             values = project_env_values(root)
-        self.assertEqual(len(values), 207)
+        self.assertEqual(len(values), 214)
+        for key in (
+            "BOT_ON_FAILURE",
+            "BOT_ON_CLEAN_EXIT",
+            "BOT_RESTART_MAX_ATTEMPTS",
+            "BOT_RESTART_DELAY_SECONDS",
+            "BOT_RESTART_MAX_DELAY_SECONDS",
+            "BOT_RESTART_RESET_AFTER_SECONDS",
+            "BOT_SHUTDOWN_TIMEOUT_SECONDS",
+        ):
+            self.assertIn(key, values)
         self.assertIn("RICH_MEDIA_MAX_LOCAL_DELIVERIES", values)
         self.assertIn("BOT_TOKEN", values)
         self.assertIn("TELEGRAM_MAX_CARD_SESSIONS", values)
