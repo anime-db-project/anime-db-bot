@@ -247,6 +247,27 @@ The interactive `/anime` command is the entry point for ordinary searches. Admin
 | `/mapping_overrides`, `/mapping_history [limit]` | Inspect overrides and mapping audit history |
 | `/mapping_set`, `/mapping_delete`, `/mapping_confirm`, `/mapping_cancel` | Stage mapping decisions, then confirm or cancel |
 
+## Administrator configuration in Telegram
+
+Authorized Telegram administrators can open **/settings → Bot configuration
+(ENV)** in a **private chat**, or send `/admin_config` (alias:
+`/bot_config`). The UI enumerates every documented option from
+`.env.example.d/*.env` automatically and offers category browsing,
+paginated keys, name search, descriptions, masked current values, editing and
+resetting. New keys are picked up automatically from the templates.
+
+Every change requires a separate inline confirmation, validated against
+the same typed configuration rules as the local CLI. Tokens, passwords, URLs
+and other sensitive values are never displayed; messages containing secrets
+are deleted before confirmation. No change takes effect until a normal bot
+restart, and process environment variables still override local ENV files.
+Regular users cannot enter the configuration UI, including via forwarded
+callback buttons. See [configuration reference](docs/configuration.md).
+
+Release archives are published together with **SHA256SUMS.txt** and
+**manifest.json** containing artifact SHA-256 hashes, sizes, source commit and
+platform identifiers. The workflow validates both before publication.
+
 ## Configuration
 
 `BOT_TOKEN` is required. Add provider credentials only for the services you intend to enable; `MAL_CLIENT_ID` improves MyAnimeList coverage and `ANIDB_CLIENT` enables AniDB. Optional reverse-image API keys are not required for guest operation. Proxy and User-Agent profiles are configured under `.proxies.d/` and `.user-agents.d/`.
