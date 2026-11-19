@@ -132,6 +132,73 @@ def openapi_document(public_url: str = "") -> dict:
         },
     }
 
+    # Source-native views are deliberately independent of merged anime cards.
+    raw_args = [
+        _query("source"), _query("ids"), _query("resolve"),
+    ]
+    paths[f"{prefix}/raw/capabilities"] = {
+        "get": _operation("List per-source API capabilities and active providers")
+    }
+    paths[f"{prefix}/raw/search"] = {
+        "get": _operation(
+            "Search each requested provider without cross-provider merging",
+            params=[_query("query", required=True), _query("source"),
+                    _query("page"), _query("limit")],
+        )
+    }
+    paths[f"{prefix}/raw/id/{{source}}/{{id}}"] = {
+        "get": _operation(
+            "Direct lookup of one native source ID without aggregation",
+            params=[_path("source"), _path("id")],
+        )
+    }
+    for capability in (
+        "metadata", "voices", "seiyuu", "staff", "characters",
+        "episodes", "episode", "timestamps", "themes", "trailers",
+        "screenshots", "popularity", "description", "relations",
+        "recommendations",
+    ):
+        paths[f"{prefix}/raw/{capability}"] = {
+            "get": _operation(
+                f"Return separate {capability} payload for each source",
+                params=[
+                    *raw_args, _query("id"), _query("detail"),
+                    _query("episode"), _query("page"),
+                ],
+            )
+        }
+    paths[f"{prefix}/raw/{{source}}/{{capability}}"] = {
+        "get": _operation(
+            "Select one source and one capability",
+            params=[
+                _path("source"), _path("capability"),
+                _query("ids"), _query("id"), _query("detail"),
+                _query("episode"), _query("page"),
+            ],
+        )
+    }
+    paths[f"{prefix}/raw/{{source}}/{{id}}/{{capability}}"] = {
+        "get": _operation(
+            "Fetch a single capability using a source-scoped ID",
+            params=[
+                _path("source"), _path("id"), _path("capability"),
+                _query("detail"), _query("episode"), _query("page"),
+            ],
+        )
+    }
+    paths[f"{prefix}/raw/image"] = {
+        "post": _operation(
+            "Return independent image-recognition provider matches",
+            body=True,
+        )
+    }
+    paths[f"{prefix}/raw/query"] = {
+        "post": _operation(
+            "Typed raw source request, including multi-source ID maps and bundles",
+            body=True,
+        )
+    }
+
     read_routes = {
         "ping": "ping", "status": "status", "sources": "sources",
         "source-health": "source-health", "metrics": "metrics",
@@ -235,6 +302,39 @@ def openapi_document(public_url: str = "") -> dict:
                             "properties": {
                                 "version": {"const": "v1"},
                                 "request_id": {"type": "string"},
+                            },
+                        },
+                    },
+                },
+                "RawSourceResponse": {
+                    "type": "object",
+                    "required": [
+                        "capability", "aggregated", "representation", "sources"
+                    ],
+                    "properties": {
+                        "capability": {"type": "string"},
+                        "aggregated": {"const": False},
+                        "representation": {
+                            "const": "source_adapter_record"
+                        },
+                        "identity": {
+                            "type": ["object", "null"],
+                            "additionalProperties": {"type": "string"},
+                        },
+                        "sources": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "object",
+                                "properties": {
+                                    "status": {
+                                        "enum": [
+                                            "ok", "missing_id", "not_found",
+                                            "unsupported", "error"
+                                        ]
+                                    },
+                                    "data": {},
+                                    "error_type": {"type": "string"},
+                                },
                             },
                         },
                     },
