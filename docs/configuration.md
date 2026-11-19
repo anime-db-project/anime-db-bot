@@ -39,11 +39,50 @@ Unexpected names are warnings in normal mode, not automatically rejected.
 | \`mappings.env\` | Mapping catalog location and background release checks |
 | \`timestamps.env\` | Skip/intro timestamp data and provider-specific settings |
 | \`logging.env\` | Structured logs, redaction, log size, archive and retention |
+| `lifecycle.env` | Fatal process-exit actions, restart limits, backoff and graceful shutdown |
 | \`.env.example\` | Legacy single-file template (for compatibility) |
 
 The sample directory is authoritative: copy **one** sample key at a time into
 the matching active file. Do not copy the same key into both \`.env\` and
 \`.env.d\`.
+
+### Process lifecycle and automatic recovery
+
+The supervised launcher reads settings from `.env.d/lifecycle.env` (or the
+legacy `.env`) and applies them to **fatal bot process exits**, not ordinary
+API errors, rejected Telegram updates, or handled provider failures.
+
+```dotenv
+BOT_ON_FAILURE=restart
+BOT_ON_CLEAN_EXIT=stop
+BOT_RESTART_MAX_ATTEMPTS=5
+BOT_RESTART_DELAY_SECONDS=5
+BOT_RESTART_MAX_DELAY_SECONDS=60
+BOT_RESTART_RESET_AFTER_SECONDS=300
+BOT_SHUTDOWN_TIMEOUT_SECONDS=10
+```
+
+- Actions are `stop` or `restart`; both actions default to `stop` for
+  backward compatibility. A non-zero exit uses `BOT_ON_FAILURE`, while
+  a successful exit (code 0) uses `BOT_ON_CLEAN_EXIT`.
+- If an action is `restart`, the supervisor waits before starting a new
+  child. Delays increase exponentially from the initial delay up to the
+  configured cap. A maximum-attempt limit (0–100) prevents a crash loop.
+  After the bot runs for `BOT_RESTART_RESET_AFTER_SECONDS`, consecutive
+  restart attempts reset.
+- An explicit operator stop (`scripts/project.py stop`, Ctrl+C, or
+  SIGINT/SIGTERM/SIGHUP) **always stops** the child and supervisor even when
+  `BOT_ON_CLEAN_EXIT=restart`. The child receives a graceful terminate
+  request and is killed only if it exceeds `BOT_SHUTDOWN_TIMEOUT_SECONDS`.
+- The policies apply to `./start.sh` tmux sessions and to the
+  cross-platform `scripts/project.py run/start/restart` commands.
+  Running `python -m bots.telegram.bot` directly bypasses the supervisor.
+- Do not combine this policy with another unbounded `systemd` or Docker
+  restart loop without understanding both layers. The provided
+  `compose.yml` manages **only Jikan**, not the bot process.
+- Legacy installations with an existing `.env.d` do not have their active
+  config overwritten. Add `lifecycle.env` yourself when customizing;
+  missing keys safely retain their built-in defaults.
 
 ### Search providers
 
