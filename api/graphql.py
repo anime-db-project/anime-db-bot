@@ -81,6 +81,27 @@ type Query {
   jobs: JSON
   job(id: String!): JSON
   operation(name: String!, input: JSON): JSON
+  sourceCatalog: JSON
+  rawSearch(query: String!, source: String = "all", page: Int = 1, limit: Int = 20): JSON
+  rawId(source: String!, id: String!): JSON
+  rawMetadata(source: String = "all", id: String, ids: JSON, resolve: Boolean = false): JSON
+  rawVoices(source: String = "all", id: String, ids: JSON, resolve: Boolean = false, detail: String = "manifest"): JSON
+  rawSeiyuu(source: String = "all", id: String, ids: JSON, resolve: Boolean = false, detail: String = "manifest"): JSON
+  rawStaff(source: String = "all", id: String, ids: JSON, resolve: Boolean = false, detail: String = "manifest"): JSON
+  rawCharacters(source: String = "all", id: String, ids: JSON, resolve: Boolean = false): JSON
+  rawEpisodes(source: String = "all", id: String, ids: JSON, resolve: Boolean = false, page: Int = 1): JSON
+  rawEpisode(source: String = "all", id: String, ids: JSON, resolve: Boolean = false, episode: Int = 1): JSON
+  rawTimestamps(source: String = "all", id: String, ids: JSON, resolve: Boolean = false, episode: Int = 1): JSON
+  rawThemes(source: String = "all", id: String, ids: JSON, resolve: Boolean = false, episode: Int = 1): JSON
+  rawTrailers(source: String = "all", id: String, ids: JSON, resolve: Boolean = false): JSON
+  rawScreenshots(source: String = "all", id: String, ids: JSON, resolve: Boolean = false): JSON
+  rawPopularity(source: String = "all", id: String, ids: JSON, resolve: Boolean = false): JSON
+  rawDescription(source: String = "all", id: String, ids: JSON, resolve: Boolean = false): JSON
+  rawRelations(source: String = "all", id: String, ids: JSON, resolve: Boolean = false): JSON
+  rawRecommendations(source: String = "all", id: String, ids: JSON, resolve: Boolean = false): JSON
+  rawImage(source: String = "all", contentBase64: String!, contentType: String = "image/jpeg"): JSON
+  rawBundle(source: String = "all", id: String, ids: JSON, resolve: Boolean = false, capabilities: [String!]!): JSON
+  rawAll(source: String = "all", id: String, ids: JSON, resolve: Boolean = false): JSON
 }
 
 type Mutation {
@@ -288,6 +309,28 @@ def _job_resolver(_root: Any, info: Any, id: str) -> Any:
 
 SCHEMA.type_map["Query"].fields["jobs"].resolve = _jobs_resolver
 SCHEMA.type_map["Query"].fields["job"].resolve = _job_resolver
+
+_bind("Query", "sourceCatalog", "raw.catalog")
+_bind("Query", "rawSearch", "raw.search")
+_bind("Query", "rawId", "raw.id")
+_bind("Query", "rawMetadata", "raw.metadata")
+_bind("Query", "rawVoices", "raw.voices")
+_bind("Query", "rawSeiyuu", "raw.voices")
+_bind("Query", "rawStaff", "raw.staff")
+_bind("Query", "rawCharacters", "raw.characters")
+_bind("Query", "rawEpisodes", "raw.episodes")
+_bind("Query", "rawEpisode", "raw.episode")
+_bind("Query", "rawTimestamps", "raw.timestamps")
+_bind("Query", "rawThemes", "raw.themes")
+_bind("Query", "rawTrailers", "raw.trailers")
+_bind("Query", "rawScreenshots", "raw.screenshots")
+_bind("Query", "rawPopularity", "raw.popularity")
+_bind("Query", "rawDescription", "raw.description")
+_bind("Query", "rawRelations", "raw.relations")
+_bind("Query", "rawRecommendations", "raw.recommendations")
+_bind("Query", "rawImage", "raw.image")
+_bind("Query", "rawBundle", "raw.bundle")
+_bind("Query", "rawAll", "raw.all")
 
 _bind_generic("Query", mutating=False)
 _bind_generic("Mutation", mutating=True)
