@@ -1,0 +1,158 @@
+# Binary and Docker releases
+
+English is the canonical project language. All release assets are built on
+native GitHub Actions runners; no build or test is performed on the production
+server.
+
+## Supported release artifacts
+
+| Archive / image | Architecture | Launch |
+|---|---|---|
+| `anime-db-bot-vX.Y.Z-windows-x64.zip` | Windows x86-64 | Double-click `anime-db-bot.exe` / `Run.cmd`, or PowerShell / CMD |
+| `anime-db-bot-vX.Y.Z-linux-x64.tar.gz` | Linux x86-64 | Executable / `Run.sh`, or terminal |
+| `anime-db-bot-vX.Y.Z-linux-arm64.tar.gz` | Linux AArch64 | Executable / `Run.sh`, or terminal |
+| `anime-db-bot-vX.Y.Z-macos-x64.tar.gz` | macOS Intel | Double-click `Run.command`, or terminal |
+| `anime-db-bot-vX.Y.Z-macos-arm64.tar.gz` | macOS Apple Silicon | Double-click `Run.command`, or terminal |
+| `ghcr.io/anime-db-project/anime-db-bot:X.Y.Z` | Docker Linux amd64/arm64 | Docker / Compose |
+
+Releases also include `SHA256SUMS.txt`. Verify downloaded archives before
+running. The executable packages use PyInstaller **onedir** for faster startup
+and avoid unpacking a Python runtime on each invocation. Keep the included
+`_internal` directory beside the executable; it contains libraries and
+bundled configuration/localization templates.
+
+The macOS binaries are not Apple Developer ID signed or notarized.
+macOS Gatekeeper may block the first launch until the user approves it;
+there is no automatic bypass. For Linux, executable and script permissions
+are preserved in the TAR archive. Some file managers may prompt before
+executing a downloaded file.
+
+## Start from a native archive
+
+Extract the archive to a writable directory. Run the executable, or use its
+clickable launcher. The first launch creates `.env.d`, `.proxies.d` and
+`.user-agents.d` templates. Insert your Telegram token into
+`.env.d/telegram.env` (`BOT_TOKEN`) or pass it via an environment variable.
+
+The application uses English for the startup interface and documentation
+and supports optional Telegram UI localizations.
+
+### CLI commands
+
+On Linux or macOS, prefix the commands with `./anime-db-bot`.
+On Windows use `anime-db-bot.exe`.
+
+```sh
+./anime-db-bot --version
+./anime-db-bot --help
+./anime-db-bot init
+./anime-db-bot check
+./anime-db-bot doctor
+./anime-db-bot run
+./anime-db-bot start
+./anime-db-bot status
+./anime-db-bot stop
+./anime-db-bot restart
+```
+
+The **default** when no argument is specified is `run`, a foreground console
+process, which is suitable for a double-click. The `start` command launches
+a persistent detached supervisor and writes `logs/launcher.log`. Use
+`stop` to request a graceful shutdown or `restart` to cycle the
+background instance. A single writable home is used for all of
+`config/data/logs`; two processes started with the same home will not
+create duplicate pollers.
+
+Supported overrides:
+
+```sh
+./anime-db-bot run --home /srv/anime-db-bot
+./anime-db-bot start --env-file /etc/anime-db-bot.env
+./anime-db-bot run --log-level DEBUG --max-updates 12
+./anime-db-bot run --on-failure restart --restart-limit 5 --restart-delay 4
+./anime-db-bot run --no-mappings-update
+```
+
+Avoid passing `BOT_TOKEN` on the command line, where arguments may appear in
+process listings. Real environment variables take precedence over local
+files; explicit documented CLI switches take highest precedence.
+
+Binary running mode uses the existing lifecycle supervisor: fatal
+process exits can stop or restart with capped exponential backoff.
+Operator `stop` always terminates the supervisor and worker.
+
+### Data and log paths
+
+The default home for a frozen executable is the executable's directory.
+Change it using `--home DIRECTORY` or `ANIME_DB_BOT_HOME` if the
+installation directory is read-only. Inside the home:
+
+- `.env.d/*.env` — credentials and settings; never commit or publish
+- `.proxies.d/` and `.user-agents.d/` — optional network profiles
+- `data/` — local SQLite databases, mappings, caches and runtime PID files
+- `logs/` — launcher and application logs
+
+## Docker / GHCR
+
+The Docker image includes the same features and optional Redis/PostgreSQL
+clients. It uses Python 3.12 and a non-root account. No Jikan service is
+started inside the bot container; use a separately managed Jikan instance
+and configure `JIKAN_API_URL` if required. The existing
+`compose.yml` is for local Jikan; `compose.bot.yml` is for the bot image.
+
+```sh
+docker pull ghcr.io/anime-db-project/anime-db-bot:latest
+
+docker run -d --name anime-db-bot \
+  --restart unless-stopped \
+  -e BOT_TOKEN="$BOT_TOKEN" \
+  -v anime-db-bot-data:/data \
+  ghcr.io/anime-db-project/anime-db-bot:latest
+
+docker logs -f anime-db-bot
+docker exec anime-db-bot python -m scripts.release_entry status
+docker stop anime-db-bot
+```
+
+`/data` contains all mutable configuration, state, mapping catalogs and logs;
+the application code in `/app` is immutable. Mount a Docker named volume or
+a host directory writable by UID/GID `10001`. Environment variables
+(`BOT_TOKEN`, `DATABASE_BACKEND`, `DATABASE_URL`,
+`CACHE_BACKEND`, `REDIS_URL`, etc.) can be supplied with `-e` or
+Docker's `--env-file`. For an additional dot-env passed to the program,
+use `--env-file /data/settings.env` *after* the image.
+
+For Compose, supply `BOT_TOKEN` through the shell or a local untracked
+`.env` file, then run:
+
+```sh
+docker compose -f compose.bot.yml up -d
+docker compose -f compose.bot.yml logs -f
+docker compose -f compose.bot.yml down
+```
+
+The container defaults to `run`, because Docker handles detaching with
+`-d`. An additional child-process supervisor remains responsible for
+fatal-error policies. Avoid combining unconditional container restarts and
+unbounded internal restarts.
+
+Docker control arguments:
+
+```sh
+docker run --rm ghcr.io/anime-db-project/anime-db-bot:latest --help
+docker run --rm ghcr.io/anime-db-project/anime-db-bot:latest doctor
+docker run --rm -v anime-db-bot-data:/data ghcr.io/anime-db-project/anime-db-bot:latest check
+```
+
+## Publishing
+
+`.github/workflows/release.yml` builds five native archives, publishes a
+multiarch GHCR image, validates basic execution on each native platform,
+and publishes a GitHub Release only after all jobs succeed. Source-only
+releases are never generated by this workflow.
+
+The first bootstrap release is `v0.1.0`, created automatically only
+if that release does not already exist. Subsequent releases are produced
+by pushing a `vMAJOR.MINOR.PATCH` tag, or by manually running the workflow
+with an explicit version. CI and release builds run in GitHub Actions,
+not on the server. The workflow performs no production deployment.
