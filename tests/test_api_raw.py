@@ -35,6 +35,9 @@ def _source(key: str) -> SimpleNamespace:
         source_key=key,
         name=key,
         get_details=AsyncMock(side_effect=details),
+        get_wire_details=AsyncMock(
+            return_value={"id": "1", "unknownProviderField": {"native": True}}
+        ),
         load_voices_manifest=AsyncMock(
             return_value=PeopleManifest(
                 people=[PersonCredit(name=f"{key} actor", roles=["voice"])]
@@ -113,6 +116,16 @@ class RawSourceContractTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result["sources"]["mal"]["data"]["source"], "mal")
         self.context.sources[0].get_details.assert_not_awaited()
         self.context.sources[1].get_details.assert_not_awaited()
+
+    async def test_original_provider_wire_payload_is_not_normalized(self) -> None:
+        result = await execute_raw(
+            self.context, "wire", {"source": "mal", "id": "1"}
+        )
+        self.assertEqual(result["representation"], "provider_wire_response")
+        record = result["sources"]["mal"]["data"]
+        self.assertEqual(record["content_type"], "application/json")
+        self.assertTrue(record["payload"]["unknownProviderField"]["native"])
+        self.context.sources[0].get_details.assert_not_awaited()
 
     async def test_identity_verification_is_opt_in(self) -> None:
         result = await execute_raw(
@@ -271,6 +284,19 @@ class RawHttpAndGraphQLTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(response.status, 200)
         data = (await response.json())["data"]
         self.assertEqual(set(data["sources"]), {"mal", "anilist"})
+
+    async def test_graphql_direct_provider_wire_data(self) -> None:
+        response = await self.client.post(
+            "/graphql",
+            headers=self.headers,
+            json={"query": '{ rawWire(source:"mal", id:"1") }'},
+        )
+        self.assertEqual(response.status, 200)
+        result = (await response.json())["data"]["rawWire"]
+        self.assertEqual(result["representation"], "provider_wire_response")
+        self.assertTrue(
+            result["sources"]["mal"]["data"]["payload"]["unknownProviderField"]["native"]
+        )
 
     async def test_rest_post_can_use_explicit_identity_map(self) -> None:
         response = await self.client.post(
