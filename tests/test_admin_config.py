@@ -17,6 +17,7 @@ from bots.telegram.admin_config import (
 from bots.telegram.settings import _settings_keyboard, register_settings_handlers
 from scripts.config_report import example_groups
 from scripts.console_config import validate_key_value
+from core.settings import ConfigFileError
 
 SECRET = "TEST_secret_access_token_dont_echo_123456"
 
@@ -63,7 +64,7 @@ class AdminConfigCatalogTests(unittest.TestCase):
                 validate_key_value("MAPPINGS_AUTO_UPDATE", "invalid", root=folder)
             with self.assertRaises(ValueError):
                 validate_key_value("API_PORT", "not-an-integer", root=folder)
-            with self.assertRaises(ValueError):
+            with self.assertRaises(ConfigFileError):
                 validate_key_value("MADE_UP_UNDOCUMENTED_KEY", "xxx", root=folder)
             self.assertEqual(list(folder.iterdir()), [])
 
