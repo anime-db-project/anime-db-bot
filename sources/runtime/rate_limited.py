@@ -27,6 +27,14 @@ class RateLimitedSourceProxy:
         await wait_for_upstream(self.source_key, "metadata")
         return await self._source.get_details(identity)
 
+    async def get_wire_details(self, identity: AnimeIdentity) -> Any:
+        """Preserve source quotas for unmodified provider payloads."""
+        loader = getattr(self._source, "get_wire_details", None)
+        if not callable(loader):
+            raise NotImplementedError("Wire metadata unavailable for this provider")
+        await wait_for_upstream(self.source_key, "metadata")
+        return await loader(identity)
+
     def __getattr__(self, name: str) -> Any:
         return getattr(self._source, name)
 
