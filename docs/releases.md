@@ -27,6 +27,27 @@ there is no automatic bypass. For Linux, executable and script permissions
 are preserved in the TAR archive. Some file managers may prompt before
 executing a downloaded file.
 
+## Operator console
+
+**Version 0.2.0 and later** also include a full local operator console. Use
+`anime-db-bot console` (interactive) or `anime-db-bot cli COMMAND`
+(one-shot; supports JSON output). Linux/macOS users should prefix the executable
+name with `./`. When a foreground binary runs on a terminal, a console
+prompt is shown alongside Telegram polling; disable with `run --no-console`.
+
+For a running Docker container, use:
+
+```sh
+docker exec -it anime-db-bot python -m scripts.release_entry console
+docker exec anime-db-bot python -m scripts.release_entry cli --json status
+docker exec anime-db-bot python -m scripts.release_entry cli users
+```
+
+The console supports anime search, local image recognition, details and lazy
+card sections, user locales and bans, mapping overrides, configuration editing,
+indexes, logs and real-time worker metrics. No second Telegram poller is
+created. Full reference: [Operator console](operator-console.md).
+
 ## Start from a native archive
 
 Extract the archive to a writable directory. Run the executable, or use its
