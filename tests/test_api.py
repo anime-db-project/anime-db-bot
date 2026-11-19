@@ -9,7 +9,8 @@ from unittest.mock import AsyncMock, patch
 from aiohttp.test_utils import TestClient, TestServer
 
 from api.http import create_app
-from api.operations import ApiOperationError, OPERATIONS, execute_operation
+from api.operations import ApiOperationError, OPERATIONS, _main_metadata, execute_operation
+from core.models import AggregatedAnime
 from core.settings import AppSettings
 
 
@@ -185,6 +186,24 @@ class ApiAuthenticationTests(unittest.IsolatedAsyncioTestCase):
             json=["unexpected"],
         )
         self.assertEqual(response.status, 400)
+
+
+class ApiMetadataContractTests(unittest.TestCase):
+    def test_main_card_is_structured_and_only_contributed_ids_visible(self) -> None:
+        anime = AggregatedAnime(
+            title="Example",
+            external_ids={
+                "mal": "1", "anilist": "2", "kitsu": "3", "tmdb": "4"
+            },
+            sources=["MAL (MyAnimeList)", "AniList"],
+        )
+        result = _main_metadata(anime)
+        self.assertEqual(result["title"], "Example")
+        self.assertEqual(
+            result["external_ids"], {"mal": "1", "anilist": "2"}
+        )
+        self.assertNotIn("staff", result)
+        self.assertNotIn("screenshots_by_source", result)
 
 
 class ApiSettingsTests(unittest.TestCase):
