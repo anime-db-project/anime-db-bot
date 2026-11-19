@@ -17,7 +17,7 @@ from aiogram.filters import Command
 from aiogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, Message
 
 from bots.session_store import ExpiringSessionStore
-from core.settings import ROOT_DIR
+from core.settings import ConfigFileError
 from scripts.config_report import example_groups
 from scripts.console_config import inspect_key, update_key, validate_key_value
 from services.users.access_control import is_telegram_admin
@@ -380,7 +380,7 @@ def register_admin_config_handlers(dp: Dispatcher) -> None:
                         result = await asyncio.to_thread(
                             update_key, record.key, record.value
                         )
-                    except (ValueError, OSError) as exc:
+                    except (ValueError, ConfigFileError, OSError) as exc:
                         logging.warning(
                             "Telegram config write rejected for %s: %s",
                             record.key, type(exc).__name__,
@@ -479,7 +479,7 @@ def register_admin_config_handlers(dp: Dispatcher) -> None:
             return
         try:
             await asyncio.to_thread(validate_key_value, pending.key, submitted)
-        except (ValueError, OSError):
+        except (ValueError, ConfigFileError, OSError):
             await message.answer(
                 _tr(locale, f"{pending.key}: validation failed; nothing was saved.",
                     f"{pending.key}: проверка не пройдена, ничего не сохранено.")
