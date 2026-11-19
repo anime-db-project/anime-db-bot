@@ -586,24 +586,51 @@ class OperatorConsole:
                     "telegram_polling_started": False}
         if name == "status":
             from scripts.release_entry import current_pid, runtime_home
+            from services.runtime.status_snapshot import read_live_snapshot
 
             home = runtime_home()
             pid = current_pid(home)
-            return {"running": pid is not None, "supervisor_pid": pid, "home": home}
-        if name == "sources":
-            return [asdict(item) for item in self.context.runtime_source_descriptors()]
-        if name == "source-health":
+            live = read_live_snapshot(home)
             return {
-                "notice": "This is a separate console process. Live Telegram bot "
-                          "health/metrics are not shared across processes.",
-                "sources": {
-                    item.key: asdict(self.context.source_health.snapshot(item.key))
-                    for item in self.context.runtime_source_descriptors()
-                },
+                "running": pid is not None or live is not None,
+                "supervisor_pid": pid,
+                "worker_pid": live["worker_pid"] if live else None,
+                "home": home,
+                "live_telegram": live is not None,
+                "uptime_seconds": live.get("uptime_seconds") if live else None,
+                "summary": live.get("summary") if live else None,
             }
-        if name == "metrics":
+        if name in {"sources", "source-health", "metrics"}:
+            from scripts.release_entry import runtime_home
+            from services.runtime.status_snapshot import read_live_snapshot
+
+            live = read_live_snapshot(runtime_home())
+            if live:
+                if name == "sources":
+                    return live["sources"]
+                if name == "source-health":
+                    return {"live_telegram": True, "sources": live["sources"]}
+                return {
+                    "live_telegram": True,
+                    "uptime_seconds": live["uptime_seconds"],
+                    "windows": live["windows"],
+                    "caches": live["caches"],
+                }
+            if name == "sources":
+                return [asdict(item) for item in self.context.runtime_source_descriptors()]
+            if name == "source-health":
+                return {
+                    "live_telegram": False,
+                    "notice": "No fresh Telegram worker snapshot. Showing only "
+                              "this console's source-health state.",
+                    "sources": {
+                        item.key: asdict(self.context.source_health.snapshot(item.key))
+                        for item in self.context.runtime_source_descriptors()
+                    },
+                }
             return {
-                "notice": "Only requests made by this console session are counted.",
+                "live_telegram": False,
+                "notice": "Only requests from this console session are counted.",
                 "stats": self.context.runtime_metrics.window(3600),
             }
         if name == "users":
