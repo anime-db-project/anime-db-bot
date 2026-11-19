@@ -43,11 +43,12 @@ typed nested models without inventing unverified metadata.
 Use the **source-native API** when you want records from MAL, AniList,
 Shikimori, Kitsu, AniDB or AniSearch **without aggregation**.
 
-The response is the complete source adapter's domain record for the requested
-capability. It is **not** the untouched upstream HTTP/GraphQL wire payload:
-source adapters still normalize enums, dates and names. Crucially, records
-from different sources are **never combined, deduplicated or averaged**, and
-no general anime card is loaded when you only ask for voices, staff or images.
+By default, the response is the complete source adapter's **unmerged domain
+record** for the requested capability. These records can normalize enums,
+dates and names, but they are **never combined, deduplicated or averaged**
+across sources. For original provider JSON/XML (with its native fields),
+request the separate `wire` capability. Neither mode fetches the aggregate
+anime card when you only ask for voices, staff, IDs or images.
 
 The existing `/api/v1/anime`, `/api/v1/search` and ordinary GraphQL
 `anime`/`search` queries remain available as **aggregated** alternatives.
@@ -59,7 +60,8 @@ The existing `/api/v1/anime`, `/api/v1/search` and ordinary GraphQL
 | Capabilities/source list | `GET /api/v1/raw/capabilities` | `sourceCatalog` |
 | Search (individual results) | `GET /api/v1/raw/search` | `rawSearch` |
 | Source-scoped ID only | `GET /api/v1/raw/id/{source}/{id}` | `rawId` |
-| Metadata | `GET /api/v1/raw/metadata` | `rawMetadata` |
+| Metadata (per-provider domain model) | `GET /api/v1/raw/metadata` | `rawMetadata` |
+| Original source JSON/XML | `GET /api/v1/raw/wire` | `rawWire` |
 | Seiyuu / voice actors | `GET /api/v1/raw/seiyuu` | `rawSeiyuu`, `rawVoices` |
 | Staff / production personnel | `GET /api/v1/raw/staff` | `rawStaff` |
 | Characters | `GET /api/v1/raw/characters` | `rawCharacters` |
@@ -80,6 +82,10 @@ curl -H "X-API-Key: $API_READ_KEY" \
 
 curl -H "X-API-Key: $API_READ_KEY" \
   "http://127.0.0.1:8181/api/v1/raw/mal/5114/metadata"
+
+# Original upstream JSON selected by the provider's metadata query:
+curl -H "X-API-Key: $API_READ_KEY" \
+  "http://127.0.0.1:8181/api/v1/raw/mal/5114/wire"
 
 # Only a source ID; no full metadata request:
 curl -H "X-API-Key: $API_READ_KEY" \
@@ -135,7 +141,12 @@ and a sanitized `error_type`, and do not suppress successful peers.
 ### Lazy/large capabilities
 
 A normal metadata or ID query never implicitly fetches cast, voice actors,
-episodes, images, skip segments, relations or reviews. For `staff` and
+episodes, images, skip segments, relations or reviews. The explicit
+`wire` request returns the original provider response selected by its
+existing query: MAL, AniList, Shikimori and Kitsu return JSON, AniDB returns
+XML, and AniSearch returns its cached full record. Upstream query field
+selection remains provider-defined; wire mode cannot request arbitrary
+additional upstream fields or bypass upstream quotas. For `staff` and
 `voices`, `detail=manifest` (default) returns lightweight source-native
 person IDs/names/roles without requesting all portraits. Explicitly use
 `detail=full` to fetch richer people details where supported.
@@ -176,14 +187,16 @@ bytes) or search (requires title text).
 ```graphql
 query NativeSources {
   sourceCatalog
-
   rawSearch(query: "Frieren", source: "all")
   rawId(source: "mal", id: "5114")
-
   rawMetadata(ids: {mal: "5114", anilist: "9253"})
+  rawWire(source: "mal", id: "5114")
   rawSeiyuu(source: "mal", id: "5114")
   rawStaff(source: "mal", id: "5114")
   rawCharacters(source: "mal", id: "5114")
+}
+
+query EpisodesAndTimings {
   rawEpisodes(source: "jikan", id: "5114", page: 1)
   rawTimestamps(ids: {mal: "5114"}, episode: 1)
 }
