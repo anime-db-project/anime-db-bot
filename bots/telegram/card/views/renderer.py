@@ -104,13 +104,15 @@ async def send_standard_text(
     reply_markup: InlineKeyboardMarkup | None = None,
     *,
     locale: str = DEFAULT_LOCALE,
-) -> None:
+) -> Message | None:
     chunks = split_text(text_value, STANDARD_MESSAGE_LIMIT, locale=locale)
+    sent: Message | None = None
     for index, chunk in enumerate(chunks):
-        await message.answer(
+        sent = await message.answer(
             chunk,
             reply_markup=reply_markup if index == len(chunks) - 1 else None,
         )
+    return sent
 
 
 async def _deliver_rich_card(
@@ -136,37 +138,51 @@ async def send_anime_view(
     page: int = 0,
     *,
     locale: str,
-) -> None:
+    show_related: bool = True,
+) -> tuple[Message | None, bool]:
+    """Send a card and return its Telegram message plus fallback-mode flag."""
     pages = view_pages(anime, section, locale=locale)
     page = max(0, min(page, len(pages) - 1))
     keyboard = navigation_keyboard(
-        token, anime, section, page, len(pages), locale=locale
+        token, anime, section, page, len(pages), locale=locale,
+        show_related=show_related,
     )
     text_value = pages[page]
+    sent: Message | None = None
+
+    async def send_rich(content: InputRichMessage) -> object:
+        nonlocal sent
+        response = await message.answer_rich(content, reply_markup=keyboard)
+        if isinstance(response, Message):
+            sent = response
+        return response
 
     try:
         await _deliver_rich_card(
-            lambda content: message.answer_rich(content, reply_markup=keyboard),
+            send_rich,
             token,
             anime,
             section,
             text_value,
             locale=locale,
         )
+        return sent, False
     except Exception:
         logging.exception(
             "sendRichMessage failed; falling back to standard sendMessage"
         )
         fallback = (
             fallback_main_keyboard(
-                token, locale=locale, show_all_ids=bool(anime.amdb_id)
+                token, locale=locale, show_all_ids=bool(anime.amdb_id),
+                show_related=show_related,
             )
             if section == "main"
             else keyboard
         )
-        await send_standard_text(
+        sent = await send_standard_text(
             message, text_value, reply_markup=fallback, locale=locale
         )
+        return sent, True
 
 
 async def edit_anime_view(
@@ -177,11 +193,13 @@ async def edit_anime_view(
     page: int,
     *,
     locale: str,
+    show_related: bool = True,
 ) -> None:
     pages = view_pages(anime, section, locale=locale)
     page = max(0, min(page, len(pages) - 1))
     keyboard = navigation_keyboard(
-        token, anime, section, page, len(pages), locale=locale
+        token, anime, section, page, len(pages), locale=locale,
+        show_related=show_related,
     )
     text_value = pages[page]
 
@@ -203,7 +221,8 @@ async def edit_anime_view(
         )
         fallback = (
             fallback_main_keyboard(
-                token, locale=locale, show_all_ids=bool(anime.amdb_id)
+                token, locale=locale, show_all_ids=bool(anime.amdb_id),
+                show_related=show_related,
             )
             if section == "main"
             else keyboard
