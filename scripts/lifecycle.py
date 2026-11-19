@@ -7,6 +7,7 @@ the cross-platform launcher. Expected operator signals always stop both.
 from __future__ import annotations
 
 import signal
+from pathlib import Path
 import subprocess
 import sys
 import threading
@@ -15,6 +16,13 @@ import time
 from core.settings import LifecycleSettings, ROOT_DIR, get_settings
 
 BOT_MODULE = "bots.telegram.bot"
+
+
+def child_command() -> list[str]:
+    # Frozen releases have no standalone Python interpreter.
+    if getattr(sys, "frozen", False):
+        return [sys.executable, "--worker"]
+    return [sys.executable, "-m", BOT_MODULE]
 
 
 def _info(message: str) -> None:
@@ -61,7 +69,9 @@ def _stop_child(
         process.wait()
 
 
-def supervise_bot(policy: LifecycleSettings) -> int:
+def supervise_bot(
+    policy: LifecycleSettings, *, stop_file: Path | None = None
+) -> int:
     """Keep the bot running according to the configured exit policy.
 
     All restarts occur in this parent, so worker crashes never duplicate
@@ -85,10 +95,13 @@ def supervise_bot(policy: LifecycleSettings) -> int:
     attempts = 0
     try:
         while not stopping.is_set():
+            if stop_file is not None and stop_file.exists():
+                stopping.set()
+                break
             started = time.monotonic()
             try:
                 child = subprocess.Popen(
-                    [sys.executable, "-m", BOT_MODULE],
+                    child_command(),
                     cwd=ROOT_DIR,
                 )
             except OSError as exc:
@@ -100,6 +113,9 @@ def supervise_bot(policy: LifecycleSettings) -> int:
             returncode: int | None = None
             try:
                 while not stopping.is_set():
+                    if stop_file is not None and stop_file.exists():
+                        stopping.set()
+                        break
                     try:
                         returncode = child.wait(timeout=0.25)
                         break
@@ -132,7 +148,16 @@ def supervise_bot(policy: LifecycleSettings) -> int:
                 f"Bot exited with code {returncode}; restarting "
                 f"({attempts}/{policy.restart_max_attempts}) in {delay:g}s."
             )
-            stopping.wait(delay)
+            if stop_file is None:
+                stopping.wait(delay)
+            else:
+                # A requested shutdown must interrupt backoff immediately.
+                until = time.monotonic() + delay
+                while not stopping.is_set() and time.monotonic() < until:
+                    if stop_file.exists():
+                        stopping.set()
+                        break
+                    stopping.wait(min(0.25, max(0.0, until - time.monotonic())))
         return 0
     finally:
         for watched_signal, previous_handler in previous_handlers.items():
