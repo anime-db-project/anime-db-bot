@@ -24,6 +24,7 @@ from graphql.validation.rules.custom.no_schema_introspection import (
     NoSchemaIntrospectionCustomRule,
 )
 
+from api.jobs import LONG_OPERATIONS, JobManager
 from api.operations import ApiOperationError, OPERATIONS, execute_operation
 
 
@@ -77,6 +78,8 @@ type Query {
   configGet(key: String!): JSON
   configExplain(key: String!): JSON
   logs(file: String = "launcher", lines: Int = 60): JSON
+  jobs: JSON
+  job(id: String!): JSON
   operation(name: String!, input: JSON): JSON
 }
 
@@ -164,12 +167,18 @@ def _bind(
     async def resolver(_root: Any, info: Any, **kwargs: Any) -> Any:
         data = _params(**kwargs)
         try:
-            result = await execute_operation(
-                info.context["app_context"],
-                operation,
-                data,
-                role=info.context["role"],
-            )
+            if operation in LONG_OPERATIONS:
+                result = info.context["jobs"].submit(
+                    info.context["app_context"], operation, data,
+                    info.context["role"],
+                )
+            else:
+                result = await execute_operation(
+                    info.context["app_context"],
+                    operation,
+                    data,
+                    role=info.context["role"],
+                )
         except ApiOperationError as exc:
             raise GraphQLError(
                 exc.message, extensions={"status": exc.code}
@@ -211,6 +220,11 @@ def _bind_generic(gql_type: str, *, mutating: bool) -> None:
         if mutating:
             payload["confirm"] = kwargs.get("confirm")
         try:
+            if action in LONG_OPERATIONS:
+                return info.context["jobs"].submit(
+                    info.context["app_context"], action, payload,
+                    info.context["role"],
+                )
             return await execute_operation(
                 info.context["app_context"], action, payload,
                 role=info.context["role"],
@@ -264,6 +278,17 @@ for _field, _op in (
 ):
     _bind("Mutation", _field, _op)
 
+def _jobs_resolver(_root: Any, info: Any) -> Any:
+    return info.context["jobs"].list_jobs(info.context["role"])
+
+
+def _job_resolver(_root: Any, info: Any, id: str) -> Any:
+    return info.context["jobs"].job(id, info.context["role"])
+
+
+SCHEMA.type_map["Query"].fields["jobs"].resolve = _jobs_resolver
+SCHEMA.type_map["Query"].fields["job"].resolve = _job_resolver
+
 _bind_generic("Query", mutating=False)
 _bind_generic("Mutation", mutating=True)
 
@@ -311,6 +336,7 @@ def _budget(
 async def execute_graphql(
     app_context: Any, *, role: str, query: str,
     variables: dict[str, Any] | None, operation_name: str | None,
+    jobs: JobManager,
 ) -> dict[str, Any]:
     settings = app_context.settings.api
     if not query or len(query) > 16384:
@@ -335,7 +361,7 @@ async def execute_graphql(
             SCHEMA, document,
             variable_values=variables,
             operation_name=operation_name,
-            context_value={"app_context": app_context, "role": role},
+            context_value={"app_context": app_context, "role": role, "jobs": jobs},
         )
         if inspect.isawaitable(result):
             result = await result
