@@ -23,6 +23,7 @@ import uuid
 from aiohttp import web
 
 from api.graphql import execute_graphql
+from api.jobs import JobManager, LONG_OPERATIONS
 from api.openapi import openapi_document
 from api.operations import ApiOperationError, OPERATIONS, execute_operation
 from core.settings import ApiSettings, AppSettings, get_settings
@@ -240,6 +241,13 @@ def _query(request: web.Request) -> dict[str, Any]:
 async def _operation_response(
     request: web.Request, action: str, data: Mapping[str, Any] | None = None,
 ) -> web.Response:
+    if action in LONG_OPERATIONS:
+        result = request.app["api_jobs"].submit(
+            request.app["context"], action, data or {}, request["api_role"]
+        )
+        response = _envelope(request, result)
+        response.set_status(202)
+        return response
     result = await execute_operation(
         request.app["context"], action, data,
         role=request["api_role"],
@@ -343,6 +351,21 @@ async def _index_operation(request: web.Request) -> web.Response:
     )
 
 
+async def _jobs(request: web.Request) -> web.Response:
+    return _envelope(
+        request, request.app["api_jobs"].list_jobs(request["api_role"])
+    )
+
+
+async def _job(request: web.Request) -> web.Response:
+    return _envelope(
+        request,
+        request.app["api_jobs"].job(
+            request.match_info["job_id"], request["api_role"]
+        ),
+    )
+
+
 async def _graphql(request: web.Request) -> web.Response:
     data = await _body(request)
     query = data.get("query")
@@ -360,6 +383,7 @@ async def _graphql(request: web.Request) -> web.Response:
         query=query,
         variables=variables,
         operation_name=operation_name,
+        jobs=request.app["api_jobs"],
     )
     # GraphQL responses follow the GraphQL over HTTP payload, without REST envelope.
     return web.json_response(result)
@@ -380,6 +404,7 @@ def create_app(
     app["api_settings"] = cfg.api
     app["api_limiter"] = _WindowLimiter(cfg.api.requests_per_minute)
     app["api_slots"] = asyncio.Semaphore(cfg.api.max_concurrency)
+    app["api_jobs"] = JobManager()
     app["context"] = context
     app["context_owned"] = context is None
 
@@ -388,6 +413,7 @@ def create_app(
             server["context"] = AppContext.create(cfg)
 
     async def cleanup(server: web.Application) -> None:
+        await server["api_jobs"].close()
         if server["context_owned"] and server["context"] is not None:
             await server["context"].aclose()
 
@@ -401,6 +427,8 @@ def create_app(
     router.add_get("/api/v1/openapi.json", _openapi)
     router.add_get("/api/v1/operations", _operations)
     router.add_post("/api/v1/actions/{operation}", _generic)
+    router.add_get("/api/v1/jobs", _jobs)
+    router.add_get("/api/v1/jobs/{job_id}", _job)
     router.add_get("/api/v1/search", _wrap("search"))
     router.add_get("/api/v1/lookup", _wrap("lookup"))
     router.add_get("/api/v1/anime", _wrap("anime"))
