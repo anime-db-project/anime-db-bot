@@ -147,6 +147,10 @@ async def guard(request: web.Request, handler: Any) -> web.Response:
     cors_origin = _allowed_origin(request, settings)
 
     try:
+        peer = request.remote or "unknown"
+        limiter: _WindowLimiter = request.app["api_limiter"]
+        if not limiter.allow(peer):
+            raise ApiOperationError(429, "API request rate limit exceeded")
         if origin and cors_origin is None:
             response = _error(request, 403, "Browser origin not permitted")
         elif request.method == "OPTIONS":
@@ -179,52 +183,45 @@ async def guard(request: web.Request, handler: Any) -> web.Response:
             else:
                 request["api_role"] = "public"
                 response = await _bounded_handler(request, handler)
-        status = response.status
-        if cors_origin:
-            response.headers["Access-Control-Allow-Origin"] = cors_origin
-            response.headers["Vary"] = "Origin"
-        response.headers["Cache-Control"] = "no-store"
-        response.headers["X-Content-Type-Options"] = "nosniff"
-        response.headers["X-Request-ID"] = request["request_id"]
-        return response
     except ApiOperationError as exc:
-        status = exc.code
-        return _error(request, exc.code, exc.message)
+        response = _error(request, exc.code, exc.message)
     except web.HTTPRequestEntityTooLarge:
-        status = 413
-        return _error(request, 413, "Request body is too large")
+        response = _error(request, 413, "Request body is too large")
     except asyncio.TimeoutError:
-        status = 504
-        return _error(request, 504, "API request timed out")
+        response = _error(request, 504, "API request timed out")
     except Exception:
-        status = 500
-        _LOG.exception("Unhandled API request failure", extra={
-            "event": "api_request", "outcome": "error",
-        })
-        return _error(request, 500, "Internal API error")
-    finally:
-        # Route templates or fixed labels only. No query strings, IDs, headers,
-        # credentials or user-supplied path segments in normal audit logs.
-        resource = request.match_info.route.resource
-        route_label = getattr(resource, "canonical", "") or "unknown"
-        _LOG.info(
-            "HTTP request complete",
-            extra={
-                "event": "api_request",
-                "platform": "api", "action": route_label,
-                "operation": request.method, "outcome": str(status),
-                "duration_ms": round((time.monotonic() - started) * 1000, 2),
-                "state": role,
-            },
+        _LOG.exception(
+            "Unhandled API request failure",
+            extra={"event": "api_request", "outcome": "error"},
         )
+        response = _error(request, 500, "Internal API error")
 
+    if cors_origin:
+        response.headers["Access-Control-Allow-Origin"] = cors_origin
+        response.headers["Vary"] = "Origin"
+    response.headers["Cache-Control"] = "no-store"
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Request-ID"] = request["request_id"]
+    # Route templates or fixed labels only; never credentials, query strings,
+    # raw IDs, headers or attacker-provided path values in the audit log.
+    resource = request.match_info.route.resource
+    route_label = getattr(resource, "canonical", "") or "unknown"
+    _LOG.info(
+        "HTTP request complete",
+        extra={
+            "event": "api_request",
+            "platform": "api",
+            "action": route_label,
+            "operation": request.method,
+            "outcome": str(response.status),
+            "duration_ms": round((time.monotonic() - started) * 1000, 2),
+            "state": role,
+        },
+    )
+    return response
 
 async def _bounded_handler(request: web.Request, handler: Any) -> web.Response:
     settings: ApiSettings = request.app["api_settings"]
-    peer = request.remote or "unknown"
-    limiter: _WindowLimiter = request.app["api_limiter"]
-    if not limiter.allow(peer):
-        raise ApiOperationError(429, "API request rate limit exceeded")
     slots: asyncio.Semaphore = request.app["api_slots"]
     try:
         await asyncio.wait_for(slots.acquire(), timeout=0.1)
@@ -268,10 +265,8 @@ async def _root(request: web.Request) -> web.Response:
 
 
 async def _openapi(request: web.Request) -> web.Response:
-    return _envelope(
-        request,
-        openapi_document(request.app["api_settings"].public_url),
-    )
+    # OpenAPI clients require the document at the JSON root (no REST envelope).
+    return web.json_response(openapi_document(request.app["api_settings"].public_url))
 
 
 async def _operations(request: web.Request) -> web.Response:
