@@ -273,9 +273,12 @@ class ProgressivePeopleLoadingWiringTests(unittest.IsolatedAsyncioTestCase):
                 new_callable=AsyncMock,
             ) as send_view,
         ):
+            # A mocked sender must follow the (message, plain_fallback) contract.
+            send_view.return_value = (None, False)
             await aggregate_and_send(message, candidate, 42, state)
 
         send_view.assert_awaited_once()
+        self.assertFalse(send_view.await_args.kwargs["show_related"])
         self.assertEqual(len(state.anime_sessions), 1)
         self.assertEqual(len(state.people_loads), 0)
         context.aggregator.aggregate.assert_awaited_once_with(candidate)
