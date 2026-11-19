@@ -224,9 +224,7 @@ class RetryingSourceProxy:
     async def get_wire_details(self, identity: AnimeIdentity) -> Any:
         """Apply the same retry and circuit-breaker rules as normalized metadata."""
         loader = getattr(self._source, "get_wire_details", None)
-        if not callable(loader) or not getattr(
-            self._source, "supports_wire", True
-        ):
+        if not callable(loader) or not getattr(self._source, "supports_wire", True):
             raise NotImplementedError("Wire metadata unavailable for this provider")
         return await _retry_call(
             self.name,
