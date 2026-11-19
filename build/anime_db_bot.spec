@@ -8,6 +8,9 @@ root = Path.cwd()
 data = collect_data_files("localization")
 # Bundle source metadata needed by the runtime ENV inspector in frozen builds.
 data.append((str(root / "core" / "settings.py"), "core"))
+# The indexers are legacy standalone scripts loaded through runpy, not imports.
+for name in ("update-imdb-ratings.py", "update-baha-anime-skip.py"):
+    data.append((str(root / "scripts" / name), "scripts"))
 data.extend(
     (str(root / path), path)
     for path in (
