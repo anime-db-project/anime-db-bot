@@ -70,7 +70,7 @@ class ApiAuthenticationTests(unittest.IsolatedAsyncioTestCase):
         self.assertTrue((await response.json())["data"]["ok"])
         response = await self.client.get("/api/v1/openapi.json", headers=headers)
         self.assertEqual(response.status, 200)
-        schema = (await response.json())["data"]
+        schema = await response.json()
         self.assertEqual(schema["openapi"], "3.1.0")
         self.assertIn("/api/v1/anime", schema["paths"])
 
