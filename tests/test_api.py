@@ -227,6 +227,20 @@ class ApiSettingsTests(unittest.TestCase):
         )
         self.assertEqual(len(good.api.cors_origins), 2)
 
+    def test_public_url_and_origin_validation(self) -> None:
+        with self.assertRaisesRegex(ValueError, "API_PUBLIC_URL"):
+            AppSettings.from_env({"API_PUBLIC_URL": "https://admin:pw@example.com"})
+        with self.assertRaisesRegex(ValueError, "API_CORS_ORIGINS"):
+            AppSettings.from_env({
+                "API_CORS_ORIGINS": "https://example.com/unexpected-path"
+            })
+        settings = AppSettings.from_env({
+            "API_PUBLIC_URL": "https://api.example.com/anime-db"
+        })
+        self.assertEqual(
+            settings.api.public_url, "https://api.example.com/anime-db"
+        )
+
     def test_local_mode_requires_loopback_bind(self) -> None:
         settings = settings_with(API_AUTH_MODE="local", API_HOST="0.0.0.0")
         with self.assertRaisesRegex(ValueError, "loopback"):
