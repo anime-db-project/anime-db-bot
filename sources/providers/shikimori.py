@@ -615,6 +615,13 @@ class ShikimoriSource:
     def _anime_id(identity: AnimeIdentity) -> str:
         return str(identity.get(SourceKey.SHIKIMORI) or "").strip()
 
+    async def get_wire_details(self, identity: AnimeIdentity) -> dict[str, Any] | None:
+        """Return the native Shikimori GraphQL anime node without mapping."""
+        anime_id = self._anime_id(identity)
+        if not anime_id.isdigit():
+            return None
+        return await _get_raw(anime_id, self._settings)
+
     async def get_details(self, identity: AnimeIdentity) -> AnimeRecord | None:
         anime_id = self._anime_id(identity)
         if not anime_id.isdigit():
