@@ -11,7 +11,7 @@ import re
 
 from dotenv import dotenv_values, set_key, unset_key
 
-from core.settings import AppSettings, ConfigFileError, ROOT_DIR, project_env_files
+from core.settings import (AppSettings, ConfigFileError, RESOURCE_DIR, ROOT_DIR, project_env_files)
 from scripts.config_report import example_groups
 
 SENSITIVE_MARKERS = (
@@ -22,7 +22,7 @@ _KEY_LINE = re.compile(r"^\s*(?:export\s+)?([A-Z][A-Z0-9_]*)\s*=")
 
 
 def _group_for(key: str, root: Path) -> str:
-    for filename, keys in example_groups(root).items():
+    for filename, keys in example_groups(RESOURCE_DIR).items():
         if filename != ".env.example" and key in keys:
             return filename
     raise ConfigFileError(f"Unknown configuration key: {key}")
@@ -69,7 +69,7 @@ def inspect_key(key: str, *, root: Path = ROOT_DIR) -> dict[str, object]:
         actual = env_value
         source = "process environment"
     else:
-        actual = dotenv_values(root / ".env.example.d" / group).get(key)
+        actual = dotenv_values(RESOURCE_DIR / ".env.example.d" / group).get(key)
         source = "example default"
     secret = any(mark in key for mark in SENSITIVE_MARKERS) or key.endswith("_URL")
     return {
