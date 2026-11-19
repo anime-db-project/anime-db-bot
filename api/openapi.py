@@ -315,7 +315,7 @@ def openapi_document(public_url: str = "") -> dict:
                         "capability": {"type": "string"},
                         "aggregated": {"const": False},
                         "representation": {
-                            "const": "source_adapter_record"
+                            "enum": ["source_adapter_record", "provider_wire_response"]
                         },
                         "identity": {
                             "type": ["object", "null"],
