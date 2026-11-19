@@ -153,7 +153,7 @@ def openapi_document(public_url: str = "") -> dict:
         )
     }
     for capability in (
-        "metadata", "voices", "seiyuu", "staff", "characters",
+        "metadata", "wire", "voices", "seiyuu", "staff", "characters",
         "episodes", "episode", "timestamps", "themes", "trailers",
         "screenshots", "popularity", "description", "relations",
         "recommendations",
