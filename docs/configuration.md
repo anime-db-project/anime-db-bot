@@ -174,6 +174,44 @@ Default mutable data storage remains SQLite. PostgreSQL is optional;
 switching does not automatically migrate the existing users, bans, or quotas.
 See [backends.md](backends.md) before changing the backend in production.
 
+## Telegram administrator configuration UI
+
+Open `/settings` in a private chat with the bot using an ID in
+`ADMIN_TELEGRAM_USER_IDS`, then press **Bot configuration (ENV)**.
+The equivalent direct commands are `/admin_config` and `/bot_config`.
+
+The administrator UI is deliberately separate from regular user preferences.
+It enumerates all keys from all shipped `.env.example.d/*.env` files rather
+than maintaining a fragile hard-coded list. Available interactions:
+
+- Browse groups and pages; select any key and see its documented group,
+  active file or process environment source, safe display value, and brief
+  reference comments.
+- Search keys by partial name, e.g. `MAPPINGS`, `REDIS` or `API_`.
+- Set a new single-line value, or reset a local override to defaults.
+  A separate inline confirmation is required for every operation.
+- Sensitive keys (including passwords, bot tokens, API keys and URLs) are
+  always masked. When editing, the bot attempts to delete the administrator's
+  message immediately; if a sensitive message cannot be deleted the edit
+  is rejected so the operator can delete it manually.
+- All edits use the same strict scalar and typed-settings validation as the
+  local CLI and API. No arbitrary new ENV key or raw shell command is allowed.
+- Settings are saved to the existing `.env.d/*.env` (or legacy `.env`)
+  and **require a manual bot restart**; changing settings does not start a
+  second bot or immediately restart the service. Process environment values
+  override local files. Restrict access to the private Telegram chat.
+- Non-administrators and group chats are denied at every menu, search,
+  edit, reset and confirmation step. Confirmation state is short-lived and
+  bound to the initiating administrator.
+
+The editor covers documented BOT_TOKEN, databases, sources, search,
+rate limits, logging, mapping updates, caching, API server, OIDC-like
+future keys when documented, lifecycle, and all other shipped ENV options.
+There are no separate Telegram UI restrictions for documented valid values,
+but some settings can lock the administrator out after the next restart:
+changing `ADMIN_TELEGRAM_USER_IDS`, `TELEGRAM_ALLOWED_USER_IDS`, API
+credentials, or the bot token warrants particular caution.
+
 ## Safeguards
 
 The newer concurrency/memory/timeout controls are range-validated and fail
