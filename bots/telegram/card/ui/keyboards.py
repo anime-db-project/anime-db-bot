@@ -91,22 +91,26 @@ def navigation_keyboard(
     *,
     locale: str,
     pagination_first: bool = False,
+    show_related: bool = True,
 ) -> InlineKeyboardMarkup | None:
     rows: list[list[InlineKeyboardButton]] = []
 
     if current_section == "main":
-        rows.append(
-            [
+        discovery_buttons: list[InlineKeyboardButton] = []
+        if show_related:
+            discovery_buttons.append(
                 InlineKeyboardButton(
                     text=text("card", "related_button", locale=locale),
                     callback_data=f"av:{token}:related:0",
-                ),
-                InlineKeyboardButton(
-                    text=text("card", "recommendations_button", locale=locale),
-                    callback_data=f"av:{token}:recommendations:0",
-                ),
-            ]
+                )
+            )
+        discovery_buttons.append(
+            InlineKeyboardButton(
+                text=text("card", "recommendations_button", locale=locale),
+                callback_data=f"av:{token}:recommendations:0",
+            )
         )
+        rows.append(discovery_buttons)
 
     nav: list[InlineKeyboardButton] = []
     if page_count > 1 and current_section not in {"description", "links"}:
@@ -289,7 +293,7 @@ def source_section_keyboard(
 
 
 def fallback_main_keyboard(
-    token: str, *, locale: str, show_all_ids: bool = False
+    token: str, *, locale: str, show_all_ids: bool = False, show_related: bool = True
 ) -> InlineKeyboardMarkup:
     rows = [
         [
@@ -342,17 +346,22 @@ def fallback_main_keyboard(
                 callback_data=f"av:{token}:links:0",
             ),
         ],
-        [
+    ]
+    discovery_buttons: list[InlineKeyboardButton] = []
+    if show_related:
+        discovery_buttons.append(
             InlineKeyboardButton(
                 text=text("card", "related_button", locale=locale),
                 callback_data=f"av:{token}:related:0",
-            ),
-            InlineKeyboardButton(
-                text=text("card", "recommendations_button", locale=locale),
-                callback_data=f"av:{token}:recommendations:0",
-            ),
-        ],
-    ]
+            )
+        )
+    discovery_buttons.append(
+        InlineKeyboardButton(
+            text=text("card", "recommendations_button", locale=locale),
+            callback_data=f"av:{token}:recommendations:0",
+        )
+    )
+    rows.append(discovery_buttons)
     if show_all_ids:
         rows.append(
             [
