@@ -22,6 +22,8 @@ data.extend(
 hidden = ["bots.telegram.bot", "psycopg", "psycopg_pool", "redis.asyncio"]
 hidden.extend(collect_submodules("sources.providers"))
 hidden.extend(collect_submodules("search.providers"))
+hidden.extend(collect_submodules("api"))
+hidden.extend(collect_submodules("graphql"))
 
 analysis = Analysis(
     [str(root / "scripts" / "binary_main.py")],
