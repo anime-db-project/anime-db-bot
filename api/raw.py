@@ -11,6 +11,7 @@ import asyncio
 import base64
 import binascii
 import io
+import json
 import re
 from typing import Any, Mapping
 
@@ -22,13 +23,13 @@ from sources.runtime.catalog import SOURCE_CATALOG
 from api.operations import ApiOperationError
 
 SOURCE_CAPABILITIES = (
-    "search", "id", "metadata", "staff", "voices", "characters",
+    "search", "id", "metadata", "wire", "staff", "voices", "characters",
     "episodes", "episode", "timestamps", "themes", "trailers",
     "screenshots", "popularity", "description", "relations",
     "recommendations", "image",
 )
 DETAIL_CAPABILITIES = (
-    "id", "metadata", "staff", "voices", "characters", "episodes", "episode",
+    "id", "metadata", "wire", "staff", "voices", "characters", "episodes", "episode",
     "timestamps", "themes", "trailers", "screenshots", "popularity",
     "description", "relations", "recommendations",
 )
@@ -232,6 +233,7 @@ def _catalog(context: Any) -> dict[str, Any]:
     trailer_sources = [str(x.backend_key) for x in context.trailer_service.sources]
     return {
         "representation": "source_adapter_record",
+        "wire_representation": "provider_wire_response",
         "aggregated": False,
         "capabilities": list(SOURCE_CAPABILITIES),
         "metadata_sources": [
@@ -276,7 +278,7 @@ async def _single(
         return "ok", page
 
     assert identity is not None
-    if capability in {"id", "metadata", "staff", "voices", "characters", "screenshots",
+    if capability in {"id", "metadata", "wire", "staff", "voices", "characters", "screenshots",
                       "popularity", "description", "relations", "recommendations"}:
         source = next(
             src for src in context.sources if str(src.source_key) == key
@@ -310,6 +312,27 @@ async def _single(
         if capability == "metadata":
             record = await source.get_details(identity.copy())
             return ("ok" if record is not None else "not_found"), record
+        if capability == "wire":
+            loader = getattr(source, "get_wire_details", None)
+            if not callable(loader):
+                return "unsupported", None
+            try:
+                native = await loader(identity.copy())
+            except NotImplementedError:
+                return "unsupported", None
+            if native is None:
+                return "not_found", None
+            # Do not allow one unexpectedly enormous provider document to
+            # exhaust RAM or exceed proxy response budgets.
+            length = len(json.dumps(native, ensure_ascii=False).encode("utf-8"))
+            if length > 16 * 1024 * 1024:
+                return "too_large", None
+            mime = (
+                "application/xml"
+                if isinstance(native, dict) and native.get("format") == "xml"
+                else "application/json"
+            )
+            return "ok", {"content_type": mime, "payload": native}
         if capability in {"staff", "voices"}:
             detail = str(data.get("detail") or "manifest").lower()
             if detail not in {"manifest", "full"}:
@@ -518,7 +541,10 @@ async def execute_raw(
     return {
         "capability": capability,
         "aggregated": False,
-        "representation": "source_adapter_record",
+        "representation": (
+            "provider_wire_response" if capability == "wire"
+            else "source_adapter_record"
+        ),
         "identity": dict(identity.external_ids) if identity else None,
         "sources": collected,
     }
