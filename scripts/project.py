@@ -278,15 +278,14 @@ def docker_compose_available() -> bool:
     return result.returncode == 0
 
 
-def ensure_jikan(*, build: bool = True) -> bool:
+def ensure_jikan(*, build: bool = False) -> bool:
     if not docker_compose_available():
         _info(
             "Docker Compose is unavailable; continuing without the optional local Jikan supplement."
         )
         return False
     command = ["docker", "compose", "-f", str(ROOT_DIR / "compose.yml"), "up", "-d"]
-    if build:
-        command.append("--build")
+    command.append("--build" if build else "--no-build")
     command.append("jikan")
     try:
         _run(command)
