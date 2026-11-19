@@ -9,7 +9,7 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: "Release tag (for example v0.4.0). Leave blank for v0.3.0."
+        description: "Release tag (for example v0.4.0). Leave blank for v0.3.1."
         required: false
         type: string
 
@@ -46,7 +46,7 @@ jobs:
           elif [[ -n "$REQUESTED_VERSION" ]]; then
             tag="$REQUESTED_VERSION"
           else
-            tag="v0.3.0"
+            tag="v0.3.1"
           fi
           if [[ ! "$tag" =~ ^v[0-9]+\.[0-9]+\.[0-9]+([.-][a-zA-Z0-9.-]+)?$ ]]; then
             echo "::error::Release tag must use vMAJOR.MINOR.PATCH."
@@ -275,6 +275,7 @@ jobs:
     permissions:
       contents: write
     steps:
+      - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
         with:
           pattern: native-*
@@ -294,7 +295,14 @@ jobs:
             "anime-db-bot-v$VERSION-macos-arm64.tar.gz"; do
             test -s "release/$file" || { echo "::error::Missing $file"; exit 1; }
           done
-          (cd release && sha256sum anime-db-bot-* > SHA256SUMS.txt)
+          python scripts/release_manifest.py \
+            --directory release \
+            --tag "${{ needs.prepare.outputs.tag }}" \
+            --repository "$GITHUB_REPOSITORY" \
+            --commit "$GITHUB_SHA"
+          python scripts/release_manifest.py --directory release --verify
+          test -s release/SHA256SUMS.txt
+          test -s release/manifest.json
       - name: Describe release contents
         shell: bash
         env:
@@ -309,7 +317,7 @@ jobs:
           - Portable Linux x64 and arm64 executables (TAR.GZ, CLI or supported file manager).
           - Portable macOS Intel and Apple Silicon executables (TAR.GZ, Run.command opens Terminal).
           - Multi-architecture Docker image: \`ghcr.io/anime-db-project/anime-db-bot:$VERSION\` and \`:latest\` (amd64/arm64).
-          - SHA256 checksums for all release archives.
+          - SHA256SUMS.txt and manifest.json with verified SHA-256, sizes, platform, source SHA and release metadata.
 
           Binary commands: \`run\`, \`start\`, \`stop\`, \`restart\`, \`status\`, \`init\`, \`check\`, \`doctor\`; pass \`--help\` for flags.
           Default launch uses an interactive foreground console; \`start\` runs in the background.
@@ -329,6 +337,9 @@ jobs:
 
           Review [runtime setup](https://github.com/anime-db-project/anime-db-bot/blob/main/docs/releases.md) and [configuration](https://github.com/anime-db-project/anime-db-bot/blob/main/docs/configuration.md).
           EOF
+      - name: Verify release metadata immediately before publishing
+        shell: bash
+        run: python scripts/release_manifest.py --directory release --verify
       - name: Create or update release with verified artifacts only
         shell: bash
         env:
