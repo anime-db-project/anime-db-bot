@@ -478,6 +478,13 @@ class AniDBSource:
             raise RuntimeError(f"Unexpected AniDB XML root: {root.tag}")
         return root
 
+    async def get_wire_details(self, identity: AnimeIdentity) -> dict[str, str] | None:
+        """Return AniDB's XML document, not a normalized AnimeRecord."""
+        root = await self._load_root(identity)
+        if root is None:
+            return None
+        return {"format": "xml", "body": ET.tostring(root, encoding="unicode")}
+
     async def get_details(self, identity: AnimeIdentity) -> AnimeRecord | None:
         root = await self._load_root(identity)
         if root is None:
