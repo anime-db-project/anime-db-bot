@@ -168,7 +168,7 @@ ensure_jikan_container() {
     state="$(docker inspect --format '{{.State.Status}}' anime-db-bot-Jikan 2>/dev/null || true)"
     if [[ "$state" != "running" ]]; then
         info "Starting local MAL/Jikan supplement container..."
-        if ! docker compose up -d --build jikan; then
+        if ! docker compose up -d --no-build jikan; then
             info "Could not start anime-db-bot-Jikan; the bot will continue with official MAL data only."
             return 0
         fi
