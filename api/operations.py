@@ -66,6 +66,26 @@ OPERATIONS: dict[str, OperationSpec] = {
     "config.set": OperationSpec("admin", "Update a setting", True),
     "config.reset": OperationSpec("admin", "Delete a local setting override", True),
     "logs": OperationSpec("admin", "Bounded local application log tail"),
+    "raw.catalog": OperationSpec("read", "Unmerged, source-separated catalog data"),
+    "raw.search": OperationSpec("read", "Unmerged, source-separated search data"),
+    "raw.id": OperationSpec("read", "Unmerged, source-separated id data"),
+    "raw.metadata": OperationSpec("read", "Unmerged, source-separated metadata data"),
+    "raw.staff": OperationSpec("read", "Unmerged, source-separated staff data"),
+    "raw.voices": OperationSpec("read", "Unmerged, source-separated voices data"),
+    "raw.characters": OperationSpec("read", "Unmerged, source-separated characters data"),
+    "raw.episodes": OperationSpec("read", "Unmerged, source-separated episodes data"),
+    "raw.episode": OperationSpec("read", "Unmerged, source-separated episode data"),
+    "raw.timestamps": OperationSpec("read", "Unmerged, source-separated timestamps data"),
+    "raw.themes": OperationSpec("read", "Unmerged, source-separated themes data"),
+    "raw.trailers": OperationSpec("read", "Unmerged, source-separated trailers data"),
+    "raw.screenshots": OperationSpec("read", "Unmerged, source-separated screenshots data"),
+    "raw.popularity": OperationSpec("read", "Unmerged, source-separated popularity data"),
+    "raw.description": OperationSpec("read", "Unmerged, source-separated description data"),
+    "raw.relations": OperationSpec("read", "Unmerged, source-separated relations data"),
+    "raw.recommendations": OperationSpec("read", "Unmerged, source-separated recommendations data"),
+    "raw.image": OperationSpec("read", "Unmerged, source-separated image data"),
+    "raw.bundle": OperationSpec("read", "Unmerged, source-separated bundle data"),
+    "raw.all": OperationSpec("read", "Unmerged, source-separated all data"),
 }
 SECTIONS = frozenset(
     ("main", "titles", "ratings", "description", "links", "staff", "voices",
@@ -323,12 +343,21 @@ async def execute_operation(
     if spec.writes:
         _confirmed(data)
 
-    tokens = _assemble(name, data)
-    console = OperatorConsole(context, interactive=False)
+    raw_operation = name.startswith("raw.")
+    tokens = [] if raw_operation else _assemble(name, data)
+    console = None if raw_operation else OperatorConsole(
+        context, interactive=False
+    )
     # Use the same AppContext-owned caches, SQLite/Postgres repositories and
     # rate limiters as other entrypoints. ContextVars isolate parallel calls.
     try:
         with activate_app_context(context):
+            if name.startswith("raw."):
+                from api.raw import execute_raw
+
+                return _serializable(
+                    await execute_raw(context, name.split(".", 1)[1], data)
+                )
             if name == "image":
                 result = await _execute_image(
                     console, name, data, tokens, context.settings
