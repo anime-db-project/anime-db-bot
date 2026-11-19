@@ -82,6 +82,22 @@ def inspect_key(key: str, *, root: Path = ROOT_DIR) -> dict[str, object]:
     }
 
 
+
+def validate_key_value(
+    key: str, value: str | None, *, root: Path = ROOT_DIR
+) -> None:
+    """Validate one documented key/candidate without writing to disk."""
+    from scripts.config_report import _invalid_scalar_keys
+
+    _group_for(key, root)
+    if value is not None:
+        if "\n" in value or "\r" in value:
+            raise ValueError("Environment values must be single-line strings.")
+        if _invalid_scalar_keys({key: value}):
+            raise ValueError("Invalid numeric or boolean configuration value.")
+    AppSettings.from_env(_effective_for_validation(root, key, value))
+
+
 def update_key(
     key: str,
     value: str | None,
@@ -90,11 +106,8 @@ def update_key(
 ) -> dict[str, object]:
     """Persist one valid key in its existing file, preserving legacy layouts."""
     group = _group_for(key, root)
-    if value is not None and ("\n" in value or "\r" in value):
-        raise ValueError("Environment values must be single-line strings.")
-    # Reject invalid combinations before writing to disk. Treat the edited
-    # value as authoritative even when this console has a stale process env.
-    AppSettings.from_env(_effective_for_validation(root, key, value))
+    # CLI, REST, GraphQL and Telegram share the same preflight checks.
+    validate_key_value(key, value, root=root)
     target = _find_declared_path(key, root)
     if target is None:
         target = root / ".env" if (root / ".env").is_file() else root / ".env.d" / group
