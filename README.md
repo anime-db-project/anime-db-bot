@@ -149,6 +149,34 @@ separate console processes; secrets are not exported.
 See **[Operator console documentation](docs/operator-console.md)** for every
 command, flags, confirmation rules, JSON output and Docker examples.
 
+## REST v1 and GraphQL API
+
+The optional authenticated HTTP API exposes the same anime discovery,
+source-scoped identity, lazy card sections, people, episode timestamps,
+relations, image recognition, user moderation, mappings, configuration,
+diagnostics and maintenance actions as the operator console.
+
+```bash
+# API-only native binary: no Telegram token or polling required
+./anime-db-bot api
+
+# External API requests (keys configured in .env.d/api.env)
+curl -H "X-API-Key: $API_READ_KEY" \
+  "http://127.0.0.1:8181/api/v1/search?query=Frieren"
+
+# Docker-only API service
+docker compose -f compose.api.yml up -d
+```
+
+Endpoints: `/api/v1/...`, `/api/v1/openapi.json` (OpenAPI 3.1), and
+`/graphql` (typed queries/mutations). By default the API is **off** and
+binds only to loopback. A bearer/API key or explicitly configured local
+authentication is required; admin mutations require `confirm=true`.
+Long-running index/mapping operations return background job IDs.
+
+See [HTTP API documentation](docs/api.md) for all operations, authentication,
+CORS, GraphQL examples, resource limits, and Docker instructions.
+
 ## Deployment and operation
 
 The cross-platform launcher manages virtual environments, checks, foreground/background execution and process status. For Linux, `start.sh` provides the existing tmux-based deployment path. Windows has `start.ps1`/`start.cmd`; macOS also includes `start.command`.
