@@ -91,7 +91,7 @@ def navigation_keyboard(
     *,
     locale: str,
     pagination_first: bool = False,
-    show_related: bool = True,
+    show_related: bool = False,
 ) -> InlineKeyboardMarkup | None:
     rows: list[list[InlineKeyboardButton]] = []
 
@@ -293,7 +293,7 @@ def source_section_keyboard(
 
 
 def fallback_main_keyboard(
-    token: str, *, locale: str, show_all_ids: bool = False, show_related: bool = True
+    token: str, *, locale: str, show_all_ids: bool = False, show_related: bool = False
 ) -> InlineKeyboardMarkup:
     rows = [
         [
