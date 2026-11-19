@@ -329,7 +329,7 @@ def openapi_document(public_url: str = "") -> dict:
                                     "status": {
                                         "enum": [
                                             "ok", "missing_id", "not_found",
-                                            "unsupported", "error"
+                                            "unsupported", "too_large", "error"
                                         ]
                                     },
                                     "data": {},
