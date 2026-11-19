@@ -145,6 +145,40 @@ class ApiAuthenticationTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("errors", data)
         self.assertIn("budget", data["errors"][0]["message"])
 
+    async def test_graphql_introspection_can_be_disabled(self) -> None:
+        from api.graphql import execute_graphql
+        from api.jobs import JobManager
+
+        settings = settings_with(API_GRAPHQL_INTROSPECTION="false")
+        app_context = SimpleNamespace(settings=settings)
+        result = await execute_graphql(
+            app_context,
+            role="read",
+            query="{ __schema { types { name } } }",
+            variables=None,
+            operation_name=None,
+            jobs=JobManager(),
+        )
+        self.assertIn("errors", result)
+
+    async def test_graphql_root_operation_budget(self) -> None:
+        query = "{ " + " ".join(f"r{i}: ping" for i in range(10)) + " }"
+        response = await self.client.post(
+            "/graphql", headers={"X-API-Key": READ_KEY},
+            json={"query": query},
+        )
+        data = await response.json()
+        self.assertIn("errors", data)
+        self.assertIn("budget", data["errors"][0]["message"])
+
+    async def test_read_key_cannot_change_configuration(self) -> None:
+        response = await self.client.put(
+            "/api/v1/config/LOG_LEVEL",
+            headers={"X-API-Key": READ_KEY},
+            json={"value": "DEBUG", "confirm": True},
+        )
+        self.assertEqual(response.status, 403)
+
     async def test_rest_rejects_bad_body(self) -> None:
         response = await self.client.post(
             "/api/v1/actions/ping", headers={"X-API-Key": READ_KEY},
