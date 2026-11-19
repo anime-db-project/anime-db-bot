@@ -15,8 +15,28 @@ server.
 | `anime-db-bot-vX.Y.Z-macos-arm64.tar.gz` | macOS Apple Silicon | Double-click `Run.command`, or terminal |
 | `ghcr.io/anime-db-project/anime-db-bot:X.Y.Z` | Docker Linux amd64/arm64 | Docker / Compose |
 
-Releases also include `SHA256SUMS.txt`. Verify downloaded archives before
-running. The executable packages use PyInstaller **onedir** for faster startup
+Starting with **v0.3.1**, each release includes both `SHA256SUMS.txt`
+and `manifest.json`. The checksum file uses standard GNU sha256sum format:
+one hash and filename per archive. The JSON manifest includes schema version,
+repository, release tag, full Git commit SHA, generated time, and each
+archive's filename, platform, architecture, byte size and SHA-256 hash;
+it also records the checksum file's digest. Docker image tags/platforms are
+listed as identifiers, not as a substitute for immutable registry digests.
+
+The release publishing job verifies all five platform archives, generates
+both files from their **actual bytes**, and verifies consistency immediately
+before publication. A changed archive or mismatched checksum fails
+verification rather than publishing an invalid release.
+
+Verify an archive on Linux or macOS with:
+
+```sh
+sha256sum --check SHA256SUMS.txt
+```
+
+Run the command in a directory containing all five archives, or compare the
+selected archive's hash manually. On Windows use `Get-FileHash` in PowerShell
+and compare with the manifest. Verify downloaded archives before running. The executable packages use PyInstaller **onedir** for faster startup
 and avoid unpacking a Python runtime on each invocation. Keep the included
 `_internal` directory beside the executable; it contains libraries and
 bundled configuration/localization templates.
@@ -41,6 +61,16 @@ Docker users can deploy a dedicated API-only service using
 until intentionally placed behind a TLS reverse proxy. REST operations and
 GraphQL both call the same shared application services; admin mutations need
 explicit confirmation. Details: [External API](api.md).
+
+## Telegram administrator ENV settings
+
+The private `/settings` menu now includes **Bot configuration (ENV)** for
+IDs listed in `ADMIN_TELEGRAM_USER_IDS`. Use `/admin_config` directly to
+open the browser, search all documented options, inspect masked values and
+safely edit/reset settings with confirmation. Incoming messages containing
+secret values are deleted where Telegram permits. Every ENV change still
+requires an explicit bot restart; no automated server build/test is needed.
+See [configuration reference](configuration.md).
 
 ## Operator console
 
