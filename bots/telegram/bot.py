@@ -29,6 +29,7 @@ from localization import text
 from mappings.runtime import periodic_mapping_updates
 from services.users.access_control import telegram_admin_ids
 from services.runtime.app_context import AppContext, activate_app_context
+from services.runtime.status_snapshot import publish_status_snapshots
 from services.users.settings import get_user_locale
 
 
@@ -260,6 +261,7 @@ async def run_bot(
         max_people_loads=settings.telegram.max_people_sessions,
     )
     mapping_task = asyncio.create_task(periodic_mapping_updates())
+    status_task = asyncio.create_task(publish_status_snapshots(context))
     try:
         with activate_app_context(context):
             health = await transport.check_health(bot)
@@ -354,7 +356,8 @@ async def run_bot(
             )
     finally:
         mapping_task.cancel()
-        await asyncio.gather(mapping_task, return_exceptions=True)
+        status_task.cancel()
+        await asyncio.gather(mapping_task, status_task, return_exceptions=True)
         await transport.close(bot)
         await context.aclose()
 
