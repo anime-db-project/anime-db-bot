@@ -40,6 +40,7 @@ Unexpected names are warnings in normal mode, not automatically rejected.
 | \`timestamps.env\` | Skip/intro timestamp data and provider-specific settings |
 | \`logging.env\` | Structured logs, redaction, log size, archive and retention |
 | `lifecycle.env` | Fatal process-exit actions, restart limits, backoff and graceful shutdown |
+| `api.env` | Optional authenticated REST v1 and GraphQL HTTP server |
 | \`.env.example\` | Legacy single-file template (for compatibility) |
 
 The sample directory is authoritative: copy **one** sample key at a time into
@@ -83,6 +84,40 @@ BOT_SHUTDOWN_TIMEOUT_SECONDS=10
 - Legacy installations with an existing `.env.d` do not have their active
   config overwritten. Add `lifecycle.env` yourself when customizing;
   missing keys safely retain their built-in defaults.
+
+### External REST and GraphQL API
+
+The HTTP server is disabled by default. It can run independently of Telegram
+(`anime-db-bot api`) or beside polling (`API_ENABLED=true`). Settings live
+in `.env.d/api.env`:
+
+```dotenv
+API_ENABLED=false
+API_HOST=127.0.0.1
+API_PORT=8181
+API_AUTH_MODE=apikey
+API_READ_KEY=
+API_ADMIN_KEY=
+API_CORS_ORIGINS=
+API_PUBLIC_URL=
+API_TRUST_PROXY=false
+API_REQUESTS_PER_MINUTE=90
+API_MAX_CONCURRENCY=12
+API_MAX_BODY_BYTES=4194304
+API_TIMEOUT_SECONDS=30
+API_GRAPHQL_MAX_DEPTH=8
+API_GRAPHQL_MAX_FIELDS=60
+API_GRAPHQL_INTROSPECTION=true
+```
+
+`API_AUTH_MODE` supports API keys, HTTP Basic, or an opt-in loopback-only
+trusted mode. All mutating operations require admin scope and confirmation.
+Missing/short credentials are rejected at server startup, not silently
+treated as anonymous access. Use `API_BASIC_USERNAME` and
+`API_BASIC_PASSWORD` for Basic mode. Cross-origin web requests require
+an exact `API_CORS_ORIGINS` allowlist. See
+[REST v1 and GraphQL API](api.md) for schema, example requests, rate limits
+and Docker Compose instructions.
 
 ### Search providers
 
