@@ -38,6 +38,163 @@ standard introspection when enabled, and a `JSON` scalar for heterogeneous
 provider data. This initial schema intentionally leaves room for richer
 typed nested models without inventing unverified metadata.
 
+## Direct source API: independent data by capability
+
+Use the **source-native API** when you want records from MAL, AniList,
+Shikimori, Kitsu, AniDB or AniSearch **without aggregation**.
+
+The response is the complete source adapter's domain record for the requested
+capability. It is **not** the untouched upstream HTTP/GraphQL wire payload:
+source adapters still normalize enums, dates and names. Crucially, records
+from different sources are **never combined, deduplicated or averaged**, and
+no general anime card is loaded when you only ask for voices, staff or images.
+
+The existing `/api/v1/anime`, `/api/v1/search` and ordinary GraphQL
+`anime`/`search` queries remain available as **aggregated** alternatives.
+
+### One endpoint per capability
+
+| Data | REST | GraphQL |
+| --- | --- | --- |
+| Capabilities/source list | `GET /api/v1/raw/capabilities` | `sourceCatalog` |
+| Search (individual results) | `GET /api/v1/raw/search` | `rawSearch` |
+| Source-scoped ID only | `GET /api/v1/raw/id/{source}/{id}` | `rawId` |
+| Metadata | `GET /api/v1/raw/metadata` | `rawMetadata` |
+| Seiyuu / voice actors | `GET /api/v1/raw/seiyuu` | `rawSeiyuu`, `rawVoices` |
+| Staff / production personnel | `GET /api/v1/raw/staff` | `rawStaff` |
+| Characters | `GET /api/v1/raw/characters` | `rawCharacters` |
+| Episodes / individual episode | `GET /api/v1/raw/episodes`, `/episode` | `rawEpisodes`, `rawEpisode` |
+| Skip timestamps | `GET /api/v1/raw/timestamps` | `rawTimestamps` |
+| OP / ED themes | `GET /api/v1/raw/themes` | `rawThemes` |
+| Trailers / screenshots | `GET /api/v1/raw/trailers`, `/screenshots` | `rawTrailers`, `rawScreenshots` |
+| Popularity / descriptions | `GET /api/v1/raw/popularity`, `/description` | `rawPopularity`, `rawDescription` |
+| Related works / recommendations | `GET /api/v1/raw/relations`, `/recommendations` | `rawRelations`, `rawRecommendations` |
+| Recognition by photo | `POST /api/v1/raw/image` | `rawImage` |
+| Chosen sections / all sections | `POST /api/v1/raw/query` | `rawBundle`, `rawAll` |
+
+**One source only:**
+
+```sh
+curl -H "X-API-Key: $API_READ_KEY" \
+  "http://127.0.0.1:8181/api/v1/raw/mal/5114/voices"
+
+curl -H "X-API-Key: $API_READ_KEY" \
+  "http://127.0.0.1:8181/api/v1/raw/mal/5114/metadata"
+
+# Only a source ID; no full metadata request:
+curl -H "X-API-Key: $API_READ_KEY" \
+  "http://127.0.0.1:8181/api/v1/raw/id/mal/5114"
+```
+
+**All relevant sources, independently:**
+
+```sh
+curl -G -H "X-API-Key: $API_READ_KEY" \
+  "http://127.0.0.1:8181/api/v1/raw/voices" \
+  --data-urlencode "source=all" \
+  --data-urlencode "ids=mal:5114,anilist:9253"
+
+curl -G -H "X-API-Key: $API_READ_KEY" \
+  "http://127.0.0.1:8181/api/v1/raw/search" \
+  --data-urlencode "source=all" \
+  --data-urlencode "query=Frieren"
+```
+
+In the second example, **MAL and AniList are independently searched**;
+results are not re-ranked together and each provider's pagination is retained.
+
+Multiple IDs are accepted as `ids=mal:5114,anilist:9253` in GET URLs or
+as an object in a JSON body. The `source=all` selector contacts every
+**enabled provider for that capability**, and each has its own result.
+**Never send `id=5114&source=all`:** the API refuses to interpret one bare
+number as an ID in every database. To discover additional ID edges, set
+`resolve=true` explicitly; expansion uses confirmed **one-hop mapping**
+relationships, never title/number guessing. A missing ID is reported as
+`missing_id`, and an unsupported provider capability as `unsupported`.
+
+Example simplified result:
+
+```json
+{
+  "capability": "voices",
+  "aggregated": false,
+  "representation": "source_adapter_record",
+  "identity": {"mal": "5114", "anilist": "9253"},
+  "sources": {
+    "mal": {"status": "ok", "data": {"level": "manifest", "people": []}},
+    "anilist": {"status": "ok", "data": {"level": "manifest", "people": []}},
+    "kitsu": {"status": "missing_id", "data": null}
+  }
+}
+```
+
+The actual REST response encloses this object under `data` with a
+`meta.request_id`. Individual source failures have `status: "error"`
+and a sanitized `error_type`, and do not suppress successful peers.
+
+### Lazy/large capabilities
+
+A normal metadata or ID query never implicitly fetches cast, voice actors,
+episodes, images, skip segments, relations or reviews. For `staff` and
+`voices`, `detail=manifest` (default) returns lightweight source-native
+person IDs/names/roles without requesting all portraits. Explicitly use
+`detail=full` to fetch richer people details where supported.
+
+Use `page` for searches/episode pages, and `episode` to request one
+episode, skip timeline or theme set. Backends such as Jikan are listed under
+their backend key (e.g. `jikan`) while their **anime identity** remains
+`mal`. For example:
+
+```sh
+curl -H "X-API-Key: $API_READ_KEY" \
+  "http://127.0.0.1:8181/api/v1/raw/jikan/5114/episodes?page=1"
+```
+
+**One combined request only when explicitly chosen:**
+
+```sh
+curl -X POST "http://127.0.0.1:8181/api/v1/raw/query" \
+  -H "X-API-Key: $API_READ_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "capability": "bundle",
+    "source": "all",
+    "ids": {"mal": "5114", "anilist": "9253"},
+    "capabilities": ["metadata", "voices", "episodes", "relations"]
+  }'
+```
+
+Set `capability: "all"` to request all supported anime-detail capabilities
+explicitly; doing so can be expensive and is still subject to API timeouts and
+provider quotas. Each capability in the response retains its own
+source-separated results, and no aggregated anime model is constructed.
+The convenience query does not include image recognition (requires image
+bytes) or search (requires title text).
+
+### Separate GraphQL queries
+
+```graphql
+query NativeSources {
+  sourceCatalog
+
+  rawSearch(query: "Frieren", source: "all")
+  rawId(source: "mal", id: "5114")
+
+  rawMetadata(ids: {mal: "5114", anilist: "9253"})
+  rawSeiyuu(source: "mal", id: "5114")
+  rawStaff(source: "mal", id: "5114")
+  rawCharacters(source: "mal", id: "5114")
+  rawEpisodes(source: "jikan", id: "5114", page: 1)
+  rawTimestamps(ids: {mal: "5114"}, episode: 1)
+}
+```
+
+These are standalone root fields with no dependency on an earlier
+`anime` query or a session-level `open` action. For a custom capability
+set use `rawBundle(capabilities: ["metadata","voices"], ids: {...})`.
+GraphQL query depth/field/root budgets and existing upstream rate limits
+still apply.
+
 ## Launching the API
 
 By default, **no HTTP listener exists**.
