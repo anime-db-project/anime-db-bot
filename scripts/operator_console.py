@@ -225,6 +225,96 @@ class OperatorConsole:
         self.selected: Any = None
         self.locale = "en"
         self.as_json = False
+        self.pending_mapping: list[str] | None = None
+
+    async def run_tokens(
+        self, tokens: list[str], parser: argparse.ArgumentParser
+    ) -> Any:
+        """Support regular CLI commands and familiar Telegram slash syntax."""
+        if not tokens:
+            return await self.execute(parser.parse_args(["help"]))
+        command, *rest = tokens
+        command = command.casefold()
+        if command in {"cancel", "/cancel"}:
+            self.candidates.clear()
+            self.selected = None
+            self.pending_mapping = None
+            return "Pending selections and mapping changes cancelled."
+        if command in {"settings", "/settings"}:
+            return (
+                "Telegram user language: language USER_ID [en|ru|ja|de|es|fr|it].\n"
+                "Project settings: config list | config check | config explain KEY."
+            )
+        if command == "/mapping_cancel":
+            self.pending_mapping = None
+            return "Pending mapping mutation cancelled."
+        if command == "/mapping_confirm":
+            if self.pending_mapping is None:
+                raise ConsoleError("No pending mapping mutation.")
+            staged = list(self.pending_mapping)
+            self.pending_mapping = None
+            return await self.execute(parser.parse_args([*staged, "--yes"]))
+        if command in {"/mapping_set", "/mapping_delete"}:
+            if not self.interactive:
+                raise ConsoleError(
+                    "Use the interactive console for staged slash mapping changes. "
+                    "For scripts use mapping set/delete with --reason and --yes."
+                )
+            if command == "/mapping_set":
+                if len(rest) < 6:
+                    raise ConsoleError(
+                        "Usage: /mapping_set accept|reject SOURCE ID TARGET ID REASON"
+                    )
+                action, source, source_id, target, target_id, *reason_parts = rest
+                staged = [
+                    "mapping", "set", action, source, source_id, target, target_id,
+                    "--reason", " ".join(reason_parts),
+                ]
+            else:
+                if len(rest) < 5:
+                    raise ConsoleError(
+                        "Usage: /mapping_delete SOURCE ID TARGET ID REASON"
+                    )
+                source, source_id, target, target_id, *reason_parts = rest
+                staged = [
+                    "mapping", "delete", source, source_id, target, target_id,
+                    "--reason", " ".join(reason_parts),
+                ]
+            parser.parse_args(staged)
+            if not " ".join(reason_parts).strip():
+                raise ConsoleError("An audit reason is required.")
+            self.pending_mapping = staged
+            return (
+                "Staged: " + " ".join(staged[:7])
+                + "\nConfirm: /mapping_confirm | Cancel: /mapping_cancel"
+            )
+
+        aliases = {
+            "/start": "help", "/ping": "ping", "/users": "users",
+            "/status": "status", "/source_health": "source-health",
+            "/unban": "unban",
+        }
+        if command == "/anime":
+            if not rest:
+                return "Usage: /anime TITLE or /anime mal:ID. Search, then open INDEX."
+            direct_id = _parse_source_id(" ".join(rest))
+            tokens = ["lookup" if direct_id is not None else "search", *rest]
+        elif command == "/mapping_overrides":
+            tokens = ["mapping", "list"]
+        elif command == "/mapping_history":
+            tokens = ["mapping", "history", *(["--limit", rest[0]] if rest else [])]
+        elif command == "/ban":
+            if not rest:
+                raise ConsoleError("Usage: /ban USER_ID [SECONDS] [REASON]")
+            user, *remaining = rest
+            tokens = ["ban", user]
+            if remaining and remaining[0].isdecimal():
+                tokens.extend(["--seconds", remaining.pop(0)])
+            if remaining:
+                tokens.extend(["--reason", " ".join(remaining)])
+        elif command in aliases:
+            tokens = [aliases[command], *rest]
+        return await self.execute(parser.parse_args(tokens))
 
     async def _find(self, query: str) -> SearchCandidate:
         value = query.strip()
@@ -481,10 +571,16 @@ class OperatorConsole:
         self.locale = args.locale
         self.as_json = args.json
         if name == "help":
-            return "Commands: ping, status, sources, source-health, metrics, search, " \
-                "lookup, anime, open, view, image, image-providers, users, user, " \
-                "language, ban, unban, mapping, config, logs.\n" \
+            return (
+                "Commands: ping, status, sources, source-health, metrics, search, "
+                "lookup, anime, open, view, image, image-providers, users, user, "
+                "language, ban, unban, mapping, config, logs, cancel.\n"
+                "Telegram aliases: /start, /ping, /anime, /users, /status, "
+                "/source_health, /ban, /unban, /settings, /cancel, "
+                "/mapping_overrides, /mapping_history, /mapping_set, "
+                "/mapping_delete, /mapping_confirm, /mapping_cancel.\n"
                 "Use '<command> --help' for arguments; 'exit' leaves the console."
+            )
         if name == "ping":
             return {"ok": True, "transport": "local-console",
                     "telegram_polling_started": False}
@@ -629,9 +725,9 @@ async def run_console(
         with activate_app_context(context):
             if not interactive:
                 try:
-                    args = parser.parse_args(tokens or [])
-                    result = await session.execute(args)
-                    print(format_output(result, as_json=args.json), flush=True)
+                    words = tokens or ["help"]
+                    result = await session.run_tokens(words, parser)
+                    print(format_output(result, as_json="--json" in words), flush=True)
                     return 0
                 except ConsoleError as exc:
                     print(f"Error: {exc}", file=sys.stderr)
@@ -651,9 +747,8 @@ async def run_console(
                     return 0
                 try:
                     words = shlex.split(raw)
-                    args = parser.parse_args(words)
-                    result = await session.execute(args)
-                    print(format_output(result, as_json=args.json), flush=True)
+                    result = await session.run_tokens(words, parser)
+                    print(format_output(result, as_json="--json" in words), flush=True)
                 except (ConsoleError, ValueError) as exc:
                     print(f"Error: {exc}", file=sys.stderr)
                 except SystemExit:
