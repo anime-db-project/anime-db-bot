@@ -179,15 +179,32 @@ def _identity(
         external_id = str(single).strip()
         if not _ID_PATTERN.fullmatch(external_id):
             raise ApiOperationError(400, "id must be numeric")
-        # Never extrapolate one unqualified number to other providers.
-        if source in {"all", "*"} or "," in source or source not in _SUPPORTED_KEYS:
-            raise ApiOperationError(
-                400, "A single id needs a concrete metadata source; "
-                     "use ids={source:id} for multiple providers"
+        # A backend such as Jikan uses its own backend key but MAL identity.
+        identity_key = source
+        if source not in _SUPPORTED_KEYS:
+            backends = (
+                *context.episode_service.sources,
+                *context.trailer_service.sources,
+                *context.episode_segment_service.sources,
             )
-        if source in supplied and supplied[source] != external_id:
+            identity_key = next(
+                (
+                    str(backend.source_key)
+                    for backend in backends
+                    if str(getattr(backend, "backend_key", "")) == source
+                    and str(getattr(backend, "source_key", "")) in _SUPPORTED_KEYS
+                ),
+                source,
+            )
+        # Never extrapolate one unqualified number to other providers.
+        if source in {"all", "*"} or "," in source or identity_key not in _SUPPORTED_KEYS:
+            raise ApiOperationError(
+                400, "A single id needs a concrete source with a known identity; "
+                "use ids={source:id} for multiple providers"
+            )
+        if identity_key in supplied and supplied[identity_key] != external_id:
             raise ApiOperationError(400, "Conflicting id and ids values")
-        supplied[source] = external_id
+        supplied[identity_key] = external_id
     if not supplied:
         raise ApiOperationError(
             400, "Provide source + id, or explicit source-scoped ids"
@@ -266,6 +283,20 @@ async def _single(
         )
         if not identity.has(key):
             return "missing_id", None
+        from sources.runtime.catalog import source_supports
+
+        required = {
+            "staff": SourceCapability.PEOPLE,
+            "voices": SourceCapability.PEOPLE,
+            "characters": SourceCapability.CHARACTERS,
+            "screenshots": SourceCapability.SCREENSHOTS,
+            "popularity": SourceCapability.POPULARITY,
+            "description": SourceCapability.DESCRIPTION,
+            "relations": SourceCapability.RELATIONS,
+            "recommendations": SourceCapability.RECOMMENDATIONS,
+        }.get(capability)
+        if required is not None and not source_supports(key, required):
+            return "unsupported", None
         if capability == "metadata":
             record = await source.get_details(identity.copy())
             return ("ok" if record is not None else "not_found"), record
@@ -447,6 +478,12 @@ async def execute_raw(
         q = data.get("query")
         if not isinstance(q, str) or not 1 <= len(q.strip()) <= 256:
             raise ApiOperationError(400, "query must contain 1-256 characters")
+        _num(data.get("page"), "page", 1, 1, 100)
+        _num(data.get("limit"), "limit", 20, 1, 100)
+    if capability in {"episodes"}:
+        _num(data.get("page"), "page", 1, 1, 100)
+    if capability in {"episode", "timestamps", "themes"}:
+        _num(data.get("episode"), "episode", 1, 1, 100000)
     if capability in {"staff", "voices"} and str(
         data.get("detail", "manifest")
     ) not in {"manifest", "full"}:
