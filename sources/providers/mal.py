@@ -327,6 +327,13 @@ class MALSource:
     def settings(self) -> SourceSettings:
         return self._settings
 
+    async def get_wire_details(self, identity: AnimeIdentity) -> dict[str, Any] | None:
+        """Unmodified MAL HTTP JSON for configured metadata fields."""
+        mal_id = str(identity.get("mal") or "").strip()
+        if not mal_id.isdigit():
+            return None
+        return await _get_raw(mal_id, self.settings)
+
     async def get_details(self, identity: AnimeIdentity) -> AnimeRecord | None:
         mal_id = str(identity.get("mal") or "").strip()
         if not mal_id.isdigit():
