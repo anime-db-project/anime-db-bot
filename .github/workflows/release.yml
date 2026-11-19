@@ -9,7 +9,7 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: "Release tag (for example v0.2.0). Leave blank for v0.1.0."
+        description: "Release tag (for example v0.3.0). Leave blank for v0.2.0."
         required: false
         type: string
 
@@ -46,7 +46,7 @@ jobs:
           elif [[ -n "$REQUESTED_VERSION" ]]; then
             tag="$REQUESTED_VERSION"
           else
-            tag="v0.1.0"
+            tag="v0.2.0"
           fi
           if [[ ! "$tag" =~ ^v[0-9]+\.[0-9]+\.[0-9]+([.-][a-zA-Z0-9.-]+)?$ ]]; then
             echo "::error::Release tag must use vMAJOR.MINOR.PATCH."
@@ -144,6 +144,18 @@ jobs:
           "$exe" init --home "$RUNNER_TEMP/anime-db-bot-smoke"
           "$exe" check --home "$RUNNER_TEMP/anime-db-bot-smoke"
           test -f "$RUNNER_TEMP/anime-db-bot-smoke/.env.d/telegram.env"
+          # Execute the packaged CLI, not the Python source in the checkout.
+          "$exe" --home "$RUNNER_TEMP/anime-db-bot-smoke" cli help
+          "$exe" --home "$RUNNER_TEMP/anime-db-bot-smoke" cli --json ping
+          "$exe" --home "$RUNNER_TEMP/anime-db-bot-smoke" cli config list
+          "$exe" --home "$RUNNER_TEMP/anime-db-bot-smoke" cli config get BOT_TOKEN
+          "$exe" --home "$RUNNER_TEMP/anime-db-bot-smoke" cli config check
+          "$exe" --home "$RUNNER_TEMP/anime-db-bot-smoke" cli mapping status
+          "$exe" --home "$RUNNER_TEMP/anime-db-bot-smoke" cli config set USER_DEFAULT_LOCALE de --yes
+          "$exe" --home "$RUNNER_TEMP/anime-db-bot-smoke" cli config get USER_DEFAULT_LOCALE
+          "$exe" --home "$RUNNER_TEMP/anime-db-bot-smoke" cli config reset USER_DEFAULT_LOCALE --yes
+          # The interactive console should process commands without bot polling.
+          printf "help\\nquit\\n" | "$exe" --home "$RUNNER_TEMP/anime-db-bot-smoke" console
       - name: Create portable archive with clickable launchers
         shell: bash
         run: |
@@ -157,7 +169,7 @@ jobs:
           retention-days: 30
 
   docker:
-    needs: [prepare, verify]
+    needs: [prepare, verify, binaries]
     if: needs.prepare.outputs.publish == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 90
@@ -203,6 +215,12 @@ jobs:
           docker run --rm "$IMAGE:$VERSION" --version
           docker run --rm "$IMAGE:$VERSION" doctor
           docker run --rm "$IMAGE:$VERSION" check
+          docker run --rm "$IMAGE:$VERSION" cli help
+          docker run --rm "$IMAGE:$VERSION" cli --json ping
+          docker run --rm "$IMAGE:$VERSION" cli config list
+          docker run --rm "$IMAGE:$VERSION" cli config check
+          docker run --rm "$IMAGE:$VERSION" cli mapping status
+          printf "help\\nquit\\n" | docker run --rm -i "$IMAGE:$VERSION" console
 
   publish:
     needs: [prepare, verify, binaries, docker]
