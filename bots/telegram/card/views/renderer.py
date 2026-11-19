@@ -138,7 +138,7 @@ async def send_anime_view(
     page: int = 0,
     *,
     locale: str,
-    show_related: bool = True,
+    show_related: bool = False,
 ) -> tuple[Message | None, bool]:
     """Send a card and return its Telegram message plus fallback-mode flag."""
     pages = view_pages(anime, section, locale=locale)
@@ -200,7 +200,7 @@ async def edit_anime_view(
     page: int,
     *,
     locale: str,
-    show_related: bool = True,
+    show_related: bool = False,
 ) -> None:
     pages = view_pages(anime, section, locale=locale)
     page = max(0, min(page, len(pages) - 1))
