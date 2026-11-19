@@ -20,7 +20,7 @@ fail() {
 
 [[ -f "$SCRIPT_DIR/requirements.lock" ]] || fail "requirements.lock not found."
 [[ -d "$SCRIPT_DIR/.env.example.d" ]] || fail ".env.example.d not found."
-ENV_FILES=(telegram.env sources.env timestamps.env rate-limits.env mappings.env storage.env logging.env runtime.env)
+ENV_FILES=(telegram.env sources.env timestamps.env rate-limits.env mappings.env storage.env logging.env runtime.env lifecycle.env)
 PROXY_FILES=(telegram.toml shikimori.toml mal.toml anilist.toml kitsu.toml anidb.toml anisearch.toml jikan.toml aniskip.toml anime_skip.toml animethemes.toml imdb.toml skipdb.toml trace_moe.toml whatanimeisthis.toml)
 USER_AGENT_FILES=(telegram.toml shikimori.toml mal.toml anilist.toml kitsu.toml anidb.toml anisearch.toml jikan.toml aniskip.toml anime_skip.toml animethemes.toml imdb.toml skipdb.toml trace_moe.toml whatanimeisthis.toml)
 for env_name in "${ENV_FILES[@]}"; do
@@ -180,7 +180,7 @@ ensure_jikan_container() {
 
 ensure_jikan_container
 
-info "Telegram runtime: $BOT_MODULE"
+info "Telegram runtime: $BOT_MODULE (supervised by scripts.lifecycle)"
 info "Telegram transport is selected from TELEGRAM_BOT_API_URL."
 info "Default /anime search: Shikimori + MAL (MyAnimeList) / Jikan + AniList + Kitsu."
 info "External IDs are enriched locally from disk-backed mappings.db."
@@ -198,7 +198,7 @@ ERROR_LOG_FILE="$CURRENT_LOG_DIR/errors.log"
 tmux new-session -d \
     -s "$SESSION_NAME" \
     -c "$SCRIPT_DIR" \
-    "exec '$PYTHON' -m '$BOT_MODULE'"
+    "exec '$PYTHON' -m scripts.lifecycle"
 
 sleep 1
 
