@@ -272,9 +272,27 @@ async def _root(request: web.Request) -> web.Response:
     })
 
 
+def _public_url(request: web.Request) -> str:
+    settings: ApiSettings = request.app["api_settings"]
+    if settings.public_url:
+        return settings.public_url
+    if settings.trust_proxy and _is_loopback(request.remote):
+        # Proxy headers only affect documentation URL. They never affect
+        # authorization, CORS, trusted-local detection or rate limit identity.
+        import re
+
+        proto = request.headers.get("X-Forwarded-Proto", "").strip().lower()
+        host = request.headers.get("X-Forwarded-Host", "").strip()
+        if proto in {"http", "https"} and re.fullmatch(
+            r"[A-Za-z0-9.:-]{1,253}", host
+        ):
+            return f"{proto}://{host}"
+    return f"http://{settings.host}:{settings.port}"
+
+
 async def _openapi(request: web.Request) -> web.Response:
     # OpenAPI clients require the document at the JSON root (no REST envelope).
-    return web.json_response(openapi_document(request.app["api_settings"].public_url))
+    return web.json_response(openapi_document(_public_url(request)))
 
 
 async def _operations(request: web.Request) -> web.Response:
