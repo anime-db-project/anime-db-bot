@@ -250,11 +250,22 @@ jobs:
           with urlopen(Request(base + "/api/v1/openapi.json", headers=headers)) as response:
               spec = json.load(response)
           assert spec["openapi"] == "3.1.0"
+          assert "/api/v1/raw/wire" in spec["paths"]
+          with urlopen(Request(base + "/api/v1/raw/id/mal/5114", headers=headers)) as response:
+              raw_id = json.load(response)
+          assert raw_id["data"]["sources"]["mal"]["data"]["source_id"] == "5114"
           payload = json.dumps({"query": "{ apiVersion ping }"}).encode()
           with urlopen(Request(base + "/graphql", data=payload, headers={**headers,"Content-Type":"application/json"})) as response:
               result = json.load(response)
           assert result["data"]["apiVersion"] == "v1", result
-          print("GHCR API-only REST/GraphQL smoke passed.")
+          payload = json.dumps({
+              "query": '{ sourceCatalog rawId(source:"mal", id:"5114") }'
+          }).encode()
+          with urlopen(Request(base + "/graphql", data=payload, headers={**headers,"Content-Type":"application/json"})) as response:
+              raw_query = json.load(response)
+          assert raw_query["data"]["rawId"]["aggregated"] is False
+          assert "wire" in raw_query["data"]["sourceCatalog"]["capabilities"]
+          print("GHCR API-only REST/GraphQL and raw-provider smoke passed.")
           PY
 
   publish:
@@ -307,6 +318,9 @@ jobs:
           - New: API-only mode for native binaries and Docker, or API_ENABLED=true alongside Telegram polling.
           - Secure keys, HTTP Basic/loopback auth, CORS, quotas and read/admin privileges.
           - Bounded asynchronous mapping and index jobs with status queries.
+          - Source-native unmerged REST/GraphQL APIs: separate search, IDs, voice actors, people, episodes, timestamps, relationships and image searches.
+          - Independent per-provider results (or all sources), verified source-ID mapping only, and lightweight versus full person manifests.
+          - Original provider JSON/XML via /api/v1/raw/wire or GraphQL rawWire, while preserving upstream quota and circuit protections.
           - Documentation: https://github.com/anime-db-project/anime-db-bot/blob/main/docs/api.md
           Data, runtime cache and secrets remain outside bundled libraries.
           The published executables are unsigned/not notarized; macOS Gatekeeper may require approval.
