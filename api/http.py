@@ -330,6 +330,84 @@ def _wrap(action: str, *, body: bool = False) -> Any:
     return handler
 
 
+async def _raw_capability_response(
+    request: web.Request, capability: str, data: Mapping[str, Any],
+) -> web.Response:
+    from api.raw import _capability
+
+    return await _operation_response(
+        request, "raw." + _capability(capability), data
+    )
+
+
+async def _raw_capability(request: web.Request) -> web.Response:
+    return await _raw_capability_response(
+        request, request.match_info["capability"], _query(request)
+    )
+
+
+async def _raw_source(request: web.Request) -> web.Response:
+    data = _query(request)
+    data["source"] = request.match_info["source"]
+    return await _raw_capability_response(
+        request, request.match_info["capability"], data
+    )
+
+
+async def _raw_direct(request: web.Request) -> web.Response:
+    from api.raw import _capability
+
+    source = request.match_info["source"].lower()
+    identifier = request.match_info["id"]
+    capability = _capability(request.match_info.get("capability") or "id")
+    if not identifier.isascii() or not identifier.isdigit() or len(identifier) > 32:
+        raise ApiOperationError(400, "Source ID must be numeric")
+    if source == "all":
+        raise ApiOperationError(400, "An ID must have a concrete source")
+
+    data = _query(request)
+    data["source"] = source
+    # Backend keys (e.g. jikan) are distinct from anime identity keys.
+    # Assign the backend's real source_key; never treat jikan as a new ID.
+    identity_key = source
+    if capability in {"episodes", "episode"}:
+        backends = request.app["context"].episode_service.sources
+    elif capability == "timestamps":
+        backends = request.app["context"].episode_segment_service.sources
+    elif capability == "trailers":
+        backends = request.app["context"].trailer_service.sources
+    else:
+        backends = ()
+    for backend in backends:
+        if str(getattr(backend, "backend_key", "")) == source:
+            identity_key = str(getattr(backend, "source_key", source))
+            break
+    if identity_key not in {
+        str(getattr(item, "source_key", ""))
+        for item in request.app["context"].sources
+    }:
+        raise ApiOperationError(
+            400, "Backend needs explicit source IDs; use ?ids=source:id"
+        )
+    data["ids"] = {identity_key: identifier}
+    data.pop("id", None)
+    return await _raw_capability_response(request, capability, data)
+
+
+async def _raw_query(request: web.Request) -> web.Response:
+    data = await _body(request)
+    from api.raw import _capability
+
+    name = _capability(data.get("capability", ""))
+    return await _raw_capability_response(request, name, data)
+
+
+async def _raw_image(request: web.Request) -> web.Response:
+    return await _raw_capability_response(
+        request, "image", await _body(request)
+    )
+
+
 async def _anime_by_id(request: web.Request) -> web.Response:
     source = request.match_info["source"]
     anime_id = request.match_info["id"]
@@ -445,6 +523,15 @@ def create_app(
     router.add_get("/api/v1/openapi.json", _openapi)
     router.add_get("/api/v1/operations", _operations)
     router.add_post("/api/v1/actions/{operation}", _generic)
+    # Source-native, non-aggregating API: one capability per request.
+    router.add_get("/api/v1/raw/capabilities", _wrap("raw.catalog"))
+    router.add_get("/api/v1/raw/search", _wrap("raw.search"))
+    router.add_post("/api/v1/raw/image", _raw_image)
+    router.add_post("/api/v1/raw/query", _raw_query)
+    router.add_get("/api/v1/raw/id/{source}/{id}", _raw_direct)
+    router.add_get("/api/v1/raw/{source}/{id}/{capability}", _raw_direct)
+    router.add_get("/api/v1/raw/{source}/{capability}", _raw_source)
+    router.add_get("/api/v1/raw/{capability}", _raw_capability)
     router.add_get("/api/v1/jobs", _jobs)
     router.add_get("/api/v1/jobs/{job_id}", _job)
     router.add_get("/api/v1/search", _wrap("search"))
