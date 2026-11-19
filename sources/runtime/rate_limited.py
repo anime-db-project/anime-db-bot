@@ -22,6 +22,7 @@ class RateLimitedSourceProxy:
         self._source = source
         self.source_key = source_key
         self.name = source.name
+        self.supports_wire = callable(getattr(source, "get_wire_details", None))
 
     async def get_details(self, identity: AnimeIdentity) -> AnimeRecord | None:
         await wait_for_upstream(self.source_key, "metadata")
