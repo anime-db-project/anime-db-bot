@@ -82,6 +82,15 @@ def openapi_document(public_url: str = "") -> dict:
         f"{prefix}/operations": {
             "get": _operation("List registered read/admin operations")
         },
+        f"{prefix}/jobs": {
+            "get": _operation("List active/completed background jobs", "admin")
+        },
+        f"{prefix}/jobs/{job_id}": {
+            "get": _operation(
+                "Inspect a background maintenance job", "admin",
+                params=[_path("job_id")],
+            )
+        },
         f"{prefix}/actions/{{operation}}": {
             "post": _operation(
                 "Execute one registered v1 operation", body=True,
