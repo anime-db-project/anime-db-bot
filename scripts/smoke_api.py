@@ -80,12 +80,27 @@ def smoke(binary: Path) -> None:
             )
             assert status == 200 and spec["openapi"] == "3.1.0"
             assert "/graphql" in spec["paths"]
+            assert "/api/v1/raw/wire" in spec["paths"]
+            assert "/api/v1/raw/search" in spec["paths"]
+            status, raw_id = _request(
+                base + "/api/v1/raw/id/mal/5114", key=read_key
+            )
+            assert status == 200
+            assert raw_id["data"]["sources"]["mal"]["data"]["source_id"] == "5114"
+            assert raw_id["data"]["aggregated"] is False
             status, payload = _request(
                 base + "/graphql", key=read_key, method="POST",
                 data={"query": "{ apiVersion ping }"},
             )
             assert status == 200
             assert payload["data"]["apiVersion"] == "v1", payload
+            status, raw_graphql = _request(
+                base + "/graphql", key=read_key, method="POST",
+                data={"query": '{ sourceCatalog rawId(source:"mal", id:"5114") }'},
+            )
+            assert status == 200
+            assert raw_graphql["data"]["rawId"]["aggregated"] is False
+            assert "wire" in raw_graphql["data"]["sourceCatalog"]["capabilities"]
             status, payload = _request(
                 base + "/api/v1/operations", key=read_key
             )
