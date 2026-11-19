@@ -262,7 +262,12 @@ async def run_bot(
     )
     mapping_task = asyncio.create_task(periodic_mapping_updates())
     status_task = asyncio.create_task(publish_status_snapshots(context))
+    api_runner = None
     try:
+        if settings.api.enabled:
+            from api.http import start_embedded_api
+
+            api_runner = await start_embedded_api(context)
         with activate_app_context(context):
             health = await transport.check_health(bot)
             if health.healthy:
@@ -355,6 +360,8 @@ async def run_bot(
                 tasks_concurrency_limit=settings.telegram.max_concurrent_updates,
             )
     finally:
+        if api_runner is not None:
+            await api_runner.cleanup()
         mapping_task.cancel()
         status_task.cancel()
         await asyncio.gather(mapping_task, status_task, return_exceptions=True)
