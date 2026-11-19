@@ -753,6 +753,17 @@ class AniListSource:
             max_entries=1000, name="anilist_people"
         )
 
+    async def get_wire_details(self, identity: AnimeIdentity) -> dict[str, Any] | None:
+        """Return the original AniList Media node selected by BY_ID_QUERY."""
+        anilist_id = str(identity.get(SourceKey.ANILIST) or "").strip()
+        if not anilist_id.isdigit():
+            return None
+        data = await graphql_request(
+            BY_ID_QUERY, {"id": int(anilist_id)}, self._settings
+        )
+        raw = data.get("Media")
+        return raw if isinstance(raw, dict) else None
+
     async def get_details(self, identity: AnimeIdentity) -> AnimeRecord | None:
         anilist_id = str(identity.get(SourceKey.ANILIST) or "").strip()
         if anilist_id.isdigit():
