@@ -189,6 +189,18 @@ def build_parser() -> argparse.ArgumentParser:
     cp.add_parser("check")
     explain = cp.add_parser("explain")
     explain.add_argument("key")
+    inspect = cp.add_parser("get", help="Inspect setting source, redacting secrets.")
+    inspect.add_argument("key")
+    setter = cp.add_parser("set", help="Persist a validated setting value.")
+    setter.add_argument("key")
+    setter.add_argument("value", nargs="?", help="Not recommended for secrets.")
+    reader = setter.add_mutually_exclusive_group()
+    reader.add_argument("--stdin", action="store_true", help="Read value from stdin.")
+    reader.add_argument("--prompt", action="store_true", help="Prompt securely.")
+    setter.add_argument("--yes", action="store_true")
+    reset = cp.add_parser("reset", help="Remove one local override.")
+    reset.add_argument("key")
+    reset.add_argument("--yes", action="store_true")
 
     logs = commands.add_parser("logs", help="Tail launcher or application logs.")
     logs.add_argument("--lines", type=_positive, default=60)
@@ -702,16 +714,42 @@ class OperatorConsole:
         if name == "mapping":
             return await self._mapping(args)
         if name == "config":
+            from core.settings import RESOURCE_DIR
             from scripts.config_report import example_groups, validate_config
+            from scripts.console_config import inspect_key, update_key
 
             if args.config_action == "list":
-                return example_groups()
+                return example_groups(RESOURCE_DIR)
             if args.config_action == "explain":
                 matches = [
-                    name for name, keys in example_groups().items()
+                    group for group, keys in example_groups(RESOURCE_DIR).items()
                     if args.key in keys
                 ]
                 return {"key": args.key, "documented_in": matches}
+            if args.config_action == "get":
+                return inspect_key(args.key)
+            if args.config_action == "set":
+                if args.value is not None and (args.prompt or args.stdin):
+                    raise ConsoleError("Choose a value, --stdin or --prompt, not both.")
+                if args.stdin:
+                    value = sys.stdin.readline().rstrip("\n")
+                elif args.prompt or args.value is None:
+                    if not sys.stdin.isatty():
+                        raise ConsoleError(
+                            "Provide a value or --stdin when no TTY is available."
+                        )
+                    from getpass import getpass
+
+                    value = getpass("New value (hidden): ")
+                else:
+                    value = args.value
+                _confirmed(f"Change configuration key {args.key}?", yes=args.yes,
+                           interactive=self.interactive)
+                return update_key(args.key, value)
+            if args.config_action == "reset":
+                _confirmed(f"Reset configuration key {args.key}?", yes=args.yes,
+                           interactive=self.interactive)
+                return update_key(args.key, None)
             return {"valid": True, "unknown_keys": validate_config()}
         if name == "logs":
             from scripts.release_entry import runtime_home
