@@ -146,7 +146,7 @@ def build_parser() -> argparse.ArgumentParser:
     user.add_argument("user_id", type=_positive)
     language = commands.add_parser("language", help="Read/change a user's Telegram locale.")
     language.add_argument("user_id", type=_positive)
-    language.add_argument("locale", nargs="?", choices=("en", "ru", "ja", "de", "es", "fr", "it"))
+    language.add_argument("target_locale", nargs="?", choices=("en", "ru", "ja", "de", "es", "fr", "it"))
 
     ban = commands.add_parser("ban", help="Ban one Telegram user, optionally temporarily.")
     ban.add_argument("user_id", type=_positive)
@@ -255,7 +255,7 @@ class OperatorConsole:
         return anime
 
     async def _section(self, anime: Any, section: str, args: Any) -> Any:
-        from bots.telegram.card.views.sections import anime_sections, format_people
+        from bots.telegram.card.views.sections import anime_sections
         identity = anime.identity
         page = max(1, getattr(args, "page", 1))
         limit = min(100, max(1, getattr(args, "limit", 20)))
@@ -437,7 +437,11 @@ class OperatorConsole:
         if args.mapping_action == "list":
             return await asyncio.to_thread(list_mapping_overrides)
         if args.mapping_action == "history":
-            return (await asyncio.to_thread(list_mapping_override_history))[:args.limit]
+            return await asyncio.to_thread(
+                list_mapping_override_history,
+                limit=args.limit,
+                newest_first=True,
+            )
         if args.mapping_action == "update":
             _confirmed("Download/replace the local mapping catalog?", yes=args.yes,
                        interactive=self.interactive)
@@ -516,16 +520,11 @@ class OperatorConsole:
                 "ban": get_active_ban("telegram", user_id),
             }
         if name == "language":
-            if args.locale:
-                pass  # UI locale selection is independent of the target user's locale.
-            if args.locale is not None and args.user_id <= 0:
-                raise ConsoleError("User ID must be positive.")
-            if args.locale and hasattr(args, "target_locale"):
-                pass
-            # `language 123 ru` is the persistent Telegram user setting.
-            if getattr(args, "language", None):
-                return {"user_id": args.user_id, "locale":
-                        set_user_locale(args.user_id, args.language)}
+            if args.target_locale:
+                return {
+                    "user_id": args.user_id,
+                    "locale": set_user_locale(args.user_id, args.target_locale),
+                }
             return {"user_id": args.user_id, "locale": get_user_locale(args.user_id)}
         if name == "ban":
             _confirmed(f"Ban Telegram user {args.user_id}?", yes=args.yes,
@@ -541,9 +540,25 @@ class OperatorConsole:
         if name == "search":
             return await self._search(args)
         if name == "lookup":
-            return await self._search(
-                argparse.Namespace(query=[args.identity], source=None, limit=20)
+            value = args.identity.strip()
+            direct_id = _parse_source_id(value)
+            if direct_id is None:
+                raise ConsoleError("Expected a source-prefixed numeric ID.")
+            source, identifier = direct_id
+            results = await self.context.direct_lookup.lookup(
+                identifier, source_keys=(source,) if source else None
             )
+            self.candidates = list(results.items)
+            return {
+                "query": value,
+                "count": len(results.items),
+                "items": [
+                    {"index": index, "title": item.title,
+                     "external_ids": item.external_ids}
+                    for index, item in enumerate(results.items, 1)
+                ],
+                "errors": results.errors,
+            }
         if name == "anime":
             candidate = await self._find(" ".join(args.query))
             anime = await self._open(candidate)
