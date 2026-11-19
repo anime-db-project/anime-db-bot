@@ -237,11 +237,9 @@ def _confirmed(prompt: str, *, yes: bool, interactive: bool) -> None:
 
 
 def _parse_source_id(value: str) -> tuple[str | None, str] | None:
-    from bots.telegram.search.handlers import _parse_direct_query
+    from services.search.query_contract import parse_direct_id
 
-    # Use the same parser/alias normalization as Telegram.
-    supported = ("mal", "shikimori", "anilist", "kitsu", "anidb", "anisearch")
-    return _parse_direct_query(value, supported)
+    return parse_direct_id(value)
 
 
 class OperatorConsole:
@@ -392,7 +390,6 @@ class OperatorConsole:
         return anime
 
     async def _section(self, anime: Any, section: str, args: Any) -> Any:
-        from bots.telegram.card.views.sections import anime_sections
         identity = anime.identity
         page = max(1, getattr(args, "page", 1))
         limit = min(100, max(1, getattr(args, "limit", 20)))
@@ -400,6 +397,8 @@ class OperatorConsole:
         episode_number = max(1, getattr(args, "episode", 1))
 
         if section == "main":
+            from bots.telegram.card.views.sections import anime_sections
+
             return anime_sections(anime, locale=self.locale)["main"]
         if section == "titles":
             return {"titles": anime.titles, "synonyms": anime.synonyms,
@@ -500,17 +499,19 @@ class OperatorConsole:
     async def _search(self, args: Any) -> Any:
         query = " ".join(args.query)
         if args.source:
-            from bots.telegram.search.handlers import _parse_scope, _service_for
+            from services.search.query_contract import (
+                parse_scope, scoped_search_service,
+            )
 
-            keys = _parse_scope(args.source)
+            keys = parse_scope(args.source)
             if not keys:
                 raise ConsoleError(
                     "Invalid source. Use mal,anilist,shikimori,kitsu or all."
                 )
-            service = _service_for(
-                keys, self.context.search_service,
+            service = scoped_search_service(
+                keys,
+                self.context.search_service,
                 {str(key): val for key, val in self.context.search_provider_map.items()},
-                {},
             )
         else:
             service = self.context.search_service
