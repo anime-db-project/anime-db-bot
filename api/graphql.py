@@ -306,15 +306,20 @@ def _budget(
     if len(fragments) > 10 or len(document.definitions) > 14:
         raise GraphQLError("GraphQL document has too many definitions")
     fields = 0
+    root_fields = 0
 
     def walk(selection_set: gql_ast.SelectionSetNode, depth: int,
              active: frozenset[str]) -> None:
-        nonlocal fields
+        nonlocal fields, root_fields
         if depth > max_depth:
             raise GraphQLError("GraphQL depth limit exceeded")
         for selection in selection_set.selections:
             if isinstance(selection, gql_ast.FieldNode):
                 fields += 1
+                if depth == 1:
+                    root_fields += 1
+                    if root_fields > 8:
+                        raise GraphQLError("GraphQL root operation budget exceeded")
                 if fields > max_fields:
                     raise GraphQLError("GraphQL field budget exceeded")
                 if selection.selection_set:
