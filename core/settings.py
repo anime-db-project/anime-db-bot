@@ -8,6 +8,7 @@ from dataclasses import dataclass, field
 from functools import lru_cache
 from pathlib import Path
 from typing import Mapping, MutableMapping
+from urllib.parse import urlsplit
 
 from dotenv import dotenv_values
 
@@ -1262,12 +1263,39 @@ class AppSettings:
         if config.api.auth_mode not in {"apikey", "basic", "local"}:
             raise ValueError("API_AUTH_MODE must be apikey, basic or local")
         for origin in config.api.cors_origins:
-            if (
-                not (origin.startswith("https://") or origin.startswith("http://"))
-                or "*" in origin
-                or " " in origin
-            ):
+            try:
+                parsed = urlsplit(origin)
+                valid = (
+                    parsed.scheme in {"http", "https"}
+                    and bool(parsed.hostname)
+                    and parsed.username is None
+                    and parsed.password is None
+                    and parsed.path in {"", "/"}
+                    and not parsed.query
+                    and not parsed.fragment
+                    and "*" not in origin
+                    and not any(char.isspace() for char in origin)
+                )
+            except ValueError:
+                valid = False
+            if not valid:
                 raise ValueError("API_CORS_ORIGINS requires explicit http(s) origins")
+        if config.api.public_url:
+            try:
+                base = urlsplit(config.api.public_url)
+                valid_public = (
+                    base.scheme in {"http", "https"}
+                    and bool(base.hostname)
+                    and base.username is None
+                    and base.password is None
+                    and not base.query
+                    and not base.fragment
+                    and not any(char.isspace() for char in config.api.public_url)
+                )
+            except ValueError:
+                valid_public = False
+            if not valid_public:
+                raise ValueError("API_PUBLIC_URL must be an http(s) base URL")
         if config.http.max_keepalive_connections > config.http.max_connections:
             raise ValueError(
                 "HTTP_MAX_KEEPALIVE_CONNECTIONS cannot exceed HTTP_MAX_CONNECTIONS"
