@@ -24,6 +24,7 @@ ENV_GROUPS = (
     "telegram.env", "sources.env", "timestamps.env", "rate-limits.env",
     "mappings.env", "storage.env", "logging.env", "runtime.env",
     "lifecycle.env",
+    "api.env",
 )
 PROFILE_FILES = (
     "telegram.toml", "shikimori.toml", "mal.toml", "anilist.toml",
@@ -176,6 +177,8 @@ def _load_external_env(path: str) -> None:
 def _set_cli_overrides(args: argparse.Namespace) -> None:
     values = {
         "LOG_LEVEL": args.log_level,
+        "API_HOST": args.api_host,
+        "API_PORT": args.api_port,
         "BOT_ON_FAILURE": args.on_failure,
         "BOT_ON_CLEAN_EXIT": args.on_clean_exit,
         "BOT_RESTART_MAX_ATTEMPTS": args.restart_limit,
@@ -198,7 +201,7 @@ def build_parser() -> argparse.ArgumentParser:
         "command", nargs="?", default="run",
         choices=(
             "run", "start", "stop", "restart", "status",
-            "init", "check", "doctor", "console", "cli",
+            "init", "check", "doctor", "console", "cli", "api",
         ),
         help="Action; default: run in foreground (double-click friendly).",
     )
@@ -211,6 +214,8 @@ def build_parser() -> argparse.ArgumentParser:
         help="Additional dotenv file; real environment and explicit flags win.",
     )
     parser.add_argument("--log-level", metavar="LEVEL")
+    parser.add_argument("--api-host", help="Override API_HOST for this process.")
+    parser.add_argument("--api-port", type=int, help="Override API_PORT.")
     parser.add_argument("--on-failure", choices=("stop", "restart"))
     parser.add_argument("--on-clean-exit", choices=("stop", "restart"))
     parser.add_argument("--restart-limit", type=int, metavar="COUNT")
@@ -383,6 +388,11 @@ def main(argv: list[str] | None = None) -> int:
                 info(f"Created config templates in {home / '.env.d'}")
         load_project_environment()
         settings = AppSettings.from_env(os.environ)
+        if args.command == "api":
+            from api.http import run_api
+
+            run_api(settings)
+            return 0
         if args.command in {"cli", "console"}:
             if args.command == "console" and console_tokens:
                 return error("Use console without subcommands; enter commands at the prompt.")
