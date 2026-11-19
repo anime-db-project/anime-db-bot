@@ -20,6 +20,7 @@ ENV_CONFIG_FILES = (
     "storage.env",
     "logging.env",
     "runtime.env",
+    "lifecycle.env",
 )
 _ADMIN_SPLIT_RE = re.compile(r"[\s,;]+")
 _ENV_KEY_RE = re.compile(r"^[ \t]*(?:export[ \t]+)?([A-Za-z_][A-Za-z0-9_]*)[ \t]*=")
@@ -203,6 +204,26 @@ class LoggingSettings:
     max_bytes: int
     backups: int
     retention_days: int = 30
+
+
+@dataclass(frozen=True, slots=True)
+class LifecycleSettings:
+    """Child-process exit policy; graceful operator shutdown is always final."""
+
+    on_failure: str = "stop"
+    on_clean_exit: str = "stop"
+    restart_max_attempts: int = 5
+    restart_delay_seconds: float = 5.0
+    restart_max_delay_seconds: float = 60.0
+    restart_reset_after_seconds: float = 300.0
+    shutdown_timeout_seconds: float = 10.0
+
+
+def _lifecycle_action(env: Mapping[str, str], name: str) -> str:
+    value = _raw(env, name, "stop").casefold()
+    if value not in {"stop", "restart"}:
+        raise ValueError(f"{name} must be stop or restart")
+    return value
 
 
 @dataclass(frozen=True, slots=True)
@@ -475,6 +496,7 @@ class AppSettings:
     rate_limits: RateLimitSettings
     cache: CacheBackendSettings = field(default_factory=CacheBackendSettings)
     http: HttpSettings = field(default_factory=HttpSettings)
+    lifecycle: LifecycleSettings = field(default_factory=LifecycleSettings)
 
     @classmethod
     def from_env(cls, env: Mapping[str, str] | None = None) -> "AppSettings":
@@ -560,6 +582,25 @@ class AppSettings:
             raise ValueError("REDIS_URL is required when CACHE_BACKEND=redis")
 
         config = cls(
+            lifecycle=LifecycleSettings(
+                on_failure=_lifecycle_action(values, "BOT_ON_FAILURE"),
+                on_clean_exit=_lifecycle_action(values, "BOT_ON_CLEAN_EXIT"),
+                restart_max_attempts=_strict_int(
+                    values, "BOT_RESTART_MAX_ATTEMPTS", 5, 0, 100
+                ),
+                restart_delay_seconds=_strict_float(
+                    values, "BOT_RESTART_DELAY_SECONDS", 5.0, 0.0, 3600.0
+                ),
+                restart_max_delay_seconds=_strict_float(
+                    values, "BOT_RESTART_MAX_DELAY_SECONDS", 60.0, 0.0, 3600.0
+                ),
+                restart_reset_after_seconds=_strict_float(
+                    values, "BOT_RESTART_RESET_AFTER_SECONDS", 300.0, 1.0, 86400.0
+                ),
+                shutdown_timeout_seconds=_strict_float(
+                    values, "BOT_SHUTDOWN_TIMEOUT_SECONDS", 10.0, 0.1, 300.0
+                ),
+            ),
             logging=LoggingSettings(
                 level=(_raw(values, "LOG_LEVEL", "INFO") or "INFO").upper(),
                 structured=_bool(values, "LOG_STRUCTURED", True),
