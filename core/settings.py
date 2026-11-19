@@ -277,11 +277,15 @@ class ApiSettings:
                 "API_BASIC_USERNAME and 24+ character API_BASIC_PASSWORD are required"
             )
         if self.auth_mode == "local" and self.host not in (
-            "127.0.0.1", "::1", "localhost"
+            "127.0.0.1",
+            "::1",
+            "localhost",
         ):
             raise ValueError("API_AUTH_MODE=local requires a loopback API_HOST")
-        for name, key in (("API_READ_KEY", self.read_key),
-                          ("API_ADMIN_KEY", self.admin_key)):
+        for name, key in (
+            ("API_READ_KEY", self.read_key),
+            ("API_ADMIN_KEY", self.admin_key),
+        ):
             if key and len(key) < 24:
                 raise ValueError(f"{name} must be at least 24 characters long")
         if self.read_key and self.admin_key and self.read_key == self.admin_key:
@@ -664,9 +668,7 @@ class AppSettings:
                 requests_per_minute=_strict_int(
                     values, "API_REQUESTS_PER_MINUTE", 90, 1, 10000
                 ),
-                max_concurrency=_strict_int(
-                    values, "API_MAX_CONCURRENCY", 12, 1, 256
-                ),
+                max_concurrency=_strict_int(values, "API_MAX_CONCURRENCY", 12, 1, 256),
                 max_body_bytes=_strict_int(
                     values, "API_MAX_BODY_BYTES", 4194304, 1024, 16777216
                 ),
@@ -679,9 +681,7 @@ class AppSettings:
                 graphql_max_fields=_strict_int(
                     values, "API_GRAPHQL_MAX_FIELDS", 60, 1, 500
                 ),
-                graphql_introspection=_bool(
-                    values, "API_GRAPHQL_INTROSPECTION", True
-                ),
+                graphql_introspection=_bool(values, "API_GRAPHQL_INTROSPECTION", True),
             ),
             lifecycle=LifecycleSettings(
                 on_failure=_lifecycle_action(values, "BOT_ON_FAILURE"),
@@ -1262,12 +1262,12 @@ class AppSettings:
         if config.api.auth_mode not in {"apikey", "basic", "local"}:
             raise ValueError("API_AUTH_MODE must be apikey, basic or local")
         for origin in config.api.cors_origins:
-            if not (
-                origin.startswith("https://") or origin.startswith("http://")
-            ) or "*" in origin or " " in origin:
-                raise ValueError(
-                    "API_CORS_ORIGINS requires explicit http(s) origins"
-                )
+            if (
+                not (origin.startswith("https://") or origin.startswith("http://"))
+                or "*" in origin
+                or " " in origin
+            ):
+                raise ValueError("API_CORS_ORIGINS requires explicit http(s) origins")
         if config.http.max_keepalive_connections > config.http.max_connections:
             raise ValueError(
                 "HTTP_MAX_KEEPALIVE_CONNECTIONS cannot exceed HTTP_MAX_CONNECTIONS"
