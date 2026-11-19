@@ -252,7 +252,7 @@ class AppSettingsTests(unittest.TestCase):
                     encoding="utf-8",
                 )
             values = project_env_values(root)
-        self.assertEqual(len(values), 214)
+        self.assertEqual(len(values), 232)
         for key in (
             "BOT_ON_FAILURE",
             "BOT_ON_CLEAN_EXIT",
@@ -261,6 +261,10 @@ class AppSettingsTests(unittest.TestCase):
             "BOT_RESTART_MAX_DELAY_SECONDS",
             "BOT_RESTART_RESET_AFTER_SECONDS",
             "BOT_SHUTDOWN_TIMEOUT_SECONDS",
+            "API_ENABLED",
+            "API_AUTH_MODE",
+            "API_READ_KEY",
+            "API_ADMIN_KEY",
         ):
             self.assertIn(key, values)
         self.assertIn("RICH_MEDIA_MAX_LOCAL_DELIVERIES", values)
