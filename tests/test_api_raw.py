@@ -111,7 +111,15 @@ class RawSourceContractTests(unittest.IsolatedAsyncioTestCase):
         self.assertFalse(result["aggregated"])
         self.assertEqual(result["sources"]["mal"]["data"]["source_id"], "1")
         self.assertEqual(result["sources"]["mal"]["data"]["source"], "mal")
+        self.context.sources[0].get_details.assert_not_awaited()
         self.context.sources[1].get_details.assert_not_awaited()
+
+    async def test_identity_verification_is_opt_in(self) -> None:
+        result = await execute_raw(
+            self.context, "id", {"source": "mal", "id": "1", "verify": True}
+        )
+        self.assertTrue(result["sources"]["mal"]["data"]["exists"])
+        self.context.sources[0].get_details.assert_awaited_once()
 
     async def test_all_sources_return_separate_records(self) -> None:
         result = await execute_raw(
