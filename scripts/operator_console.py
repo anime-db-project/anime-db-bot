@@ -245,7 +245,19 @@ class OperatorConsole:
         """Support regular CLI commands and familiar Telegram slash syntax."""
         if not tokens:
             return await self.execute(parser.parse_args(["help"]))
-        command, *rest = tokens
+        # Keep global options before a familiar Telegram slash alias.
+        global_options: list[str] = []
+        args_left = list(tokens)
+        while args_left:
+            if args_left[0] == "--json":
+                global_options.append(args_left.pop(0))
+            elif args_left[0] == "--locale" and len(args_left) >= 2:
+                global_options.extend((args_left.pop(0), args_left.pop(0)))
+            else:
+                break
+        if not args_left:
+            return await self.execute(parser.parse_args([*global_options, "help"]))
+        command, *rest = args_left
         command = command.casefold()
         if command in {"cancel", "/cancel"}:
             self.candidates.clear()
@@ -319,13 +331,19 @@ class OperatorConsole:
             if not rest:
                 raise ConsoleError("Usage: /ban USER_ID [SECONDS] [REASON]")
             user, *remaining = rest
+            approved = "--yes" in remaining
+            remaining = [part for part in remaining if part != "--yes"]
             tokens = ["ban", user]
             if remaining and remaining[0].isdecimal():
                 tokens.extend(["--seconds", remaining.pop(0)])
             if remaining:
                 tokens.extend(["--reason", " ".join(remaining)])
+            if approved:
+                tokens.append("--yes")
         elif command in aliases:
             tokens = [aliases[command], *rest]
+        if global_options:
+            tokens = [*global_options, *tokens]
         return await self.execute(parser.parse_args(tokens))
 
     async def _find(self, query: str) -> SearchCandidate:
