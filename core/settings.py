@@ -249,6 +249,12 @@ class ApiSettings:
     enabled: bool = False
     host: str = "127.0.0.1"
     port: int = 8181
+    public_url: str = ""
+    trust_proxy: bool = False
+    auth_mode: str = "apikey"
+    basic_username: str = ""
+    basic_password: str = ""
+    cors_origins: tuple[str, ...] = ()
     read_key: str = ""
     admin_key: str = ""
     requests_per_minute: int = 90
@@ -260,10 +266,20 @@ class ApiSettings:
     graphql_introspection: bool = True
 
     def validate_server(self) -> None:
-        if not (self.read_key or self.admin_key):
+        if self.auth_mode == "apikey" and not (self.read_key or self.admin_key):
             raise ValueError(
                 "API_READ_KEY or API_ADMIN_KEY is required before starting the API"
             )
+        if self.auth_mode == "basic" and (
+            not self.basic_username or len(self.basic_password) < 24
+        ):
+            raise ValueError(
+                "API_BASIC_USERNAME and 24+ character API_BASIC_PASSWORD are required"
+            )
+        if self.auth_mode == "local" and self.host not in (
+            "127.0.0.1", "::1", "localhost"
+        ):
+            raise ValueError("API_AUTH_MODE=local requires a loopback API_HOST")
         for name, key in (("API_READ_KEY", self.read_key),
                           ("API_ADMIN_KEY", self.admin_key)):
             if key and len(key) < 24:
@@ -633,6 +649,16 @@ class AppSettings:
                 enabled=_bool(values, "API_ENABLED", False),
                 host=_raw(values, "API_HOST", "127.0.0.1"),
                 port=_strict_int(values, "API_PORT", 8181, 1, 65535),
+                public_url=_raw(values, "API_PUBLIC_URL"),
+                trust_proxy=_bool(values, "API_TRUST_PROXY", False),
+                auth_mode=_raw(values, "API_AUTH_MODE", "apikey").casefold(),
+                basic_username=_raw(values, "API_BASIC_USERNAME"),
+                basic_password=_raw(values, "API_BASIC_PASSWORD"),
+                cors_origins=tuple(
+                    origin.strip().rstrip("/")
+                    for origin in _raw(values, "API_CORS_ORIGINS").split(",")
+                    if origin.strip()
+                ),
                 read_key=_raw(values, "API_READ_KEY"),
                 admin_key=_raw(values, "API_ADMIN_KEY"),
                 requests_per_minute=_strict_int(
@@ -642,7 +668,7 @@ class AppSettings:
                     values, "API_MAX_CONCURRENCY", 12, 1, 256
                 ),
                 max_body_bytes=_strict_int(
-                    values, "API_MAX_BODY_BYTES", 65536, 1024, 1048576
+                    values, "API_MAX_BODY_BYTES", 4194304, 1024, 16777216
                 ),
                 timeout_seconds=_strict_float(
                     values, "API_TIMEOUT_SECONDS", 30.0, 1.0, 300.0
@@ -1233,6 +1259,15 @@ class AppSettings:
                 upstream_per_operation=upstream_per_operation,
             ),
         )
+        if config.api.auth_mode not in {"apikey", "basic", "local"}:
+            raise ValueError("API_AUTH_MODE must be apikey, basic or local")
+        for origin in config.api.cors_origins:
+            if not (
+                origin.startswith("https://") or origin.startswith("http://")
+            ) or "*" in origin or " " in origin:
+                raise ValueError(
+                    "API_CORS_ORIGINS requires explicit http(s) origins"
+                )
         if config.http.max_keepalive_connections > config.http.max_connections:
             raise ValueError(
                 "HTTP_MAX_KEEPALIVE_CONNECTIONS cannot exceed HTTP_MAX_CONNECTIONS"
