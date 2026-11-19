@@ -6,6 +6,8 @@ from PyInstaller.utils.hooks import collect_data_files, collect_submodules
 
 root = Path.cwd()
 data = collect_data_files("localization")
+# Bundle source metadata needed by the runtime ENV inspector in frozen builds.
+data.append((str(root / "core" / "settings.py"), "core"))
 data.extend(
     (str(root / path), path)
     for path in (
