@@ -1,0 +1,17 @@
+# Standalone bot image (the existing compose.yml is dedicated to local Jikan).
+# Set BOT_TOKEN in the shell or an untracked .env file before deploying.
+services:
+  anime-db-bot:
+    image: ghcr.io/anime-db-project/anime-db-bot:${ANIME_DB_BOT_TAG:-latest}
+    container_name: anime-db-bot
+    restart: unless-stopped
+    environment:
+      BOT_TOKEN: ${BOT_TOKEN:?Set BOT_TOKEN first}
+      ANIME_DB_BOT_HOME: /data
+      PYTHONUNBUFFERED: "1"
+    volumes:
+      - anime-db-bot-data:/data
+    command: ["run"]
+
+volumes:
+  anime-db-bot-data:
