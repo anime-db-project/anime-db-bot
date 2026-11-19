@@ -6,6 +6,7 @@ No subcommand runs in the foreground, including double-clicked executables.
 from __future__ import annotations
 
 import argparse
+import asyncio
 import json
 import os
 from pathlib import Path
@@ -194,7 +195,10 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "command", nargs="?", default="run",
-        choices=("run", "start", "stop", "restart", "status", "init", "check", "doctor"),
+        choices=(
+            "run", "start", "stop", "restart", "status",
+            "init", "check", "doctor", "console", "cli",
+        ),
         help="Action; default: run in foreground (double-click friendly).",
     )
     parser.add_argument(
@@ -330,7 +334,9 @@ def _stop_background(home: Path, *, timeout: float = 15.0) -> int:
 def main(argv: list[str] | None = None) -> int:
     arguments = list(sys.argv[1:] if argv is None else argv)
     parser = build_parser()
-    args = parser.parse_args(arguments)
+    args, console_tokens = parser.parse_known_args(arguments)
+    if console_tokens and args.command not in {"cli", "console"}:
+        parser.error("Unrecognized arguments: " + " ".join(console_tokens))
     home = runtime_home(args.home)
     os.environ["ANIME_DB_BOT_HOME"] = str(home)
 
@@ -350,11 +356,22 @@ def main(argv: list[str] | None = None) -> int:
             made = _copy_examples(home, force=True)
             info(f"Config {'initialized' if made else 'already exists'}: {home}")
             return 0
-        if args.command in {"run", "start", "restart"} and not args.worker:
+        if args.command in {"run", "start", "restart", "cli", "console"} and not args.worker:
             if _copy_examples(home):
                 info(f"Created config templates in {home / '.env.d'}")
         load_project_environment()
         settings = AppSettings.from_env(os.environ)
+        if args.command in {"cli", "console"}:
+            if args.command == "console" and console_tokens:
+                return error("Use console without subcommands; enter commands at the prompt.")
+            from scripts.operator_console import run_console
+
+            return asyncio.run(
+                run_console(
+                    console_tokens,
+                    interactive=args.command == "console",
+                )
+            )
         if args.command == "doctor":
             info(f"Version: {VERSION}")
             info(f"OS: {platform.platform()} [{platform.machine()}]")
