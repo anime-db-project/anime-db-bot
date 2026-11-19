@@ -869,12 +869,29 @@ async def run_console(
     from core.settings import get_settings
     from services.runtime.app_context import AppContext, activate_app_context
 
+    from contextlib import nullcontext
+    from types import SimpleNamespace
+
     parser = build_parser()
     settings = get_settings()
-    context = AppContext.create(settings)
+    words = list(tokens or [])
+    command_words = list(words)
+    while command_words and command_words[0] in {"--json", "--locale"}:
+        option = command_words.pop(0)
+        if option == "--locale" and command_words:
+            command_words.pop(0)
+    command = command_words[0].casefold() if command_words else "help"
+    lightweight = not interactive and command in {
+        "help", "ping", "status", "config", "logs", "mapping", "index",
+        "settings", "/start", "/ping", "/status", "/mapping_overrides",
+        "/mapping_history", "/settings",
+    }
+    context = SimpleNamespace(settings=settings) if lightweight else AppContext.create(
+        settings
+    )
     session = OperatorConsole(context, interactive=interactive)
     try:
-        with activate_app_context(context):
+        with nullcontext() if lightweight else activate_app_context(context):
             if not interactive:
                 try:
                     words = tokens or ["help"]
@@ -913,7 +930,8 @@ async def run_console(
                         file=sys.stderr,
                     )
     finally:
-        await context.aclose()
+        if not lightweight:
+            await context.aclose()
 
 
 def main(argv: list[str] | None = None) -> int:
