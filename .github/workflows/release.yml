@@ -1,0 +1,272 @@
+name: Build and publish releases
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+    paths:
+      - ".github/workflows/release.yml"
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Release tag (for example v0.2.0). Leave blank for v0.1.0."
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: anime-db-bot-release-pipeline
+  cancel-in-progress: false
+
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      publish: ${{ steps.plan.outputs.publish }}
+      tag: ${{ steps.plan.outputs.tag }}
+      version: ${{ steps.plan.outputs.version }}
+    steps:
+      - name: Select release tag and avoid duplicate automatic releases
+        id: plan
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EVENT_NAME: ${{ github.event_name }}
+          REF_TYPE: ${{ github.ref_type }}
+          REF_NAME: ${{ github.ref_name }}
+          REQUESTED_VERSION: ${{ inputs.version }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ "$REF_TYPE" == tag ]]; then
+            tag="$REF_NAME"
+          elif [[ -n "$REQUESTED_VERSION" ]]; then
+            tag="$REQUESTED_VERSION"
+          else
+            tag="v0.1.0"
+          fi
+          if [[ ! "$tag" =~ ^v[0-9]+\.[0-9]+\.[0-9]+([.-][a-zA-Z0-9.-]+)?$ ]]; then
+            echo "::error::Release tag must use vMAJOR.MINOR.PATCH."
+            exit 1
+          fi
+          publish=true
+          if [[ "$EVENT_NAME" == push && "$REF_TYPE" == branch ]] && \
+             gh release view "$tag" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            publish=false
+            echo "Bootstrap release $tag already exists; skipping."
+          fi
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          echo "version=${tag#v}" >> "$GITHUB_OUTPUT"
+          echo "publish=$publish" >> "$GITHUB_OUTPUT"
+          echo "Publishing: $publish, tag: $tag"
+
+  verify:
+    needs: prepare
+    if: needs.prepare.outputs.publish == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: Install runtime and test dependencies
+        run: |
+          python -m pip install -r requirements.lock -r requirements-dev.txt
+          python -m pip check
+      - name: Run full unit tests before building any release artifacts
+        run: python -m unittest discover -s tests -v
+      - name: Verify configuration and packaging code is syntactically valid
+        run: |
+          python -m compileall -q bots core localization mappings search services sources scripts
+          python -m scripts.release_entry --version
+          python -m scripts.release_entry doctor
+
+  binaries:
+    needs: [prepare, verify]
+    if: needs.prepare.outputs.publish == 'true'
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-22.04
+            platform: linux
+            arch: x64
+          - os: ubuntu-24.04-arm
+            platform: linux
+            arch: arm64
+          - os: windows-latest
+            platform: windows
+            arch: x64
+          - os: macos-15-intel
+            platform: macos
+            arch: x64
+          - os: macos-15
+            platform: macos
+            arch: arm64
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 60
+    env:
+      RELEASE_VERSION: ${{ needs.prepare.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: Install all runtime backends and packaging dependencies
+        shell: bash
+        run: |
+          python -m pip install -r requirements.lock -r requirements-backends.txt
+          python -m pip install "pyinstaller>=6.17,<7"
+          python -m pip check
+      - name: Embed immutable release version
+        shell: bash
+        run: |
+          python -c 'import os,pathlib; pathlib.Path("scripts/build_version.py").write_text("VERSION = " + repr(os.environ["RELEASE_VERSION"]) + "\n", encoding="utf-8")'
+      - name: Build fast onedir executable
+        shell: bash
+        run: python -m PyInstaller --noconfirm --clean build/anime_db_bot.spec
+      - name: Smoke test native executable and bundled resources
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ "$RUNNER_OS" == Windows ]]; then
+            exe="./dist/anime-db-bot/anime-db-bot.exe"
+          else
+            exe="./dist/anime-db-bot/anime-db-bot"
+          fi
+          "$exe" --version
+          "$exe" doctor
+          "$exe" init --home "$RUNNER_TEMP/anime-db-bot-smoke"
+          "$exe" check --home "$RUNNER_TEMP/anime-db-bot-smoke"
+          test -f "$RUNNER_TEMP/anime-db-bot-smoke/.env.d/telegram.env"
+      - name: Create portable archive with clickable launchers
+        shell: bash
+        run: |
+          python scripts/package_release.py --platform ${{ matrix.platform }} --arch ${{ matrix.arch }} --version "$RELEASE_VERSION"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: native-${{ matrix.platform }}-${{ matrix.arch }}
+          path: release/*
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 30
+
+  docker:
+    needs: [prepare, verify]
+    if: needs.prepare.outputs.publish == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Normalize GHCR repository
+        id: image
+        shell: bash
+        run: echo "name=ghcr.io/${GITHUB_REPOSITORY,,}" >> "$GITHUB_OUTPUT"
+      - uses: docker/setup-qemu-action@v3
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Publish linux/amd64 and linux/arm64 images
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          platforms: linux/amd64,linux/arm64
+          tags: |
+            ${{ steps.image.outputs.name }}:${{ needs.prepare.outputs.version }}
+            ${{ steps.image.outputs.name }}:latest
+          build-args: |
+            APP_VERSION=${{ needs.prepare.outputs.version }}
+          labels: |
+            org.opencontainers.image.version=${{ needs.prepare.outputs.version }}
+            org.opencontainers.image.revision=${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+      - name: Pull published image and check Docker startup
+        shell: bash
+        env:
+          IMAGE: ${{ steps.image.outputs.name }}
+          VERSION: ${{ needs.prepare.outputs.version }}
+        run: |
+          docker pull "$IMAGE:$VERSION"
+          docker run --rm "$IMAGE:$VERSION" --version
+          docker run --rm "$IMAGE:$VERSION" doctor
+          docker run --rm "$IMAGE:$VERSION" check
+
+  publish:
+    needs: [prepare, verify, binaries, docker]
+    if: needs.prepare.outputs.publish == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: native-*
+          path: release
+          merge-multiple: true
+      - name: Verify all five native platforms are present
+        shell: bash
+        env:
+          VERSION: ${{ needs.prepare.outputs.version }}
+        run: |
+          set -euo pipefail
+          for file in \
+            "anime-db-bot-v$VERSION-linux-x64.tar.gz" \
+            "anime-db-bot-v$VERSION-linux-arm64.tar.gz" \
+            "anime-db-bot-v$VERSION-windows-x64.zip" \
+            "anime-db-bot-v$VERSION-macos-x64.tar.gz" \
+            "anime-db-bot-v$VERSION-macos-arm64.tar.gz"; do
+            test -s "release/$file" || { echo "::error::Missing $file"; exit 1; }
+          done
+          (cd release && sha256sum anime-db-bot-* > SHA256SUMS.txt)
+      - name: Describe release contents
+        shell: bash
+        env:
+          TAG: ${{ needs.prepare.outputs.tag }}
+          VERSION: ${{ needs.prepare.outputs.version }}
+        run: |
+          cat > release-notes.md <<EOF
+          # anime-db-bot $TAG
+
+          **Production artifacts**, not source-only or placeholder releases:
+          - Portable Windows x64 executable (ZIP, direct double-click or CLI).
+          - Portable Linux x64 and arm64 executables (TAR.GZ, CLI or supported file manager).
+          - Portable macOS Intel and Apple Silicon executables (TAR.GZ, Run.command opens Terminal).
+          - Multi-architecture Docker image: \`ghcr.io/anime-db-project/anime-db-bot:$VERSION\` and \`:latest\` (amd64/arm64).
+          - SHA256 checksums for all release archives.
+
+          Binary commands: \`run\`, \`start\`, \`stop\`, \`restart\`, \`status\`, \`init\`, \`check\`, \`doctor\`; pass \`--help\` for flags.
+          Default launch uses an interactive foreground console; \`start\` runs in the background.
+          The first launch creates configuration templates; set \`BOT_TOKEN\` to enable Telegram polling.
+          Data, runtime cache and secrets remain outside bundled libraries.
+          The published executables are unsigned/not notarized; macOS Gatekeeper may require approval.
+
+          Docker example: \`docker run -d --name anime-db-bot --restart unless-stopped -e BOT_TOKEN=<token> -v anime-db-bot-data:/data ghcr.io/anime-db-project/anime-db-bot:$VERSION\`.
+
+          Review [runtime setup](https://github.com/anime-db-project/anime-db-bot/blob/main/docs/releases.md) and [configuration](https://github.com/anime-db-project/anime-db-bot/blob/main/docs/configuration.md).
+          EOF
+      - name: Create or update release with verified artifacts only
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ needs.prepare.outputs.tag }}
+        run: |
+          set -euo pipefail
+          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release upload "$TAG" release/* --repo "$GITHUB_REPOSITORY" --clobber
+            gh release edit "$TAG" --repo "$GITHUB_REPOSITORY" --notes-file release-notes.md --latest
+          else
+            gh release create "$TAG" release/* --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --title "anime-db-bot $TAG" --notes-file release-notes.md --latest
+          fi
