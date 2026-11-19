@@ -27,6 +27,7 @@ ENV_FILES = (
     "storage.env",
     "logging.env",
     "runtime.env",
+    "lifecycle.env",
 )
 PROFILE_FILES = (
     "telegram.toml",
@@ -352,7 +353,9 @@ def run_bot(*, no_jikan: bool = False) -> int:
         ensure_jikan()
     python = venv_python()
     _info(f"Starting {BOT_MODULE} in the foreground on {platform.system()}.")
-    process = subprocess.run([str(python), "-m", BOT_MODULE], cwd=ROOT_DIR, check=False)
+    process = subprocess.run(
+        [str(python), "-m", "scripts.lifecycle"], cwd=ROOT_DIR, check=False
+    )
     return int(process.returncode)
 
 
@@ -428,7 +431,7 @@ def start_bot(*, no_jikan: bool = False) -> int:
                 | getattr(subprocess, "DETACHED_PROCESS", 0)
             )
             process = subprocess.Popen(
-                [str(python), "-m", BOT_MODULE],
+                [str(python), "-m", "scripts.lifecycle"],
                 cwd=ROOT_DIR,
                 stdin=subprocess.DEVNULL,
                 stdout=log_file,
@@ -439,7 +442,7 @@ def start_bot(*, no_jikan: bool = False) -> int:
             )
         else:
             process = subprocess.Popen(
-                [str(python), "-m", BOT_MODULE],
+                [str(python), "-m", "scripts.lifecycle"],
                 cwd=ROOT_DIR,
                 stdin=subprocess.DEVNULL,
                 stdout=log_file,
@@ -455,7 +458,7 @@ def start_bot(*, no_jikan: bool = False) -> int:
         return _fail(
             f"Bot exited immediately with code {process.returncode}; see {LAUNCHER_LOG}."
         )
-    _info(f"Bot started in the background (PID {process.pid}).")
+    _info(f"Bot supervisor started in the background (PID {process.pid}).")
     _info(f"Launcher output: {LAUNCHER_LOG}")
     return 0
 
