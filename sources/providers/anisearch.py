@@ -659,6 +659,10 @@ class AniSearchSource:
             return None
         return await _load_item(source_id, settings=self._settings)
 
+    async def get_wire_details(self, identity: AnimeIdentity) -> dict[str, Any] | None:
+        """Return the cached unmodified AniSearch /full result object."""
+        return await self._payload(identity)
+
     async def get_details(self, identity: AnimeIdentity) -> AnimeRecord | None:
         # AniSearch places id/full and the individual heavy endpoints in the same
         # 10-second public throttle group. Fetching one cached /full payload here
