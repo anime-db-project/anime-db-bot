@@ -25,6 +25,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends tini ca-certifi
     && chown -R anime:anime /data
 COPY --from=builder /opt/venv /opt/venv
 WORKDIR /app
+COPY api/ api/
 COPY bots/ bots/
 COPY core/ core/
 COPY localization/ localization/
@@ -37,9 +38,10 @@ COPY .env.example.d/ .env.example.d/
 COPY .proxies.example.d/ .proxies.example.d/
 COPY .user-agents.example.d/ .user-agents.example.d/
 USER anime
+EXPOSE 8181
 VOLUME ["/data"]
 STOPSIGNAL SIGTERM
 HEALTHCHECK --interval=60s --timeout=10s --start-period=30s --retries=3 \
-    CMD ["python", "-m", "scripts.release_entry", "status"]
+    CMD ["python", "-m", "scripts.docker_health"]
 ENTRYPOINT ["/usr/bin/tini", "--", "python", "-m", "scripts.release_entry"]
 CMD ["run"]
