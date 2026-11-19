@@ -271,6 +271,42 @@ async def _execute_image(
         return await console.execute(parsed)
 
 
+def _main_metadata(anime: Any) -> dict[str, Any]:
+    """Expose lightweight structured metadata, not Telegram UI markup.
+
+    Confirmed identity edges remain internal except IDs associated with
+    metadata sources that actually contributed to the card.
+    """
+    data = _serializable(anime)
+    source_names = " ".join(data.get("sources") or []).casefold()
+    supported = {
+        "mal": ("myanimelist", "mal", "jikan"),
+        "shikimori": ("shikimori",),
+        "anilist": ("anilist",),
+        "kitsu": ("kitsu",),
+        "anidb": ("anidb",),
+        "anisearch": ("anisearch",),
+    }
+    visible = {
+        key for key, aliases in supported.items()
+        if any(alias in source_names for alias in aliases)
+    }
+    data["external_ids"] = {
+        key: value
+        for key, value in data.get("external_ids", {}).items()
+        if key in visible
+    }
+    # Media/rosters and heavy source fields are retrieved only by explicit
+    # section requests, even if an upstream happened to include them early.
+    omit = {
+        "staff", "voices", "characters",
+        "staff_by_source", "voices_by_source", "characters_by_source",
+        "screenshots_by_source", "popularity_by_source", "descriptions",
+        "backgrounds_by_source", "background",
+    }
+    return {key: value for key, value in data.items() if key not in omit}
+
+
 async def execute_operation(
     context: Any, name: str, payload: Mapping[str, Any] | None,
     *, role: str,
@@ -297,6 +333,12 @@ async def execute_operation(
                 result = await _execute_image(
                     console, name, data, tokens, context.settings
                 )
+            elif name == "anime" and data.get("section", "main") == "main":
+                candidate = await console._find(
+                    _string(data, "query", required=True)
+                )
+                anime = await console._open(candidate)
+                result = _main_metadata(anime)
             else:
                 parsed = build_parser().parse_args(tokens)
                 result = await console.execute(parsed)
