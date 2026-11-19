@@ -3,6 +3,7 @@ from __future__ import annotations
 import math
 import os
 import re
+import sys
 from dataclasses import dataclass, field
 from functools import lru_cache
 from pathlib import Path
@@ -10,7 +11,17 @@ from typing import Mapping, MutableMapping
 
 from dotenv import dotenv_values
 
-ROOT_DIR = Path(__file__).resolve().parents[1]
+# Frozen releases ship read-only resources, while state and secrets are writable.
+# ANIME_DB_BOT_HOME also allows Docker to persist state outside /app.
+RESOURCE_DIR = Path(getattr(sys, "_MEIPASS", Path(__file__).resolve().parents[1]))
+ROOT_DIR = Path(
+    os.environ.get("ANIME_DB_BOT_HOME")
+    or (
+        Path(sys.executable).resolve().parent
+        if getattr(sys, "frozen", False)
+        else RESOURCE_DIR
+    )
+).expanduser().resolve()
 ENV_CONFIG_FILES = (
     "telegram.env",
     "sources.env",
