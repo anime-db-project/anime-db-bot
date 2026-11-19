@@ -392,7 +392,9 @@ class RelatedAnimeUiTests(unittest.TestCase):
 
     def test_main_navigation_uses_inline_discovery_buttons(self) -> None:
         anime = AggregatedAnime(title="Test", external_ids={"mal": "1"})
-        keyboard = navigation_keyboard("token", anime, "main", 0, 1, locale="ru")
+        keyboard = navigation_keyboard(
+            "token", anime, "main", 0, 1, locale="ru", show_related=True
+        )
         self.assertIsNotNone(keyboard)
         assert keyboard is not None
         callbacks = [
@@ -407,7 +409,7 @@ class RelatedAnimeUiTests(unittest.TestCase):
         )
 
     def test_fallback_main_keyboard_has_both_discovery_buttons(self) -> None:
-        keyboard = fallback_main_keyboard("token", locale="ru")
+        keyboard = fallback_main_keyboard("token", locale="ru", show_related=True)
         callbacks = [
             button.callback_data
             for row in keyboard.inline_keyboard
@@ -416,6 +418,22 @@ class RelatedAnimeUiTests(unittest.TestCase):
         ]
         self.assertIn("av:token:related:0", callbacks)
         self.assertIn("av:token:recommendations:0", callbacks)
+
+    def test_related_is_hidden_by_default(self) -> None:
+        anime = AggregatedAnime(title="Standalone", external_ids={"mal": "1"})
+        for keyboard in (
+            navigation_keyboard("token", anime, "main", 0, 1, locale="en"),
+            fallback_main_keyboard("token", locale="en"),
+        ):
+            self.assertIsNotNone(keyboard)
+            assert keyboard is not None
+            callbacks = [
+                button.callback_data
+                for row in keyboard.inline_keyboard
+                for button in row
+            ]
+            self.assertNotIn("av:token:related:0", callbacks)
+            self.assertIn("av:token:recommendations:0", callbacks)
 
     def test_empty_related_disappears_without_hiding_recommendations(self) -> None:
         anime = AggregatedAnime(title="Standalone", external_ids={"mal": "1"})
