@@ -20,7 +20,7 @@ fail() {
 
 [[ -f "$SCRIPT_DIR/requirements.lock" ]] || fail "requirements.lock not found."
 [[ -d "$SCRIPT_DIR/.env.example.d" ]] || fail ".env.example.d not found."
-ENV_FILES=(telegram.env sources.env timestamps.env rate-limits.env mappings.env storage.env logging.env runtime.env lifecycle.env)
+ENV_FILES=(telegram.env sources.env timestamps.env rate-limits.env mappings.env storage.env logging.env runtime.env lifecycle.env api.env)
 PROXY_FILES=(telegram.toml shikimori.toml mal.toml anilist.toml kitsu.toml anidb.toml anisearch.toml jikan.toml aniskip.toml anime_skip.toml animethemes.toml imdb.toml skipdb.toml trace_moe.toml whatanimeisthis.toml)
 USER_AGENT_FILES=(telegram.toml shikimori.toml mal.toml anilist.toml kitsu.toml anidb.toml anisearch.toml jikan.toml aniskip.toml anime_skip.toml animethemes.toml imdb.toml skipdb.toml trace_moe.toml whatanimeisthis.toml)
 for env_name in "${ENV_FILES[@]}"; do
