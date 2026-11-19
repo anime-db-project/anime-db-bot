@@ -199,6 +199,38 @@ class OperatorConsoleServicesTests(unittest.IsolatedAsyncioTestCase):
         with self.assertRaises(ConsoleError):
             await self.console.execute(args)
 
+    async def test_slash_search_and_cancel_match_telegram_workflow(self) -> None:
+        result = await self.console.run_tokens(["/anime", "Example"], self.parser)
+        self.assertEqual(result["count"], 1)
+        opened = await self.console.run_tokens(["open", "1"], self.parser)
+        self.assertIn("Example", opened)
+        result = await self.console.run_tokens(["/cancel"], self.parser)
+        self.assertIn("cancelled", result)
+        self.assertIsNone(self.console.selected)
+
+    async def test_slash_mapping_mutation_is_staged_then_confirmed(self) -> None:
+        self.console.interactive = True
+        with patch("mappings.resolver.set_mapping_override") as write:
+            preview = await self.console.run_tokens(
+                ["/mapping_set", "accept", "mal", "1", "anilist", "2", "verified"],
+                self.parser,
+            )
+            self.assertIn("/mapping_confirm", preview)
+            write.assert_not_called()
+            await self.console.run_tokens(["/mapping_confirm"], self.parser)
+            write.assert_called_once()
+        self.assertIsNone(self.console.pending_mapping)
+
+    async def test_slash_mapping_cancel_prevents_writes(self) -> None:
+        self.console.interactive = True
+        await self.console.run_tokens(
+            ["/mapping_delete", "mal", "1", "anilist", "2", "invalid"], self.parser
+        )
+        result = await self.console.run_tokens(["/mapping_cancel"], self.parser)
+        self.assertIn("cancelled", result)
+        with self.assertRaises(ConsoleError):
+            await self.console.run_tokens(["/mapping_confirm"], self.parser)
+
     async def test_config_list_only_returns_example_names(self) -> None:
         result = await self.console.execute(
             self.parser.parse_args(["config", "explain", "BOT_TOKEN"])
