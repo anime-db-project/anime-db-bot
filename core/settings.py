@@ -14,14 +14,18 @@ from dotenv import dotenv_values
 # Frozen releases ship read-only resources, while state and secrets are writable.
 # ANIME_DB_BOT_HOME also allows Docker to persist state outside /app.
 RESOURCE_DIR = Path(getattr(sys, "_MEIPASS", Path(__file__).resolve().parents[1]))
-ROOT_DIR = Path(
-    os.environ.get("ANIME_DB_BOT_HOME")
-    or (
-        Path(sys.executable).resolve().parent
-        if getattr(sys, "frozen", False)
-        else RESOURCE_DIR
+ROOT_DIR = (
+    Path(
+        os.environ.get("ANIME_DB_BOT_HOME")
+        or (
+            Path(sys.executable).resolve().parent
+            if getattr(sys, "frozen", False)
+            else RESOURCE_DIR
+        )
     )
-).expanduser().resolve()
+    .expanduser()
+    .resolve()
+)
 ENV_CONFIG_FILES = (
     "telegram.env",
     "sources.env",
