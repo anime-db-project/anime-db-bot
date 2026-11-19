@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import secrets
 from dataclasses import dataclass, field
 
@@ -36,6 +37,8 @@ class AnimeCardSession:
     popularity_errors: dict[str, str] = field(default_factory=dict)
     descriptions_loaded: bool = False
     description_errors: dict[str, str] = field(default_factory=dict)
+    # Only the main card can receive a delayed discovery keyboard update.
+    main_view_active: bool = True
     related_loaded: bool = False
     related_items: list[AggregatedAnimeReference] = field(default_factory=list)
     related_by_source: dict[str, list[AggregatedAnimeReference]] = field(
@@ -58,6 +61,7 @@ class TelegramCardState:
 
     anime_sessions: ExpiringSessionStore[AnimeCardSession]
     people_loads: ExpiringSessionStore[PeopleLoadProgress]
+    background_tasks: set[asyncio.Task[None]] = field(default_factory=set)
 
     @classmethod
     def create(
