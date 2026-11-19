@@ -10,23 +10,33 @@ from aiogram.types import (
 )
 
 from bots.telegram.callbacks import SettingsCallback
+from bots.telegram.admin_config import register_admin_config_handlers
+from services.users.access_control import is_telegram_admin
 from localization import available_locales, locale_name, text
 from services.users.settings import get_user_locale, set_user_locale
 
 SETTINGS_PREFIX = "settings:"
 
 
-def _settings_keyboard(locale: str) -> InlineKeyboardMarkup:
-    return InlineKeyboardMarkup(
-        inline_keyboard=[
-            [
-                InlineKeyboardButton(
-                    text=text("settings", "language_button", locale=locale),
-                    callback_data=SettingsCallback("language").encode(),
-                )
-            ]
+def _settings_keyboard(
+    locale: str, *, user_id: int | None = None, private: bool = False
+) -> InlineKeyboardMarkup:
+    rows = [
+        [
+            InlineKeyboardButton(
+                text=text("settings", "language_button", locale=locale),
+                callback_data=SettingsCallback("language").encode(),
+            )
         ]
-    )
+    ]
+    if private and is_telegram_admin(user_id):
+        rows.append([
+            InlineKeyboardButton(
+                text="Настройки бота (ENV)" if locale == "ru" else "Bot configuration (ENV)",
+                callback_data="cfg:h:0",
+            )
+        ])
+    return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
 def _language_keyboard(locale: str) -> InlineKeyboardMarkup:
@@ -79,7 +89,7 @@ def register_settings_handlers(dp: Dispatcher) -> None:
         locale = get_user_locale(user_id)
         await message.answer(
             _settings_text(locale),
-            reply_markup=_settings_keyboard(locale),
+            reply_markup=_settings_keyboard(locale, user_id=user_id, private=message.chat.type == "private"),
         )
 
     @dp.callback_query(F.data == "settings:language")
@@ -123,7 +133,10 @@ def register_settings_handlers(dp: Dispatcher) -> None:
         )
         await callback.message.edit_text(
             _settings_text(locale),
-            reply_markup=_settings_keyboard(locale),
+            reply_markup=_settings_keyboard(
+                locale, user_id=callback.from_user.id,
+                private=callback.message.chat.type == "private",
+            ),
         )
 
     @dp.callback_query(F.data == "settings:back")
@@ -135,5 +148,10 @@ def register_settings_handlers(dp: Dispatcher) -> None:
         await callback.answer()
         await callback.message.edit_text(
             _settings_text(locale),
-            reply_markup=_settings_keyboard(locale),
+            reply_markup=_settings_keyboard(
+                locale, user_id=callback.from_user.id,
+                private=callback.message.chat.type == "private",
+            ),
         )
+
+    register_admin_config_handlers(dp)
