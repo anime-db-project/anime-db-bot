@@ -405,6 +405,13 @@ class KitsuSource:
     def supports_identity(self, identity: AnimeIdentity) -> bool:
         return bool(self._kitsu_id(identity))
 
+    async def get_wire_details(self, identity: AnimeIdentity) -> dict[str, Any] | None:
+        """Return the unchanged Kitsu JSON:API document, including included."""
+        kitsu_id = self._kitsu_id(identity)
+        if not kitsu_id:
+            return None
+        return await _load_detail(kitsu_id, self._settings)
+
     async def get_details(self, identity: AnimeIdentity) -> AnimeRecord | None:
         kitsu_id = self._kitsu_id(identity)
         if not kitsu_id:
