@@ -28,13 +28,13 @@ SOURCE_CAPABILITIES = (
     "recommendations", "image",
 )
 DETAIL_CAPABILITIES = (
-    "metadata", "staff", "voices", "characters", "episodes", "episode",
+    "id", "metadata", "staff", "voices", "characters", "episodes", "episode",
     "timestamps", "themes", "trailers", "screenshots", "popularity",
     "description", "relations", "recommendations",
 )
 CAPABILITY_ALIASES = {
     "seiyuu": "voices", "seyu": "voices", "voice_actors": "voices",
-    "id": "metadata", "lookup": "metadata", "details": "metadata",
+    "lookup": "id", "details": "metadata",
     "related": "relations", "recommendation": "recommendations",
     "photos": "image", "photo": "image", "opening": "themes",
     "ending": "themes", "openings": "themes", "endings": "themes",
@@ -42,7 +42,7 @@ CAPABILITY_ALIASES = {
 _ID_PATTERN = re.compile(r"^[0-9]{1,32}$")
 _SUPPORTED_KEYS = tuple(str(item.key) for item in SOURCE_CATALOG)
 _DEFAULT_ALL_CAPABILITIES = (
-    "metadata", "staff", "voices", "characters", "episodes",
+    "id", "metadata", "staff", "voices", "characters", "episodes",
     "timestamps", "themes", "trailers", "screenshots", "popularity",
     "description", "relations", "recommendations",
 )
@@ -276,13 +276,23 @@ async def _single(
         return "ok", page
 
     assert identity is not None
-    if capability in {"metadata", "staff", "voices", "characters", "screenshots",
+    if capability in {"id", "metadata", "staff", "voices", "characters", "screenshots",
                       "popularity", "description", "relations", "recommendations"}:
         source = next(
             src for src in context.sources if str(src.source_key) == key
         )
         if not identity.has(key):
             return "missing_id", None
+        if capability == "id":
+            # ID-only requests do not fetch a full anime card.
+            verified = None
+            if _flag(data.get("verify"), default=False):
+                verified = await source.get_details(identity.copy()) is not None
+            return "ok", {
+                "source": key,
+                "source_id": identity.get(key),
+                "exists": verified,
+            }
         from sources.runtime.catalog import source_supports
 
         required = {
