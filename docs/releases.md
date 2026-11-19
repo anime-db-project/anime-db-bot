@@ -27,6 +27,21 @@ there is no automatic bypass. For Linux, executable and script permissions
 are preserved in the TAR archive. Some file managers may prompt before
 executing a downloaded file.
 
+## External API
+
+**v0.3.0 and later** add REST `/api/v1/...` and GraphQL `/graphql` to
+Windows/Linux/macOS binaries and GHCR. HTTP listeners are off by default;
+start explicitly with `anime-db-bot api` or enable `API_ENABLED=true`
+alongside Telegram polling. API-only operation does not require `BOT_TOKEN`.
+Keys, Basic/local policies, exact CORS origins, public URL and limits are
+configured in `.env.d/api.env`.
+
+Docker users can deploy a dedicated API-only service using
+`docker compose -f compose.api.yml up -d`; the host port binds to localhost
+until intentionally placed behind a TLS reverse proxy. REST operations and
+GraphQL both call the same shared application services; admin mutations need
+explicit confirmation. Details: [External API](api.md).
+
 ## Operator console
 
 **Version 0.2.0 and later** also include a full local operator console. Use
