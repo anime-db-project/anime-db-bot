@@ -119,6 +119,31 @@ python3 scripts/project.py restart
 python3 scripts/project.py stop
 ```
 
+## Lifecycle and recovery policy
+
+Bot process failures can be handled by an optional supervisor. The default
+policy remains **stop**. To restart automatically after fatal errors, add these
+settings to `.env.d/lifecycle.env` (create it from
+`.env.example.d/lifecycle.env` if needed):
+
+```dotenv
+BOT_ON_FAILURE=restart
+BOT_ON_CLEAN_EXIT=stop
+BOT_RESTART_MAX_ATTEMPTS=5
+BOT_RESTART_DELAY_SECONDS=5
+BOT_RESTART_MAX_DELAY_SECONDS=60
+BOT_RESTART_RESET_AFTER_SECONDS=300
+BOT_SHUTDOWN_TIMEOUT_SECONDS=10
+```
+
+The bot subprocess is supervised by `./start.sh` and
+`scripts/project.py run/start`. Expected manual stops always stop the
+supervisor and child, even if the clean-exit policy requests restarts. Handled
+provider/API errors do not restart the whole bot. A restart budget and capped
+exponential backoff prevent hot crash loops. See
+[configuration reference](docs/configuration.md#process-lifecycle-and-automatic-recovery)
+for policy semantics.
+
 ## Usage
 
 Use `/anime` to choose a search source or enter a title. An image attached to `/anime` or a public image URL activates image search when a backend is available. `/settings` changes preferences; `/cancel` ends pending input.
