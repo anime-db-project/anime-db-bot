@@ -1,0 +1,29 @@
+# Dedicated authenticated HTTP service. No Telegram polling is started.
+# Keep API_ADMIN_KEY in a local, untracked .env file or secret provider.
+# The port is bound to localhost on the Docker host by default; put a TLS
+# reverse proxy in front of it for external connections.
+services:
+  anime-db-api:
+    image: ghcr.io/anime-db-project/anime-db-bot:${ANIME_DB_BOT_TAG:-latest}
+    container_name: anime-db-api
+    restart: unless-stopped
+    command: ["api"]
+    environment:
+      ANIME_DB_BOT_HOME: /data
+      ANIME_DB_BOT_RUN_MODE: api
+      API_ENABLED: "true"
+      API_HOST: 0.0.0.0
+      API_PORT: "8181"
+      API_AUTH_MODE: apikey
+      API_ADMIN_KEY: ${API_ADMIN_KEY:?Set a random API_ADMIN_KEY of at least 24 characters}
+      API_READ_KEY: ${API_READ_KEY:-}
+      API_CORS_ORIGINS: ${API_CORS_ORIGINS:-}
+      API_PUBLIC_URL: ${API_PUBLIC_URL:-}
+    volumes:
+      - anime-db-bot-data:/data
+    ports:
+      - "127.0.0.1:${API_PORT:-8181}:8181"
+
+volumes:
+  anime-db-bot-data:
+    name: anime-db-bot-data
