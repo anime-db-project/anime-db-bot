@@ -9,7 +9,7 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: "Release tag (for example v0.3.0). Leave blank for v0.2.0."
+        description: "Release tag (for example v0.4.0). Leave blank for v0.3.0."
         required: false
         type: string
 
@@ -46,7 +46,7 @@ jobs:
           elif [[ -n "$REQUESTED_VERSION" ]]; then
             tag="$REQUESTED_VERSION"
           else
-            tag="v0.2.0"
+            tag="v0.3.0"
           fi
           if [[ ! "$tag" =~ ^v[0-9]+\.[0-9]+\.[0-9]+([.-][a-zA-Z0-9.-]+)?$ ]]; then
             echo "::error::Release tag must use vMAJOR.MINOR.PATCH."
@@ -81,7 +81,7 @@ jobs:
         run: python -m unittest discover -s tests -v
       - name: Verify configuration and packaging code is syntactically valid
         run: |
-          python -m compileall -q bots core localization mappings search services sources scripts
+          python -m compileall -q api bots core localization mappings search services sources scripts
           python -m scripts.release_entry --version
           python -m scripts.release_entry doctor
 
@@ -156,6 +156,7 @@ jobs:
           "$exe" --home "$RUNNER_TEMP/anime-db-bot-smoke" cli config reset USER_DEFAULT_LOCALE --yes
           # The interactive console should process commands without bot polling.
           printf "help\\nquit\\n" | "$exe" --home "$RUNNER_TEMP/anime-db-bot-smoke" console
+          python scripts/smoke_api.py --binary "$exe"
       - name: Create portable archive with clickable launchers
         shell: bash
         run: |
@@ -221,6 +222,40 @@ jobs:
           docker run --rm "$IMAGE:$VERSION" cli config check
           docker run --rm "$IMAGE:$VERSION" cli mapping status
           printf "help\\nquit\\n" | docker run --rm -i "$IMAGE:$VERSION" console
+          # Launch published GHCR image as an API-only service.
+          readkey="$(printf 'r%.0s' {1..32})"
+          adminkey="$(printf 'a%.0s' {1..32})"
+          cid="$(docker run -d -e ANIME_DB_BOT_RUN_MODE=api \
+            -e API_ENABLED=true -e API_HOST=127.0.0.1 \
+            -e API_READ_KEY="$readkey" -e API_ADMIN_KEY="$adminkey" \
+            "$IMAGE:$VERSION" api)"
+          trap 'docker rm -f "$cid" >/dev/null 2>&1 || true' EXIT
+          ready=false
+          for attempt in {1..50}; do
+            if docker exec "$cid" python -c \
+              'from urllib.request import urlopen; assert urlopen("http://127.0.0.1:8181/api/v1/health",timeout=3).status==200' 2>/dev/null; then
+              ready=true; break
+            fi
+            if [[ "$(docker inspect --format "{{.State.Running}}" "$cid")" != true ]]; then
+              docker logs "$cid"; exit 1
+            fi
+            sleep 0.5
+          done
+          [[ "$ready" == true ]] || { docker logs "$cid"; exit 1; }
+          docker exec -i "$cid" python - <<'PY'
+          import json
+          from urllib.request import Request, urlopen
+          base = "http://127.0.0.1:8181"
+          headers = {"Authorization": "Bearer " + "r" * 32}
+          with urlopen(Request(base + "/api/v1/openapi.json", headers=headers)) as response:
+              spec = json.load(response)
+          assert spec["openapi"] == "3.1.0"
+          payload = json.dumps({"query": "{ apiVersion ping }"}).encode()
+          with urlopen(Request(base + "/graphql", data=payload, headers={**headers,"Content-Type":"application/json"})) as response:
+              result = json.load(response)
+          assert result["data"]["apiVersion"] == "v1", result
+          print("GHCR API-only REST/GraphQL smoke passed.")
+          PY
 
   publish:
     needs: [prepare, verify, binaries, docker]
@@ -268,6 +303,11 @@ jobs:
           Binary commands: \`run\`, \`start\`, \`stop\`, \`restart\`, \`status\`, \`init\`, \`check\`, \`doctor\`; pass \`--help\` for flags.
           Default launch uses an interactive foreground console; \`start\` runs in the background.
           The first launch creates configuration templates; set \`BOT_TOKEN\` to enable Telegram polling.
+          - New: REST /api/v1 with OpenAPI 3.1 and GraphQL /graphql for anime, identity, media, user operations and maintenance.
+          - New: API-only mode for native binaries and Docker, or API_ENABLED=true alongside Telegram polling.
+          - Secure keys, HTTP Basic/loopback auth, CORS, quotas and read/admin privileges.
+          - Bounded asynchronous mapping and index jobs with status queries.
+          - Documentation: https://github.com/anime-db-project/anime-db-bot/blob/main/docs/api.md
           Data, runtime cache and secrets remain outside bundled libraries.
           The published executables are unsigned/not notarized; macOS Gatekeeper may require approval.
 
