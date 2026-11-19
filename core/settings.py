@@ -36,6 +36,7 @@ ENV_CONFIG_FILES = (
     "logging.env",
     "runtime.env",
     "lifecycle.env",
+    "api.env",
 )
 _ADMIN_SPLIT_RE = re.compile(r"[\s,;]+")
 _ENV_KEY_RE = re.compile(r"^[ \t]*(?:export[ \t]+)?([A-Za-z_][A-Za-z0-9_]*)[ \t]*=")
@@ -239,6 +240,36 @@ def _lifecycle_action(env: Mapping[str, str], name: str) -> str:
     if value not in {"stop", "restart"}:
         raise ValueError(f"{name} must be stop or restart")
     return value
+
+
+@dataclass(frozen=True, slots=True)
+class ApiSettings:
+    """Authenticated, versioned HTTP and GraphQL interface."""
+
+    enabled: bool = False
+    host: str = "127.0.0.1"
+    port: int = 8181
+    read_key: str = ""
+    admin_key: str = ""
+    requests_per_minute: int = 90
+    max_concurrency: int = 12
+    max_body_bytes: int = 65536
+    timeout_seconds: float = 30.0
+    graphql_max_depth: int = 8
+    graphql_max_fields: int = 60
+    graphql_introspection: bool = True
+
+    def validate_server(self) -> None:
+        if not (self.read_key or self.admin_key):
+            raise ValueError(
+                "API_READ_KEY or API_ADMIN_KEY is required before starting the API"
+            )
+        for name, key in (("API_READ_KEY", self.read_key),
+                          ("API_ADMIN_KEY", self.admin_key)):
+            if key and len(key) < 24:
+                raise ValueError(f"{name} must be at least 24 characters long")
+        if self.read_key and self.admin_key and self.read_key == self.admin_key:
+            raise ValueError("API_READ_KEY and API_ADMIN_KEY must differ")
 
 
 @dataclass(frozen=True, slots=True)
@@ -512,6 +543,7 @@ class AppSettings:
     cache: CacheBackendSettings = field(default_factory=CacheBackendSettings)
     http: HttpSettings = field(default_factory=HttpSettings)
     lifecycle: LifecycleSettings = field(default_factory=LifecycleSettings)
+    api: ApiSettings = field(default_factory=ApiSettings)
 
     @classmethod
     def from_env(cls, env: Mapping[str, str] | None = None) -> "AppSettings":
@@ -597,6 +629,34 @@ class AppSettings:
             raise ValueError("REDIS_URL is required when CACHE_BACKEND=redis")
 
         config = cls(
+            api=ApiSettings(
+                enabled=_bool(values, "API_ENABLED", False),
+                host=_raw(values, "API_HOST", "127.0.0.1"),
+                port=_strict_int(values, "API_PORT", 8181, 1, 65535),
+                read_key=_raw(values, "API_READ_KEY"),
+                admin_key=_raw(values, "API_ADMIN_KEY"),
+                requests_per_minute=_strict_int(
+                    values, "API_REQUESTS_PER_MINUTE", 90, 1, 10000
+                ),
+                max_concurrency=_strict_int(
+                    values, "API_MAX_CONCURRENCY", 12, 1, 256
+                ),
+                max_body_bytes=_strict_int(
+                    values, "API_MAX_BODY_BYTES", 65536, 1024, 1048576
+                ),
+                timeout_seconds=_strict_float(
+                    values, "API_TIMEOUT_SECONDS", 30.0, 1.0, 300.0
+                ),
+                graphql_max_depth=_strict_int(
+                    values, "API_GRAPHQL_MAX_DEPTH", 8, 2, 20
+                ),
+                graphql_max_fields=_strict_int(
+                    values, "API_GRAPHQL_MAX_FIELDS", 60, 1, 500
+                ),
+                graphql_introspection=_bool(
+                    values, "API_GRAPHQL_INTROSPECTION", True
+                ),
+            ),
             lifecycle=LifecycleSettings(
                 on_failure=_lifecycle_action(values, "BOT_ON_FAILURE"),
                 on_clean_exit=_lifecycle_action(values, "BOT_ON_CLEAN_EXIT"),
