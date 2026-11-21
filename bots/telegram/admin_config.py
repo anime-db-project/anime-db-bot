@@ -122,6 +122,7 @@ def _groups_page(locale: str, page: int = 0) -> tuple[str, InlineKeyboardMarkup]
     rows, page, _ = indexed_selection_rows(
         [f"{name.removesuffix('.env')} ({len(keys)})" for name, keys in groups],
         window=page,
+        block="settings",
         destination=lambda index: f"cfg:g:{index}:0",
         change_window=lambda index: f"cfg:h:{index}",
     )
@@ -152,6 +153,7 @@ def _group_page(locale: str, group_index: int, page: int = 0) -> tuple[str, Inli
     rows, _, _ = indexed_selection_rows(
         list(keys),
         window=page,
+        block="settings",
         destination=lambda index: f"cfg:k:{group_index}:{index}",
         change_window=lambda index: f"cfg:g:{group_index}:{index}",
     )
@@ -214,7 +216,7 @@ async def _key_page(
         [
             _button(
                 _tr(locale, "Back", "Назад"),
-                f"g:{group_index}:{key_index // selection_page_size()}",
+                f"g:{group_index}:{key_index // selection_page_size("settings")}",
             ),
             _button(_tr(locale, "Categories", "Категории"), "h:0"),
         ],
@@ -228,6 +230,7 @@ def _search_page(
     rows, _, _ = indexed_selection_rows(
         list(record.keys),
         window=page,
+        block="settings",
         destination=lambda index: f"cfg:hit:{token}:{index}",
         change_window=lambda index: f"cfg:res:{token}:{index}",
     )

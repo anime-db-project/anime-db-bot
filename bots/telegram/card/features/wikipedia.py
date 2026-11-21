@@ -143,6 +143,7 @@ async def _search_screen(
     rows, _, _ = indexed_selection_rows(
         [_japanese_label(session.anime, hit) for hit in hits],
         window=page,
+        block="wikipedia",
         destination=lambda index: f"wk:{token}:a:{index}",
         change_window=lambda target: f"wk:{token}:s:{target}",
     )
@@ -183,6 +184,7 @@ async def _chapters(
     rows, page, _ = indexed_selection_rows(
         [section.title for section in sections],
         window=page,
+        block="wikipedia",
         destination=lambda index: f"wk:{token}:r:{index}:0",
         change_window=lambda target: f"wk:{token}:l:{target}",
     )
@@ -231,7 +233,7 @@ def _chapter_page(
             ))
         page_navigation.append(_button(
             f"{page + 1}/{len(pages)}",
-            f"wk:{token}:p:{section_index}:{page // selection_page_size()}",
+            f"wk:{token}:p:{section_index}:{page // selection_page_size("wikipedia")}",
         ))
         if page + 1 < len(pages):
             page_navigation.append(_button(
@@ -255,7 +257,7 @@ def _chapter_page(
         keyboard_rows.append(chapter_navigation)
     keyboard_rows.append([
         _button(_tr(locale, "К разделам", "All sections"),
-                f"wk:{token}:l:{section_index // selection_page_size()}"),
+                f"wk:{token}:l:{section_index // selection_page_size("wikipedia")}"),
         _back(token, locale),
     ])
     return heading + "\n\n" + pages[page] + attribution, _keyboard(keyboard_rows)
@@ -280,13 +282,14 @@ async def _chapter_pages_index(
             for index in range(len(pages))
         ],
         window=window,
+        block="wikipedia",
         destination=lambda index: f"wk:{token}:r:{section_index}:{index}",
         change_window=lambda target: f"wk:{token}:p:{section_index}:{target}",
     )
     rows.append([
         _button(
             _tr(locale, "К разделам", "All sections"),
-            f"wk:{token}:l:{section_index // selection_page_size()}",
+            f"wk:{token}:l:{section_index // selection_page_size("wikipedia")}",
         ),
         _back(token, locale),
     ])

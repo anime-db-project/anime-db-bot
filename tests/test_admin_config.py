@@ -44,6 +44,23 @@ class AdminConfigCatalogTests(unittest.TestCase):
         self.assertIs(documented_config_groups(), documented_config_groups())
         self.assertEqual(catalog(), documented_config_groups())
 
+    def test_admin_paginated_rows_use_settings_override(self) -> None:
+        from types import SimpleNamespace
+
+        config = SimpleNamespace(
+            telegram=SimpleNamespace(
+                pagination_page_size=10,
+                pagination_block_page_sizes={"settings": 3},
+            )
+        )
+        with patch("bots.telegram.pagination.get_settings", return_value=config):
+            _header, keyboard = _group_page("ru", 0)
+        choices = [
+            button for row in keyboard.inline_keyboard for button in row
+            if button.callback_data.startswith("cfg:k:")
+        ]
+        self.assertEqual(len(choices), 3)
+
     def test_admin_pages_have_one_navigation_counter_and_localized_headings(self) -> None:
         heading, keys_markup = _group_page("ru", 0)
         self.assertIn("параметров", heading)

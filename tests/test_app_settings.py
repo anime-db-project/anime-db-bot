@@ -16,6 +16,30 @@ from core.settings import (
 
 
 class AppSettingsTests(unittest.TestCase):
+    def test_telegram_section_sizes_inherit_and_override_independently(self) -> None:
+        from core.settings import TELEGRAM_PAGINATION_BLOCKS
+
+        variables = {
+            "BOT_TOKEN": "token",
+            "TELEGRAM_PAGINATION_PAGE_SIZE": "8",
+            "TELEGRAM_PAGINATION_EPISODES_PAGE_SIZE": "3",
+            "TELEGRAM_PAGINATION_WIKIPEDIA_PAGE_SIZE": "",
+            "TELEGRAM_PAGINATION_SETTINGS_PAGE_SIZE": "20",
+        }
+        settings = AppSettings.from_env(variables).telegram
+        self.assertEqual(settings.pagination_page_size, 8)
+        self.assertEqual(settings.pagination_block_page_sizes, {
+            "episodes": 3,
+            "settings": 20,
+        })
+        self.assertIn("search", TELEGRAM_PAGINATION_BLOCKS)
+        for invalid in ("0", "31", "wrong"):
+            with self.subTest(invalid=invalid):
+                with self.assertRaisesRegex(ValueError, "TELEGRAM_PAGINATION_EPISODES_PAGE_SIZE"):
+                    AppSettings.from_env({
+                        **variables, "TELEGRAM_PAGINATION_EPISODES_PAGE_SIZE": invalid
+                    })
+
     def test_telegram_selection_page_size_has_bounded_configuration(self) -> None:
         self.assertEqual(
             AppSettings.from_env({"BOT_TOKEN": "token"}).telegram.pagination_page_size,
@@ -270,7 +294,7 @@ class AppSettingsTests(unittest.TestCase):
                     encoding="utf-8",
                 )
             values = project_env_values(root)
-        self.assertEqual(len(values), 233)
+        self.assertEqual(len(values), 248)
         for key in (
             "BOT_ON_FAILURE",
             "BOT_ON_CLEAN_EXIT",

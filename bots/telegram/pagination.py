@@ -18,9 +18,47 @@ PICKER_PAGE_SIZE = 10  # compatibility default; actual size is configured
 MAX_CARD_PICKER_CHOICES = 5000
 
 
-def selection_page_size() -> int:
-    """Shared, validated page size for all Telegram selection menus."""
-    return get_settings().telegram.pagination_page_size
+def selection_page_size(block: str | None = None) -> int:
+    """Block override when present; otherwise the shared Telegram page size."""
+    settings = get_settings().telegram
+    if block is None:
+        return settings.pagination_page_size
+    return settings.pagination_block_page_sizes.get(block, settings.pagination_page_size)
+
+
+def picker_block_for_route(route: str) -> str | None:
+    """A single route-to-settings mapping for all card selector callbacks."""
+    parts = route.split("~")
+    kind = parts[0]
+    if kind in {"ap", "apg"}:
+        return "episodes"
+    if kind == "ar" and len(parts) > 1:
+        return parts[1] if parts[1] in {"related", "recommendations"} else None
+    if kind in {"ac"}:
+        return "characters"
+    if kind == "at":
+        return "trailers"
+    if kind == "ad":
+        return "descriptions"
+    if kind == "sr":
+        return "search"
+    if kind == "gx" and len(parts) >= 3:
+        if parts[1] == "ac":
+            return "characters"
+        if parts[2] in {"characters", "staff", "voices"}:
+            return parts[2]
+    if kind == "pv" and len(parts) >= 3:
+        if parts[1] == "ac":
+            return "characters"
+        if parts[2] in {"characters", "staff", "voices"}:
+            return parts[2]
+    if kind in {"av", "as"} and len(parts) >= 2:
+        section = parts[1]
+        if section == "all_ids":
+            return "source_ids"
+        if section in {"titles", "popularity", "screenshots", "staff", "voices"}:
+            return section
+    return None
 
 
 def indexed_selection_rows(
@@ -31,11 +69,12 @@ def indexed_selection_rows(
     change_window: Callable[[int], str],
     current: int | None = None,
     page_size: int | None = None,
+    block: str | None = None,
     total: int | None = None,
     fallback_label: Callable[[int], str] | None = None,
 ) -> tuple[list[list[InlineKeyboardButton]], int, int]:
     """Numbered single-column selection; resolve labels only for visible rows."""
-    size = selection_page_size() if page_size is None else page_size
+    size = selection_page_size(block) if page_size is None else page_size
     if size < 1:
         raise ValueError("Page size must be positive")
     count = len(labels) if total is None else total
@@ -98,8 +137,8 @@ def _default_label(route: str, index: int, locale: str) -> str:
     return f"Страница {number}" if locale == "ru" else f"Page {number}"
 
 
-def _window_for(current: int) -> int:
-    return max(0, int(current)) // selection_page_size()
+def _window_for(current: int, route: str) -> int:
+    return max(0, int(current)) // selection_page_size(picker_block_for_route(route))
 
 
 def card_picker_callback(token: str, route: str, current: int, total: int) -> str:
@@ -109,7 +148,7 @@ def card_picker_callback(token: str, route: str, current: int, total: int) -> st
         route,
         current,
         total,
-        _window_for(current),
+        _window_for(current, route),
     ).encode()
 
 
@@ -120,7 +159,7 @@ def search_picker_callback(token: str, current: int, total: int) -> str:
         "sr",
         current,
         total,
-        _window_for(current),
+        _window_for(current, "sr"),
     ).encode()
 
 
@@ -211,6 +250,7 @@ def _picker_keyboard(
     rows, _, _ = indexed_selection_rows(
         labels if labels is not None else (),
         window=data.window,
+        block=picker_block_for_route(data.route),
         total=total,
         fallback_label=lambda index: _default_label(data.route, index, locale),
         destination=destination,

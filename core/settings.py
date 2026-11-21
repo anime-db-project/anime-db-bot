@@ -353,6 +353,26 @@ def _rich_media_order(env: Mapping[str, str]) -> tuple[str, ...]:
     return tuple(dict.fromkeys(values))
 
 
+# Named Telegram selector sections, shared by configuration validation and the UI.
+TELEGRAM_PAGINATION_BLOCKS = (
+    "wikipedia",
+    "settings",
+    "search",
+    "episodes",
+    "characters",
+    "staff",
+    "voices",
+    "related",
+    "recommendations",
+    "trailers",
+    "screenshots",
+    "titles",
+    "popularity",
+    "descriptions",
+    "source_ids",
+)
+
+
 @dataclass(frozen=True, slots=True)
 class TelegramSettings:
     bot_token: str
@@ -371,6 +391,7 @@ class TelegramSettings:
     max_people_sessions: int = 256
     max_search_sessions: int = 192
     pagination_page_size: int = 10
+    pagination_block_page_sizes: Mapping[str, int] = field(default_factory=dict)
     rich_media: RichMediaSettings = field(default_factory=RichMediaSettings)
     max_scope_sessions: int = 400
     max_pending_inputs: int = 500
@@ -757,6 +778,19 @@ class AppSettings:
                 pagination_page_size=_strict_int(
                     values, "TELEGRAM_PAGINATION_PAGE_SIZE", 10, 1, 30
                 ),
+                pagination_block_page_sizes={
+                    block: _strict_int(
+                        values,
+                        f"TELEGRAM_PAGINATION_{block.upper()}_PAGE_SIZE",
+                        10,
+                        1,
+                        30,
+                    )
+                    for block in TELEGRAM_PAGINATION_BLOCKS
+                    if _raw(
+                        values, f"TELEGRAM_PAGINATION_{block.upper()}_PAGE_SIZE"
+                    ).strip()
+                },
                 max_scope_sessions=_strict_int(
                     values, "TELEGRAM_MAX_SCOPE_SESSIONS", 400, 1, 100000
                 ),

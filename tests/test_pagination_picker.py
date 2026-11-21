@@ -11,12 +11,43 @@ from core.models import AggregatedAnime
 from bots.telegram.pagination import (
     card_picker_keyboard,
     card_route_callback,
+    picker_block_for_route,
+    selection_page_size,
     indexed_selection_rows,
     search_picker_keyboard,
 )
 
 
 class PaginationPickerTests(unittest.TestCase):
+    def test_route_specific_pagination_limits_with_global_fallback(self) -> None:
+        settings = SimpleNamespace(
+            telegram=SimpleNamespace(
+                pagination_page_size=8,
+                pagination_block_page_sizes={
+                    "episodes": 3,
+                    "wikipedia": 4,
+                    "settings": 12,
+                },
+            )
+        )
+        with patch("bots.telegram.pagination.get_settings", return_value=settings):
+            self.assertEqual(selection_page_size("episodes"), 3)
+            self.assertEqual(selection_page_size("related"), 8)
+            self.assertEqual(selection_page_size("wikipedia"), 4)
+            self.assertEqual(selection_page_size("settings"), 12)
+            self.assertEqual(picker_block_for_route("ap~jikan"), "episodes")
+            self.assertEqual(picker_block_for_route("gx~as~voices~anilist~1"), "voices")
+            self.assertEqual(picker_block_for_route("ar~recommendations~all"), "recommendations")
+            picker = card_picker_keyboard(
+                PagePickerCallback("cp", "token", "ap~jikan", 4, 24, 1),
+                locale="ru",
+            )
+            labels = [
+                button.text for row in picker.inline_keyboard
+                for button in row if button.callback_data.startswith("ap:")
+            ]
+            self.assertEqual(labels, ["4. 4 серия", "✓ 5. 5 серия", "6. 6 серия"])
+
     def test_shared_selection_rows_use_configured_page_size(self) -> None:
         settings = SimpleNamespace(telegram=SimpleNamespace(pagination_page_size=3))
         with patch("bots.telegram.pagination.get_settings", return_value=settings):
