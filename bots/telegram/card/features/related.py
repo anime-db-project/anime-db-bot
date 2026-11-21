@@ -217,7 +217,12 @@ def related_keyboard(
         rows.append(
             [
                 InlineKeyboardButton(
-                    text=text("card", "discovery_open_card", locale=locale),
+                    text=text(
+                        "card",
+                        "discovery_more_details" if section == "recommendations"
+                        else "discovery_open_card",
+                        locale=locale,
+                    ),
                     callback_data=KeyedPageCallback(
                         "ari", token, _route_key(section, source_key), page
                     ).encode(),
