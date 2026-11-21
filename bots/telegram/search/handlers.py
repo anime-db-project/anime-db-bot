@@ -1505,7 +1505,10 @@ def register_search_handlers(
         )
         await callback.answer()
         await callback.message.edit_reply_markup(
-            reply_markup=search_picker_keyboard(picker, locale=locale)
+            reply_markup=search_picker_keyboard(
+                picker, locale=locale,
+                labels=[item.title for item in session.items],
+            )
         )
 
     @dp.callback_query(F.data.startswith("sr:"))

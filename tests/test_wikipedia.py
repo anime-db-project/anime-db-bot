@@ -266,7 +266,7 @@ class WikipediaUiTests(unittest.TestCase):
             sections=(WikipediaSection("Сюжет", (paragraph,)),),
         )
         rendered, markup = _chapter_page(article, 0, 1, token="card", locale="ru")
-        self.assertIn("<b>Сюжет</b>\n2/", rendered)
+        self.assertIn("<b>Сюжет</b>\n\n", rendered)
         self.assertIn('<a href="https://ru.wikipedia.org/wiki/Test">Тест</a>', rendered)
         self.assertIn("CC BY-SA 4.0", rendered)
         self.assertIn("wk:card:r:0:0", str(markup.model_dump()))

@@ -15,13 +15,17 @@ This integration **does not use Wikidata or modify anime-mapping-db**.
    cluttering the Wikipedia card. Search results are **not verified anime
    matches**, and no result is automatically selected.
 3. Search results are **title-only inline buttons**, without numbered
-   snippets/descriptions. Choose the correct page explicitly; when the
+snippets/descriptions. Only hits with Japanese characters in the visible
+Wikipedia title or snippet are included; the original-title retry uses the
+same filter. Choose the correct page explicitly; when the
    requested-language article is missing, change the bot language in /settings.
 4. Major headings are navigable sections. Lower-level headings and all their
    text remain inside their **parent section**, not duplicated as buttons.
 5. Reading a section shows a bold heading and the original flowing Wikipedia
    prose, its paragraph breaks, lists, links and subheadings.
-   **Previous/next section** buttons work even for short sections.
+   **Previous/next section** arrow-only buttons work even for short sections.
+   Overflow pages use arrow / page-count / arrow navigation; the count opens
+   a numbered selection list of up to the configured page size.
 6. Page arrows appear **only when the section exceeds the applicable
    message size limit**: rich Telegram HTML first, standard Telegram HTML
    as a fallback. Page numbering is shown only for longer sections.

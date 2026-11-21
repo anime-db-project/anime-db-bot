@@ -41,7 +41,7 @@ class WikipediaCallbackTests(unittest.IsolatedAsyncioTestCase):
         )
         self.dispatcher = build_dispatcher("test", self.state)
         self.counter = 0
-        self.hit = WikipediaHit(123, "Наруто", "Статья об аниме", "ru")
+        self.hit = WikipediaHit(123, "Наруто", "Японское название ナルト", "ru")
         self.article = WikipediaArticle(
             123, "Наруто", "ru", "https://ru.wikipedia.org/wiki/Наруто",
             (WikipediaSection(
@@ -164,7 +164,7 @@ class WikipediaCallbackTests(unittest.IsolatedAsyncioTestCase):
         first = await self.click(f"av:{self.token}:wikipedia:0")
         body = self.text_of(first)
         self.assertIn("Выберите статью:", body)
-        self.assertNotIn("Статья об аниме", body)
+        self.assertNotIn("Японское название", body)
         self.assertNotIn("Русский", body)
         self.assertNotIn("Очищенный", body)
         self.assertNotIn("Подразделы", body)
