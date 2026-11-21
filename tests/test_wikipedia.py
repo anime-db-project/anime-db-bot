@@ -106,7 +106,7 @@ class WikipediaSourceTests(unittest.TestCase):
             for fragment in paragraph
         )
         self.assertIn("References", [section.title for section in sections])
-        self.assertIn("[edit]", joined)
+        self.assertTrue(any("[edit]" in section.title for section in sections))
         self.assertIn("Unrelated infobox text", joined)
         self.assertIn("navigation noise", joined)
         self.assertNotIn("<script", joined)
