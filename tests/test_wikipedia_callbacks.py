@@ -123,7 +123,8 @@ class WikipediaCallbackTests(unittest.IsolatedAsyncioTestCase):
         await self.click(f"wk:{self.token}:a:0")
         self.fake_client.article.assert_awaited_once()
         third = await self.click(f"wk:{self.token}:r:0:0")
-        self.assertIn("<b>Сюжет — 1/1</b>", self.text_of(third))
+        self.assertIn("<b>Сюжет</b>", self.text_of(third))
+        self.assertNotIn("1/1", self.text_of(third))
         self.assertIn('href="https://ru.wikipedia.org/wiki/Коноха"', self.text_of(third))
         self.assertNotIn("Отображение не удалось", self.text_of(third))
 
@@ -141,9 +142,15 @@ class WikipediaCallbackTests(unittest.IsolatedAsyncioTestCase):
         await self.click(f"av:{self.token}:wikipedia:0")
         await self.click(f"wk:{self.token}:a:0")
         self.assertEqual(self.state.anime_sessions[self.token].wikipedia_pageid, 123)
-        with patch(
-            "bots.telegram.card.features.wikipedia.get_user_locale",
-            return_value="en",
+        with (
+            patch(
+                "bots.telegram.card.features.wikipedia.get_user_locale",
+                return_value="en",
+            ),
+            patch(
+                "bots.telegram.card.runtime.handlers.get_user_locale",
+                return_value="en",
+            ),
         ):
             await self.click(f"av:{self.token}:wikipedia:0")
         self.assertIsNone(self.state.anime_sessions[self.token].wikipedia_pageid)
