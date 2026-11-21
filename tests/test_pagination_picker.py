@@ -11,27 +11,27 @@ from bots.telegram.pagination import (
 
 
 class PaginationPickerTests(unittest.TestCase):
-    def test_card_picker_uses_windowed_numeric_grid(self) -> None:
-        data = PagePickerCallback("cp", "token", "ap~jikan", 32, 75, 1)
+    def test_card_picker_uses_named_selection_pages(self) -> None:
+        data = PagePickerCallback("cp", "token", "ap~jikan", 32, 75, 3)
         keyboard = card_picker_keyboard(data, locale="ru")
         flattened = [button for row in keyboard.inline_keyboard for button in row]
 
-        self.assertTrue(any(button.text == "31" for button in flattened))
-        self.assertTrue(any(button.text == "✓ 33" for button in flattened))
-        self.assertTrue(any(button.text == "60" for button in flattened))
-        self.assertFalse(any(button.text == "30" for button in flattened))
+        self.assertTrue(any(button.text == "31. 31 серия" for button in flattened))
+        self.assertTrue(any(button.text == "✓ 33. 33 серия" for button in flattened))
+        self.assertTrue(any(button.text == "40. 40 серия" for button in flattened))
+        self.assertFalse(any(button.text.startswith("30.") for button in flattened))
         self.assertTrue(
             any(button.callback_data == "ap:token:jikan:32" for button in flattened)
         )
         self.assertTrue(
             any(
-                button.callback_data == "cp:token:ap~jikan:32:75:0"
+                button.callback_data == "cp:token:ap~jikan:32:75:2"
                 for button in flattened
             )
         )
         self.assertTrue(
             any(
-                button.callback_data == "cp:token:ap~jikan:32:75:2"
+                button.callback_data == "cp:token:ap~jikan:32:75:4"
                 for button in flattened
             )
         )
@@ -78,7 +78,7 @@ class PaginationPickerTests(unittest.TestCase):
         keyboard = search_picker_keyboard(data, locale="ru")
         flattened = [button for row in keyboard.inline_keyboard for button in row]
 
-        self.assertTrue(any(button.text == "✓ 3" for button in flattened))
+        self.assertTrue(any(button.text == "✓ 3. Страница 3" for button in flattened))
         self.assertTrue(
             any(button.callback_data == "sr:token:17" for button in flattened)
         )

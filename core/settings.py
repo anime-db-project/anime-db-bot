@@ -370,6 +370,7 @@ class TelegramSettings:
     max_card_sessions: int = 256
     max_people_sessions: int = 256
     max_search_sessions: int = 192
+    pagination_page_size: int = 10
     rich_media: RichMediaSettings = field(default_factory=RichMediaSettings)
     max_scope_sessions: int = 400
     max_pending_inputs: int = 500
@@ -752,6 +753,9 @@ class AppSettings:
                 ),
                 max_search_sessions=_int(
                     values, "TELEGRAM_MAX_SEARCH_SESSIONS", 192, 1
+                ),
+                pagination_page_size=_strict_int(
+                    values, "TELEGRAM_PAGINATION_PAGE_SIZE", 10, 1, 30
                 ),
                 max_scope_sessions=_strict_int(
                     values, "TELEGRAM_MAX_SCOPE_SESSIONS", 400, 1, 100000
