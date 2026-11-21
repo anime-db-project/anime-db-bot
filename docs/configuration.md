@@ -69,6 +69,15 @@ the **number of choices**, not Telegram's rich/plain text message budgets.
 Details still use their normal previous/next controls. Changes to ENV settings
 require restarting the bot.
 
+## Progressive long-text reading
+
+`TELEGRAM_LONG_TEXT_CHUNK_SIZE=4000` (valid 200–30000) controls
+how much long-form text is revealed at once in Wikipedia and descriptions.
+Additional text is sent on **Show more...** actions without deleting
+previous messages. The bot still respects the stricter native Telegram
+sendMessage and sendRichMessage limits, and keeps source attributions,
+links and navigation available independently of article-body limits.
+
 ## Per-user Wikipedia reading preference
 
 The **/settings → Wikipedia · display mode** menu lets every Telegram user

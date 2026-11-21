@@ -22,6 +22,7 @@ from aiogram.types import (
 
 from bots.telegram.card.runtime.state import AnimeCardSession, TelegramCardState
 from bots.telegram.pagination import indexed_selection_rows, selection_page_size
+from core.settings import get_settings
 from bots.telegram.card.ui.constants import RICH_MESSAGE_LIMIT, STANDARD_MESSAGE_LIMIT
 from bots.telegram.card.views.renderer import edit_standard_text
 from core.models import AggregatedAnime
@@ -38,6 +39,34 @@ from sources.providers.wikipedia import (
 )
 
 SECTIONS_PER_PAGE = 10  # shared selector default
+
+
+def _chapter_limit(*, plain: bool) -> int:
+    native = PLAIN_CHAPTER_BUDGET if plain else RICH_CHAPTER_BUDGET
+    return min(native, get_settings().telegram.long_text_chunk_size)
+
+
+def _rich_wikipedia_html(body: str) -> str:
+    """Render headings as real block elements, not bold inline prose.
+
+    Plain Telegram HTML keeps its newlines; custom rich HTML needs <p>/<h3>
+    to prevent titles like 'Music' running into the next paragraph.
+    """
+    rendered: list[str] = []
+    for paragraph in body.split("\n\n"):
+        paragraph = paragraph.strip()
+        if not paragraph:
+            continue
+        if (
+            paragraph.startswith("<b>")
+            and paragraph.endswith("</b>")
+            and paragraph.count("<b>") == 1
+        ):
+            rendered.append(f"<h3>{paragraph[3:-4]}</h3>")
+        else:
+            rendered.append(f"<p>{paragraph.replace(chr(10), '<br>')}</p>")
+    return "".join(rendered)
+
 # Headers, source attribution and Telegram internals also consume characters.
 RICH_CHAPTER_BUDGET = RICH_MESSAGE_LIMIT - 750
 PLAIN_CHAPTER_BUDGET = STANDARD_MESSAGE_LIMIT - 450
@@ -199,6 +228,7 @@ async def _chapters(
     title = f"<b>Wikipedia — {html.escape(article.title)}</b>"
     if japanese_title and japanese_title not in article.title:
         title += f"\n{html.escape(japanese_title)}"
+    title += "\n\n<b>" + _tr(locale, "Оглавление", "Contents") + "</b>"
     title += "\n\n" + _tr(locale, "Выберите раздел:", "Choose a section:")
     await _edit_html(message, title, _keyboard(rows), locale=locale)
 
@@ -240,6 +270,13 @@ def _chapter_page(
                 "▶️", f"wk:{token}:r:{section_index}:{page + 1}",
             ))
         keyboard_rows.append(page_navigation)
+    if page + 1 < len(pages):
+        keyboard_rows.append([
+            _button(
+                _tr(locale, "Показать всё…", "Show more…"),
+                f"wk:{token}:m:{section_index}:{page + 1}",
+            )
+        ])
     # Cross-chapter navigation works from every chapter, even when it is
     # short enough to fit in one message.
     chapter_navigation = []
@@ -248,13 +285,15 @@ def _chapter_page(
             "◀️",
             f"wk:{token}:r:{section_index - 1}:0",
         ))
+    chapter_navigation.append(
+        _button(f"{section_index + 1}/{len(article.sections)}", "noop")
+    )
     if section_index + 1 < len(article.sections):
         chapter_navigation.append(_button(
             "▶️",
             f"wk:{token}:r:{section_index + 1}:0",
         ))
-    if chapter_navigation:
-        keyboard_rows.append(chapter_navigation)
+    keyboard_rows.append(chapter_navigation)
     keyboard_rows.append([
         _button(_tr(locale, "К разделам", "All sections"),
                 f"wk:{token}:l:{section_index // selection_page_size('wikipedia')}"),
@@ -310,14 +349,14 @@ async def _render_chapter(
     # If the Telegram API server rejects rich text, remember the fallback
     # and paginate at the sendMessage limit only then.
     plain_mode = session.wikipedia_plain_fallback
-    limit = PLAIN_CHAPTER_BUDGET if plain_mode else RICH_CHAPTER_BUDGET
+    limit = _chapter_limit(plain=plain_mode)
     body, keyboard = _chapter_page(
         article, section_index, page, token=token, locale=locale, limit=limit,
     )
     if not plain_mode:
         try:
             await message.edit_text(
-                rich_message=InputRichMessage(html=body),
+                rich_message=InputRichMessage(html=_rich_wikipedia_html(body)),
                 reply_markup=keyboard,
             )
             return
@@ -331,7 +370,7 @@ async def _render_chapter(
             session.wikipedia_plain_fallback = True
             body, keyboard = _chapter_page(
                 article, section_index, page, token=token, locale=locale,
-                limit=PLAIN_CHAPTER_BUDGET,
+                limit=_chapter_limit(plain=True),
             )
     await _edit_html(message, body, keyboard, locale=locale)
 
@@ -438,9 +477,47 @@ def register_wikipedia_handlers(dp: Dispatcher, state: TelegramCardState) -> Non
                     window=int(parts[4]),
                     locale=locale,
                     limit=(
-                        PLAIN_CHAPTER_BUDGET if session.wikipedia_plain_fallback
-                        else RICH_CHAPTER_BUDGET
+                        _chapter_limit(plain=session.wikipedia_plain_fallback)
                     ),
+                )
+            elif action == "m" and len(parts) == 5:
+                article = await _article(
+                    session, user_id=callback.from_user.id, locale=locale,
+                )
+                if article is None:
+                    raise ValueError("Wikipedia article expired")
+                section_index, next_page = int(parts[3]), int(parts[4])
+                limit = _chapter_limit(plain=session.wikipedia_plain_fallback)
+                if not 0 <= section_index < len(article.sections):
+                    raise ValueError("Invalid section")
+                pages = paginate_section(article.sections[section_index], limit=limit)
+                if not 0 < next_page < len(pages):
+                    raise ValueError("Invalid text continuation")
+                await callback.answer()
+                body, keyboard = _chapter_page(
+                    article, section_index, next_page,
+                    token=token, locale=locale, limit=limit,
+                )
+                # Send the continuation as a new message. Previous text
+                # remains intact, including inline article/source hyperlinks.
+                if not session.wikipedia_plain_fallback:
+                    try:
+                        await callback.message.answer_rich(
+                            InputRichMessage(html=_rich_wikipedia_html(body)),
+                            reply_markup=keyboard,
+                        )
+                        return
+                    except TelegramBadRequest:
+                        session.wikipedia_plain_fallback = True
+                        # Reopen in plain mode at a valid (possibly shorter)
+                        # page boundary rather than dropping any text.
+                        body, keyboard = _chapter_page(
+                            article, section_index, next_page,
+                            token=token, locale=locale,
+                            limit=_chapter_limit(plain=True),
+                        )
+                await callback.message.answer(
+                    body, parse_mode="HTML", reply_markup=keyboard,
                 )
             elif action == "r" and len(parts) == 5:
                 article = await _article(
