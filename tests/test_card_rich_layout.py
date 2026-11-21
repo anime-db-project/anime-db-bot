@@ -183,7 +183,7 @@ class CardRichLayoutTests(unittest.TestCase):
                 starts[captions[index + 1]] if index + 1 < len(captions) else len(html)
             )
             for section in categories[caption]:
-                position = html.index(f"av:card-token:{section}:0")
+                position = html.index(f"ci:card-token:{section}" if section in {"titles", "episodes", "screenshots", "staff", "voices", "characters", "popularity"} else f"av:card-token:{section}:0")
                 self.assertGreater(position, starts[caption])
                 self.assertLess(position, end)
 
@@ -211,7 +211,7 @@ class CardRichLayoutTests(unittest.TestCase):
             "popularity",
             "links",
         ):
-            self.assertIn(f"av:card-token:{section}:0", html)
+            self.assertIn(f"ci:card-token:{section}" if section in {"titles", "episodes", "screenshots", "staff", "voices", "characters", "popularity"} else f"av:card-token:{section}:0", html)
 
     def test_popularity_section_is_source_scoped(self) -> None:
         anime = self._sample()

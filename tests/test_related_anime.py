@@ -387,8 +387,8 @@ class RelatedAnimeUiTests(unittest.TestCase):
     def test_main_card_keeps_discovery_actions_out_of_rich_html(self) -> None:
         anime = AggregatedAnime(title="Test", external_ids={"mal": "1"})
         rich = main_rich("token", anime, "Test", locale="ru")
-        self.assertNotIn('data="av:token:related:0"', rich.html)
-        self.assertNotIn('data="av:token:recommendations:0"', rich.html)
+        self.assertNotIn('data="ci:token:related"', rich.html)
+        self.assertNotIn('data="ci:token:recommendations"', rich.html)
 
     def test_main_navigation_uses_inline_discovery_buttons(self) -> None:
         anime = AggregatedAnime(title="Test", external_ids={"mal": "1"})
@@ -405,7 +405,7 @@ class RelatedAnimeUiTests(unittest.TestCase):
         ]
         self.assertEqual(
             callbacks,
-            ["av:token:wikipedia:0", "av:token:related:0", "av:token:recommendations:0"],
+            ["av:token:wikipedia:0", "ci:token:related", "ci:token:recommendations"],
         )
 
     def test_fallback_main_keyboard_has_both_discovery_buttons(self) -> None:
@@ -416,8 +416,8 @@ class RelatedAnimeUiTests(unittest.TestCase):
             for button in row
             if button.callback_data
         ]
-        self.assertIn("av:token:related:0", callbacks)
-        self.assertIn("av:token:recommendations:0", callbacks)
+        self.assertIn("ci:token:related", callbacks)
+        self.assertIn("ci:token:recommendations", callbacks)
 
     def test_related_is_hidden_by_default(self) -> None:
         anime = AggregatedAnime(title="Standalone", external_ids={"mal": "1"})
@@ -432,8 +432,8 @@ class RelatedAnimeUiTests(unittest.TestCase):
                 for row in keyboard.inline_keyboard
                 for button in row
             ]
-            self.assertNotIn("av:token:related:0", callbacks)
-            self.assertIn("av:token:recommendations:0", callbacks)
+            self.assertNotIn("ci:token:related", callbacks)
+            self.assertIn("ci:token:recommendations", callbacks)
 
     def test_empty_related_disappears_without_hiding_recommendations(self) -> None:
         anime = AggregatedAnime(title="Standalone", external_ids={"mal": "1"})
@@ -451,8 +451,8 @@ class RelatedAnimeUiTests(unittest.TestCase):
                 for button in row
                 if button.callback_data
             ]
-            self.assertNotIn("av:token:related:0", callbacks)
-            self.assertIn("av:token:recommendations:0", callbacks)
+            self.assertNotIn("ci:token:related", callbacks)
+            self.assertIn("ci:token:recommendations", callbacks)
 
     def test_related_keyboard_uses_item_callbacks_and_pagination(self) -> None:
         items = [
@@ -523,8 +523,8 @@ class RelatedAnimeAvailabilityTests(unittest.IsolatedAsyncioTestCase):
             for row in markup.inline_keyboard
             for button in row
         ]
-        self.assertIn(f"av:{token}:related:0", actions)
-        self.assertIn(f"av:{token}:recommendations:0", actions)
+        self.assertIn(f"ci:{token}:related", actions)
+        self.assertIn(f"ci:{token}:recommendations", actions)
         service.load_relations.assert_awaited_once()
 
     async def test_empty_or_failed_results_do_not_show_button(self) -> None:
@@ -585,7 +585,7 @@ class RelatedAnimeAvailabilityTests(unittest.IsolatedAsyncioTestCase):
         actions = [
             button.callback_data for row in markup.inline_keyboard for button in row
         ]
-        self.assertIn(f"av:{token}:related:0", actions)
+        self.assertIn(f"ci:{token}:related", actions)
         self.assertIn(f"av:{token}:description:0", actions)
 
 

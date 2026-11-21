@@ -74,15 +74,15 @@ class PaginationPickerTests(unittest.TestCase):
         )
 
     def test_search_picker_returns_to_existing_result_callbacks(self) -> None:
-        data = PagePickerCallback("sp", "token", "sr", 2, 18, 0)
+        data = PagePickerCallback("sp", "token", "sr", 12, 18, 1)
         keyboard = search_picker_keyboard(data, locale="ru")
         flattened = [button for row in keyboard.inline_keyboard for button in row]
 
-        self.assertTrue(any(button.text == "✓ 3. Страница 3" for button in flattened))
+        self.assertTrue(any(button.text == "✓ 13. Страница 13" for button in flattened))
         self.assertTrue(
             any(button.callback_data == "sr:token:17" for button in flattened)
         )
-        self.assertEqual(keyboard.inline_keyboard[-1][0].callback_data, "sr:token:2")
+        self.assertEqual(keyboard.inline_keyboard[-1][0].callback_data, "sr:token:12")
 
 
 if __name__ == "__main__":

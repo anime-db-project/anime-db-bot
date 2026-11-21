@@ -310,7 +310,7 @@ def fallback_main_keyboard(
             ),
             InlineKeyboardButton(
                 text=text("card", "section_titles", locale=locale),
-                callback_data=f"av:{token}:titles:0",
+                callback_data=f"ci:{token}:titles",
             ),
         ],
         [
@@ -336,7 +336,7 @@ def fallback_main_keyboard(
         [
             InlineKeyboardButton(
                 text=text("card", "popularity_button", locale=locale),
-                callback_data=f"av:{token}:popularity:0",
+                callback_data=f"ci:{token}:popularity",
             ),
             InlineKeyboardButton(
                 text=text("card", "episodes_button", locale=locale),

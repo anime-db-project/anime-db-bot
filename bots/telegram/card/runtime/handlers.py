@@ -152,35 +152,61 @@ def build_dispatcher(mode_name: str, state: TelegramCardState) -> Dispatcher:
             if prepared is None:
                 if section in {"related", "recommendations"}:
                     await edit_related_view(
-                        callback.message, token, session, section=section,
-                        page=0, locale=locale,
+                        callback.message,
+                        token,
+                        session,
+                        section=section,
+                        page=0,
+                        locale=locale,
                     )
                 elif section == "episodes":
                     await edit_episodes_view(
-                        callback.message, token, session, view_page=0,
-                        backend=None, locale=locale,
+                        callback.message,
+                        token,
+                        session,
+                        view_page=0,
+                        backend=None,
+                        locale=locale,
                     )
                 elif section == "characters":
                     await edit_characters_view(
-                        callback.message, token, session, source_key=None,
-                        page=0, locale=locale,
+                        callback.message,
+                        token,
+                        session,
+                        source_key=None,
+                        page=0,
+                        locale=locale,
                     )
                 elif section == "screenshots":
                     await edit_screenshots_view(
-                        callback.message, token, session, source_key=None,
-                        page=0, locale=locale,
+                        callback.message,
+                        token,
+                        session,
+                        source_key=None,
+                        page=0,
+                        locale=locale,
                     )
                 elif section in {"staff", "voices"}:
                     from bots.telegram.people.portraits import _edit_people_view
 
                     await _edit_people_view(
-                        state, callback.message, token, session.anime,
-                        section, None, 0, locale=locale,
+                        state,
+                        callback.message,
+                        token,
+                        session.anime,
+                        section,
+                        None,
+                        0,
+                        locale=locale,
                     )
                 else:
                     await edit_anime_view(
-                        callback.message, token, session.anime, section=section,
-                        page=0, locale=locale,
+                        callback.message,
+                        token,
+                        session.anime,
+                        section=section,
+                        page=0,
+                        locale=locale,
                     )
                 return
             route, labels = prepared
@@ -189,7 +215,9 @@ def build_dispatcher(mode_name: str, state: TelegramCardState) -> Dispatcher:
             labels = labels_for_route(session, data.route, locale=locale)
         try:
             keyboard = card_picker_keyboard(
-                data, locale=locale, labels=labels,
+                data,
+                locale=locale,
+                labels=labels,
                 back_callback=f"av:{token}:main:0",
             )
         except ValueError:
@@ -222,7 +250,8 @@ def build_dispatcher(mode_name: str, state: TelegramCardState) -> Dispatcher:
             return
         try:
             keyboard = card_picker_keyboard(
-                data, locale=locale,
+                data,
+                locale=locale,
                 labels=labels_for_route(session, data.route, locale=locale),
             )
         except ValueError:

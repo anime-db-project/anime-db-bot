@@ -1506,7 +1506,8 @@ def register_search_handlers(
         await callback.answer()
         await callback.message.edit_reply_markup(
             reply_markup=search_picker_keyboard(
-                picker, locale=locale,
+                picker,
+                locale=locale,
                 labels=[item.title for item in session.items],
             )
         )

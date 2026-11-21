@@ -252,10 +252,10 @@ class WikipediaUiTests(unittest.TestCase):
                 b.callback_data for row in markup.inline_keyboard for b in row if b.callback_data
             ]
             self.assertLess(
-                actions.index("av:token:wikipedia:0"), actions.index("av:token:related:0")
+                actions.index("av:token:wikipedia:0"), actions.index("ci:token:related")
             )
             self.assertLess(
-                actions.index("av:token:wikipedia:0"), actions.index("av:token:recommendations:0")
+                actions.index("av:token:wikipedia:0"), actions.index("ci:token:recommendations")
             )
 
     def test_article_has_header_with_page_number_and_attached_links(self) -> None:
