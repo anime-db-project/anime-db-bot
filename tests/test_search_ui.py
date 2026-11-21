@@ -32,6 +32,34 @@ async def _noop_aggregate(message, candidate, owner_user_id):
 
 
 class UnifiedSearchUiTests(unittest.TestCase):
+    def test_search_picker_first_screen_has_names_without_fake_back(self) -> None:
+        session = search_ui.SearchSession(
+            query="naruto",
+            owner_user_id=1,
+            items=[
+                SearchCandidate(title="Naruto", external_ids={"mal": "20"}),
+                SearchCandidate(title="Naruto Shippuden", external_ids={"mal": "1735"}),
+            ],
+        )
+        async def run() -> object:
+            mock_message = SimpleNamespace(answer=AsyncMock())
+            with patch.object(search_ui, "get_user_locale", return_value="ru"):
+                await search_ui._send_results_list(
+                    mock_message, "token", session, edit=False
+                )
+            return mock_message.answer.call_args.kwargs["reply_markup"]
+
+        markup = __import__("asyncio").run(run())
+        choices = [b for row in markup.inline_keyboard for b in row]
+        self.assertEqual(
+            [b.text for b in choices],
+            ["1. Naruto", "2. Naruto Shippuden"],
+        )
+        self.assertEqual(
+            [b.callback_data for b in choices],
+            ["sr:token:0", "sr:token:1"],
+        )
+
     def test_scope_parser_normalizes_provider_order(self) -> None:
         self.assertEqual(
             search_ui._parse_scope("mal,shikimori"),

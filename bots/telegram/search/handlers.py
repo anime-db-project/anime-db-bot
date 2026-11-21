@@ -93,6 +93,7 @@ class SearchSession:
     poster_file_ids: dict[str, str] = field(default_factory=dict)
     image_matches: list[list[ImageSearchMatch]] = field(default_factory=list)
     image_input_token: str | None = None
+    preview_seen: bool = False
 
 
 @dataclass(slots=True)
@@ -897,6 +898,7 @@ async def _send_preview(
         return
 
     index = max(0, min(index, len(session.items) - 1))
+    session.preview_seen = True
     candidate = session.items[index]
     matches = (
         session.image_matches[index] if index < len(session.image_matches) else None
@@ -996,6 +998,7 @@ async def _send_results_list(
         PagePickerCallback("sp", token, "sr", 0, len(session.items), 0),
         locale=locale,
         labels=[item.title for item in session.items],
+        show_back=False,
     )
     if edit:
         await message.edit_text(title, reply_markup=keyboard)
@@ -1540,6 +1543,7 @@ def register_search_handlers(
                 picker,
                 locale=locale,
                 labels=[item.title for item in session.items],
+                show_back=session.preview_seen,
             ),
         )
 

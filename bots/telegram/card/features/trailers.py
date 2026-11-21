@@ -119,9 +119,7 @@ def _source_rows(
         InlineKeyboardButton(
             text=("✓ " + source_name) if selected_source_key == key else source_name,
             callback_data=(
-                PagePickerCallback(
-                    "ci", token, f"at~{key}", 0, counts[key], 0
-                ).encode()
+                PagePickerCallback("ci", token, f"at~{key}", 0, counts[key], 0).encode()
                 if counts and counts.get(key, 0) > 0
                 else KeyedPageCallback("at", token, key, 0).encode()
             ),
@@ -279,7 +277,9 @@ async def edit_trailers_view(
         else:
             content = text("card", "trailers_empty", locale=locale)
         keyboard = _chooser_keyboard(
-            token, sources, locale=locale,
+            token,
+            sources,
+            locale=locale,
             counts={
                 key: len(session.trailers_by_source.get(source, []))
                 for key, source in sources

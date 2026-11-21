@@ -4,6 +4,7 @@ import unittest
 
 from bots.telegram.card.runtime.state import AnimeCardSession
 from bots.telegram.card.features.trailers import (
+    _chooser_keyboard,
     _source_keyboard,
     _source_name_for_selector,
     _trailer_rich,
@@ -93,6 +94,16 @@ class TrailerParsingTests(unittest.TestCase):
 
 
 class TrailerUiTests(unittest.TestCase):
+    def test_source_chooser_opens_named_trailers_before_first_page(self) -> None:
+        keyboard = _chooser_keyboard(
+            "token", [("jikan", "MAL / Jikan")],
+            locale="ru", counts={"jikan": 3},
+        )
+        self.assertEqual(
+            keyboard.inline_keyboard[0][0].callback_data,
+            "ci:token:at~jikan:0:3:0",
+        )
+
     def test_source_view_renders_one_trailer_with_thumbnail(self) -> None:
         item = TrailerRecord(
             source="mal",

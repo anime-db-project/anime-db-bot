@@ -128,6 +128,18 @@ class WikipediaCallbackTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn('href="https://ru.wikipedia.org/wiki/Коноха"', self.text_of(third))
         self.assertNotIn("Отображение не удалось", self.text_of(third))
 
+    async def test_search_omits_results_without_japanese_text(self) -> None:
+        self.fake_client.search.return_value = (
+            WikipediaHit(501, "General article", "No Japanese writing", "ru"),
+            WikipediaHit(123, "Наруто", "ナルト — 日本の漫画", "ru"),
+        )
+        response = await self.click(f"av:{self.token}:wikipedia:0")
+        self.assertEqual(
+            [hit.pageid for hit in self.state.anime_sessions[self.token].wikipedia_hits],
+            [123],
+        )
+        self.assertNotIn("General article", str(response))
+
     async def test_callback_is_bound_to_owning_anime_card(self) -> None:
         response = await self.click(f"av:{self.token}:wikipedia:0", user_id=55)
         self.assertEqual(len(response), 1)

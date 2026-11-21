@@ -167,6 +167,7 @@ def _picker_keyboard(
     destination: Callable[[int], str],
     labels: Sequence[str] | None = None,
     back_callback: str | None = None,
+    show_back: bool = True,
 ) -> InlineKeyboardMarkup:
     total = max(1, int(data.total))
     current = max(0, min(int(data.current), total - 1))
@@ -185,14 +186,15 @@ def _picker_keyboard(
         ).encode(),
         current=current,
     )
-    rows.append(
-        [
-            InlineKeyboardButton(
-                text=text("common", "back", locale=locale),
-                callback_data=back_callback or destination(current),
-            )
-        ]
-    )
+    if show_back:
+        rows.append(
+            [
+                InlineKeyboardButton(
+                    text=text("common", "back", locale=locale),
+                    callback_data=back_callback or destination(current),
+                )
+            ]
+        )
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
@@ -217,6 +219,7 @@ def search_picker_keyboard(
     *,
     locale: str,
     labels: Sequence[str] | None = None,
+    show_back: bool = True,
 ) -> InlineKeyboardMarkup:
     if data.route != "sr":
         raise ValueError(f"Unsupported search page-picker route: {data.route}")
@@ -225,4 +228,5 @@ def search_picker_keyboard(
         locale=locale,
         destination=lambda index: TokenIndexCallback("sr", data.token, index).encode(),
         labels=labels,
+        show_back=show_back,
     )
