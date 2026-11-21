@@ -147,11 +147,16 @@ def build_dispatcher(mode_name: str, state: TelegramCardState) -> Dispatcher:
                 if source_route and section.startswith("ap~"):
                     backend = section.split("~", 1)[1]
                     service = get_app_context().episode_service
-                    if backend not in service.available_backends(session.anime.identity):
+                    available = service.available_backends(session.anime.identity)
+                    if backend not in available:
                         raise ValueError("Episode backend unavailable")
                     session.episode_backend = backend
                     prepared = await prepare_initial_picker(
-                        state, token, session, "episodes", callback.message,
+                        state,
+                        token,
+                        session,
+                        "episodes",
+                        callback.message,
                         locale=locale,
                     )
                 elif source_route:
