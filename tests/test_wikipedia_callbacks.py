@@ -179,7 +179,7 @@ class WikipediaCallbackTests(unittest.IsolatedAsyncioTestCase):
             button.text for row in edited.reply_markup.inline_keyboard
             for button in row
         ]
-        self.assertIn("Наруто", labels)
+        self.assertIn("1. Наруто", labels)
         self.assertFalse(any("Русский" in label for label in labels))
 
 
