@@ -120,7 +120,8 @@ async def _edit_html(
 
 
 async def _search_screen(
-    message: Message, token: str, session: AnimeCardSession, *, locale: str,
+    message: Message, token: str, session: AnimeCardSession, *,
+    locale: str, page: int = 0,
 ) -> None:
     language = _reset_for_locale(session, locale)
     hits = tuple(
@@ -139,10 +140,12 @@ async def _search_screen(
                 )
                 hits = tuple(hit for hit in found if _japanese_hit(hit))
         session.wikipedia_hits = hits
-    rows = [
-        [_button(_japanese_label(session.anime, hit), f"wk:{token}:a:{index}")]
-        for index, hit in enumerate(hits)
-    ]
+    rows, _, _ = indexed_selection_rows(
+        [_japanese_label(session.anime, hit) for hit in hits],
+        window=page,
+        destination=lambda index: f"wk:{token}:a:{index}",
+        change_window=lambda target: f"wk:{token}:s:{target}",
+    )
     rows.append([_back(token, locale)])
     header = _tr(locale, "<b>Wikipedia</b>\nВыберите статью:",
                  "<b>Wikipedia</b>\nChoose an article:")
@@ -391,6 +394,12 @@ def register_wikipedia_handlers(dp: Dispatcher, state: TelegramCardState) -> Non
                 await callback.answer()
                 await _search_screen(
                     callback.message, token, session, locale=locale,
+                )
+            elif action == "s" and len(parts) == 4:
+                await callback.answer()
+                await _search_screen(
+                    callback.message, token, session,
+                    locale=locale, page=int(parts[3]),
                 )
             elif action == "a" and len(parts) == 4:
                 index = int(parts[3])
