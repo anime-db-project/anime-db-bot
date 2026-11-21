@@ -8,6 +8,7 @@ from aiogram.types import InlineKeyboardMarkup, InputRichMessage, Message
 from bots.telegram.callbacks import resolve_key_or_legacy_index
 from bots.telegram.rich_media import deliver_rich_media
 from bots.telegram.card.ui.constants import RICH_MESSAGE_LIMIT, STANDARD_MESSAGE_LIMIT
+from bots.telegram.card.text_expansion import continuation_keyboard, long_text_parts
 from bots.telegram.card.ui.keyboards import (
     description_keyboard,
     fallback_main_keyboard,
@@ -267,10 +268,14 @@ async def edit_description_view(
     pages = description_pages(anime, source, locale=locale)
     page = max(0, min(page, len(pages) - 1))
     keyboard = description_keyboard(token, source_key, page, len(pages), locale=locale)
+    parts = long_text_parts(pages[page], locale=locale)
+    keyboard = continuation_keyboard(
+        keyboard, token, "ad", source_key, page, 1, len(parts), locale=locale
+    )
 
     try:
         await message.edit_text(
-            rich_message=rich(pages[page]),
+            rich_message=rich(parts[0]),
             reply_markup=keyboard,
         )
     except Exception:
@@ -279,7 +284,7 @@ async def edit_description_view(
         )
         await edit_standard_text(
             message,
-            pages[page],
+            parts[0],
             reply_markup=keyboard,
             locale=locale,
         )
