@@ -126,9 +126,11 @@ class _WikipediaHTMLParser(HTMLParser):
         self._italic = 0
 
     def _flush(self) -> None:
-        parts = tuple(part for part in self._paragraph if part.strip())
+        # Keep whitespace between linked/marked-up fragments, but never a
+        # paragraph made exclusively of formatting or whitespace.
+        parts = tuple(self._paragraph)
         self._paragraph.clear()
-        if parts:
+        if any(part.strip() and part.strip() != " " for part in parts):
             self._current.paragraphs.append(parts)
 
     def _append(self, string: str) -> None:
