@@ -66,6 +66,20 @@ class PaginationPickerTests(unittest.TestCase):
         self.assertEqual(card_route_callback("token", route, 3), "av:token:voices:1")
         self.assertEqual(card_route_callback("token", route, 9), "av:token:voices:7")
 
+    def test_grouped_galleries_only_offer_one_unpictured_group(self) -> None:
+        self.assertEqual(
+            card_route_callback("token", "gx~av~voices~1", 0),
+            "av:token:voices:0",
+        )
+        self.assertEqual(
+            card_route_callback("token", "gx~av~voices~1", 2),
+            "av:token:voices:2",
+        )
+        self.assertEqual(
+            card_route_callback("token", "gx~ac~anilist~0", 0),
+            "ac:token:anilist:1",
+        )
+
     def test_people_source_route_preserves_source_key(self) -> None:
         route = "pv~as~staff~anilist~2"
         self.assertEqual(

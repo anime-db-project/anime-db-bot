@@ -143,6 +143,24 @@ def card_route_callback(token: str, route: str, index: int) -> str:
             raise ValueError("Invalid episode-group page-picker route")
         return KeyedPageCallback("ap", token, parts[1], group_start + index).encode()
 
+    if kind == "gx" and len(parts) in {4, 5}:
+        # The initial list represents the unpictured group as ONE detail page,
+        # not N different buttons all pointing to page 0.
+        try:
+            has_unpictured = int(parts[-1])
+        except ValueError as exc:
+            raise ValueError("Invalid grouped gallery selector") from exc
+        if has_unpictured not in {0, 1}:
+            raise ValueError("Invalid grouped gallery selector")
+        page = index if has_unpictured else index + 1
+        if parts[1] == "av" and len(parts) == 4:
+            return ViewCallback(token, parts[2], page).encode()
+        if parts[1] == "as" and len(parts) == 5:
+            return SectionSourceCallback(token, parts[2], parts[3], page).encode()
+        if parts[1] == "ac" and len(parts) == 4:
+            return KeyedPageCallback("ac", token, parts[2], page).encode()
+        raise ValueError("Unsupported grouped gallery selector")
+
     if kind == "pv" and len(parts) >= 4:
         try:
             without = int(parts[-1])

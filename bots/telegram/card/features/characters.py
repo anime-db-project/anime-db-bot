@@ -311,17 +311,20 @@ def _keyboard(
             )
         )
     without_count = max(0, shown - page) if page > 0 else max(0, shown)
+    group = int(without_count > 0)
     picker_route = (
-        f"pv~av~characters~{without_count}"
+        f"gx~av~characters~{group}"
         if source_key is None
-        else f"pv~ac~{source_key}~{without_count}"
+        else f"gx~ac~{source_key}~{group}"
     )
+    picker_total = max_page + group
+    picker_index = 0 if page == 0 else page if group else page - 1
     nav.append(
         InlineKeyboardButton(
             text=text("characters", "shown", locale=locale, shown=shown, total=total),
             callback_data=(
-                card_picker_callback(token, picker_route, max(0, shown - 1), total)
-                if total > 1 and shown > 0
+                card_picker_callback(token, picker_route, picker_index, picker_total)
+                if picker_total > 1 and shown > 0
                 else "noop"
             ),
         )

@@ -74,6 +74,45 @@ def labels_for_route(
             for index, item in enumerate(session.trailers_by_source.get(source, []))
         ]
 
+    if kind == "gx" and len(parts) in {4, 5}:
+        from bots.telegram.card.ui.selectors import source_section_options
+
+        if parts[1] == "ac" or (
+            parts[1] == "av" and parts[2] == "characters"
+        ):
+            from bots.telegram.card.features.characters import (
+                _character_state,
+                _source_name_for_selector,
+            )
+
+            selector = parts[2] if parts[1] == "ac" else None
+            try:
+                _, source = _source_name_for_selector(session, selector)
+            except ValueError:
+                return []
+            _, without, portraits = _character_state(session, source)
+        elif parts[2] in {"staff", "voices"}:
+            source = None
+            if parts[1] == "as" and len(parts) == 5:
+                source = dict(source_section_options(
+                    session.anime, parts[2]
+                )).get(parts[3])
+            without, portraits = people_state(session.anime, parts[2], source)
+        else:
+            return []
+        group_name = (
+            f"Без портретов ({len(without)})"
+            if locale == "ru"
+            else f"Without portraits ({len(without)})"
+        )
+        return (
+            ([group_name] if without else [])
+            + [
+                display_person_name(item.name, item.aliases, locale=locale)
+                for item in portraits
+            ]
+        )
+
     if kind in {"ac", "pv"}:
         from bots.telegram.card.features.characters import (
             _character_state,
@@ -172,6 +211,7 @@ async def prepare_initial_picker(
             backend = backends[0]
         session.episode_backend = backend
         catalog = session.episode_catalogs.get(backend)
+        page = session.episode_pages.get((backend, 1))
         if catalog is None:
             page = session.episode_pages.get((backend, 1))
             if page is None:
@@ -204,7 +244,7 @@ async def prepare_initial_picker(
 
         await _ensure_loaded(message, session, locale=locale)
         _, without, portraits = _character_state(session, None)
-        route = f"pv~av~characters~{len(without)}"
+        route = f"gx~av~characters~{int(bool(without))}"
         labels = labels_for_route(session, route, locale=locale)
         return (route, labels) if labels else None
 
@@ -216,7 +256,7 @@ async def prepare_initial_picker(
             locale=locale, requested_page=0,
         )
         without, portraits = people_state(session.anime, section, None)
-        route = f"pv~av~{section}~{len(without)}"
+        route = f"gx~av~{section}~{int(bool(without))}"
         labels = labels_for_route(session, route, locale=locale)
         return (route, labels) if labels else None
 
