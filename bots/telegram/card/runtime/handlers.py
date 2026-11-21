@@ -17,7 +17,7 @@ from bots.telegram.callbacks import (
     ViewCallback,
     resolve_key_or_legacy_index,
 )
-from bots.telegram.pagination import card_picker_keyboard
+from bots.telegram.pagination import MAX_CARD_PICKER_CHOICES, card_picker_keyboard
 from bots.telegram.card.runtime.picker_entries import (
     labels_for_route,
     picker_parent_callback,
@@ -142,7 +142,7 @@ def build_dispatcher(mode_name: str, state: TelegramCardState) -> Dispatcher:
             data = None
         else:
             data = PagePickerCallback.parse(callback.data, prefix="ci")
-            if data is None or data.total > 5000:
+            if data is None or data.total > MAX_CARD_PICKER_CHOICES:
                 await callback.answer(
                     text("card", "invalid_command", locale=locale), show_alert=True
                 )
@@ -316,7 +316,7 @@ def build_dispatcher(mode_name: str, state: TelegramCardState) -> Dispatcher:
     async def card_page_picker_callback_handler(callback: CallbackQuery) -> None:
         locale = get_user_locale(callback.from_user.id)
         data = PagePickerCallback.parse(callback.data, prefix="cp")
-        if data is None:
+        if data is None or data.total > MAX_CARD_PICKER_CHOICES:
             await callback.answer(
                 text("card", "invalid_command", locale=locale), show_alert=True
             )

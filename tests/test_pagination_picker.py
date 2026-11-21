@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import unittest
+from unittest.mock import patch
 
 from bots.telegram.callbacks import PagePickerCallback
 from bots.telegram.card.runtime.picker_entries import picker_parent_callback
@@ -47,6 +48,19 @@ class PaginationPickerTests(unittest.TestCase):
         self.assertEqual(
             long_row[0][0].callback_data, "ci:token:ad~shikimori"
         )
+
+    def test_picker_creates_only_visible_labels_for_large_page_totals(self) -> None:
+        data = PagePickerCallback("cp", "token", "ap~jikan", 4321, 5000, 432)
+        with patch(
+            "bots.telegram.pagination._default_label",
+            side_effect=lambda _, index, __: f"Episode {index + 1}",
+        ) as formatter:
+            keyboard = card_picker_keyboard(data, locale="ru")
+        self.assertEqual(formatter.call_count, 10)
+        labels = [button.text for row in keyboard.inline_keyboard for button in row]
+        self.assertIn("4321. Episode 4321", labels)
+        self.assertIn("4330. Episode 4330", labels)
+        self.assertNotIn("4320. Episode 4320", labels)
 
     def test_card_picker_uses_named_selection_pages(self) -> None:
         data = PagePickerCallback("cp", "token", "ap~jikan", 32, 75, 3)

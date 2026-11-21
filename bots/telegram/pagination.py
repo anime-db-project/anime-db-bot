@@ -15,6 +15,7 @@ from localization import text
 from core.settings import get_settings
 
 PICKER_PAGE_SIZE = 10  # compatibility default; actual size is configured
+MAX_CARD_PICKER_CHOICES = 5000
 
 
 def selection_page_size() -> int:
@@ -30,24 +31,36 @@ def indexed_selection_rows(
     change_window: Callable[[int], str],
     current: int | None = None,
     page_size: int | None = None,
+    total: int | None = None,
+    fallback_label: Callable[[int], str] | None = None,
 ) -> tuple[list[list[InlineKeyboardButton]], int, int]:
-    """Numbered single-column selection; no extra number-grid picker."""
+    """Numbered single-column selection; resolve labels only for visible rows."""
     size = selection_page_size() if page_size is None else page_size
     if size < 1:
         raise ValueError("Page size must be positive")
-    total = len(labels)
-    pages = max(1, (total + size - 1) // size)
+    count = len(labels) if total is None else total
+    if count < 0 or (count > len(labels) and fallback_label is None):
+        raise ValueError("Missing labels for selection entries")
+    pages = max(1, (count + size - 1) // size)
     window = max(0, min(int(window), pages - 1))
     start = window * size
-    rows = [
-        [
-            InlineKeyboardButton(
-                text=f"{'✓ ' if current == index else ''}{index + 1}. {labels[index]}",
-                callback_data=destination(index),
-            )
-        ]
-        for index in range(start, min(total, start + size))
-    ]
+    rows: list[list[InlineKeyboardButton]] = []
+    for index in range(start, min(count, start + size)):
+        label = (
+            labels[index]
+            if index < len(labels)
+            else fallback_label(index)
+            if fallback_label is not None
+            else ""
+        )
+        rows.append(
+            [
+                InlineKeyboardButton(
+                    text=f"{'✓ ' if current == index else ''}{index + 1}. {label}",
+                    callback_data=destination(index),
+                )
+            ]
+        )
     if pages > 1:
         navigation: list[InlineKeyboardButton] = []
         if window:
@@ -195,15 +208,11 @@ def _picker_keyboard(
 ) -> InlineKeyboardMarkup:
     total = max(1, int(data.total))
     current = max(0, min(int(data.current), total - 1))
-    names = [
-        str(labels[index])
-        if labels is not None and index < len(labels)
-        else _default_label(data.route, index, locale)
-        for index in range(total)
-    ]
     rows, _, _ = indexed_selection_rows(
-        names,
+        labels if labels is not None else (),
         window=data.window,
+        total=total,
+        fallback_label=lambda index: _default_label(data.route, index, locale),
         destination=destination,
         change_window=lambda window: PagePickerCallback(
             data.prefix, data.token, data.route, current, total, window
