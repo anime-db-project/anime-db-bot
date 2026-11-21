@@ -339,14 +339,14 @@ def _keyboard(
             InlineKeyboardButton(
                 text=("✓ " if source_key is None else "")
                 + text("characters", "all", locale=locale),
-                callback_data=f"av:{token}:characters:0",
+                callback_data=f"ci:{token}:characters",
             )
         ]
     )
     buttons = [
         InlineKeyboardButton(
             text=("✓ " + source_name) if source_key == key else source_name,
-            callback_data=KeyedPageCallback("ac", token, key, 0).encode(),
+            callback_data=f"ci:{token}:ac~{key}",
         )
         for key, source_name in sources
     ]

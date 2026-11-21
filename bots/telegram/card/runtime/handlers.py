@@ -114,7 +114,10 @@ def build_dispatcher(mode_name: str, state: TelegramCardState) -> Dispatcher:
             token, section = parts[1:]
             from bots.telegram.card.ui.constants import PAGED_ENTRY_SECTIONS
 
-            if section not in PAGED_ENTRY_SECTIONS:
+            source_route = section.startswith(
+                ("ar~", "at~", "ac~", "ap~", "as~screenshots~")
+            )
+            if section not in PAGED_ENTRY_SECTIONS and not source_route:
                 await callback.answer(
                     text("card", "invalid_command", locale=locale), show_alert=True
                 )
@@ -141,15 +144,35 @@ def build_dispatcher(mode_name: str, state: TelegramCardState) -> Dispatcher:
         await callback.answer()
         if initial:
             try:
-                prepared = await prepare_initial_picker(
-                    state, token, session, section, callback.message, locale=locale
-                )
+                if source_route and section.startswith("ap~"):
+                    backend = section.split("~", 1)[1]
+                    service = get_app_context().episode_service
+                    if backend not in service.available_backends(session.anime.identity):
+                        raise ValueError("Episode backend unavailable")
+                    session.episode_backend = backend
+                    prepared = await prepare_initial_picker(
+                        state, token, session, "episodes", callback.message,
+                        locale=locale,
+                    )
+                elif source_route:
+                    scoped_labels = labels_for_route(session, section, locale=locale)
+                    prepared = (section, scoped_labels) if scoped_labels else None
+                else:
+                    prepared = await prepare_initial_picker(
+                        state, token, session, section, callback.message, locale=locale
+                    )
             except Exception:
                 import logging
 
                 logging.exception("Failed to prepare initial card picker")
                 prepared = None
             if prepared is None:
+                if source_route:
+                    await callback.message.edit_text(
+                        text("common", "no_data", locale=locale),
+                        reply_markup=None,
+                    )
+                    return
                 if section in {"related", "recommendations"}:
                     await edit_related_view(
                         callback.message,

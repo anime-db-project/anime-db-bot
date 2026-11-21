@@ -461,12 +461,7 @@ def _episode_keyboard(
         InlineKeyboardButton(
             text=("✓ " if candidate == backend else "")
             + service.display_name(candidate),
-            callback_data=KeyedPageCallback(
-                "ap",
-                token,
-                candidate,
-                view_page if source_switch_page is None else source_switch_page,
-            ).encode(),
+            callback_data=f"ci:{token}:ap~{candidate}",
         )
         for candidate in backends
     ]

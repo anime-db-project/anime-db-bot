@@ -269,18 +269,14 @@ def related_keyboard(
         [
             InlineKeyboardButton(
                 text=(f"✓ {all_label}" if source_key == _ALL_SOURCE_KEY else all_label),
-                callback_data=KeyedPageCallback(
-                    "ar", token, _route_key(section, _ALL_SOURCE_KEY), 0
-                ).encode(),
+                callback_data=f"ci:{token}:ar~{section}~{_ALL_SOURCE_KEY}",
             )
         ]
     )
     source_buttons = [
         InlineKeyboardButton(
             text=(f"✓ {name}" if key == source_key else name),
-            callback_data=KeyedPageCallback(
-                "ar", token, _route_key(section, key), 0
-            ).encode(),
+            callback_data=f"ci:{token}:ar~{section}~{key}",
         )
         for key, name in source_names.items()
     ]

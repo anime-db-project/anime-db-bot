@@ -64,7 +64,11 @@ def source_section_selection_rows(
             text=("✓ " + source_name)
             if selected_source_key == source_key
             else source_name,
-            callback_data=SectionSourceCallback(token, section, source_key, 0).encode(),
+            callback_data=(
+                f"ci:{token}:as~{section}~{source_key}"
+                if section == "screenshots"
+                else SectionSourceCallback(token, section, source_key, 0).encode()
+            ),
         )
         for source_key, source_name in sources
     ]
