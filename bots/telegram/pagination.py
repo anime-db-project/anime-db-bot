@@ -168,6 +168,7 @@ def _picker_keyboard(
     labels: Sequence[str] | None = None,
     back_callback: str | None = None,
     show_back: bool = True,
+    highlight_current: bool = True,
 ) -> InlineKeyboardMarkup:
     total = max(1, int(data.total))
     current = max(0, min(int(data.current), total - 1))
@@ -184,7 +185,7 @@ def _picker_keyboard(
         change_window=lambda window: PagePickerCallback(
             data.prefix, data.token, data.route, current, total, window
         ).encode(),
-        current=current,
+        current=current if highlight_current else None,
     )
     if show_back:
         rows.append(
@@ -204,6 +205,7 @@ def card_picker_keyboard(
     locale: str,
     labels: Sequence[str] | None = None,
     back_callback: str | None = None,
+    highlight_current: bool = True,
 ) -> InlineKeyboardMarkup:
     return _picker_keyboard(
         data,
@@ -211,6 +213,7 @@ def card_picker_keyboard(
         destination=lambda index: card_route_callback(data.token, data.route, index),
         labels=labels,
         back_callback=back_callback,
+        highlight_current=highlight_current,
     )
 
 
@@ -229,4 +232,5 @@ def search_picker_keyboard(
         destination=lambda index: TokenIndexCallback("sr", data.token, index).encode(),
         labels=labels,
         show_back=show_back,
+        highlight_current=show_back,
     )

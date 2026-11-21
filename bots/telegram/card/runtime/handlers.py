@@ -244,6 +244,7 @@ def build_dispatcher(mode_name: str, state: TelegramCardState) -> Dispatcher:
                 data,
                 locale=locale,
                 labels=labels,
+                highlight_current=False,
                 back_callback=(
                     f"av:{token}:trailers:0"
                     if data.route.startswith("at~")
