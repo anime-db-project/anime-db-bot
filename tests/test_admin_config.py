@@ -40,7 +40,7 @@ class AdminConfigCatalogTests(unittest.TestCase):
         for page in range(10):
             txt, keys = _groups_page("ru", page)
             self.assertLess(len(txt), 1500)
-            self.assertLessEqual(len(keys.inline_keyboard), 9)
+            self.assertLessEqual(len(keys.inline_keyboard), 13)
         self.assertIn("MAPPINGS_AUTO_UPDATE", search_keys("mappings"))
         self.assertEqual(search_keys(""), ())
         self.assertLessEqual(len(description_for("BOT_TOKEN", "telegram.env")), 300)

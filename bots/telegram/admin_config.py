@@ -17,14 +17,13 @@ from aiogram.filters import Command
 from aiogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, Message
 
 from bots.session_store import ExpiringSessionStore
+from bots.telegram.pagination import indexed_selection_rows, selection_page_size
 from core.settings import ConfigFileError
 from scripts.config_report import example_groups
 from scripts.console_config import inspect_key, update_key, validate_key_value
 from services.users.access_control import is_telegram_admin
 from services.users.settings import get_user_locale
 
-PAGE_SIZE = 7
-GROUP_PAGE_SIZE = 7
 CONFIRM_TTL_SECONDS = 300
 SENSITIVE_WARNING_KEYS = frozenset({
     "BOT_TOKEN", "ADMIN_TELEGRAM_USER_IDS", "TELEGRAM_ALLOWED_USER_IDS",
@@ -118,20 +117,12 @@ def _markup(
 def _groups_page(locale: str, page: int = 0) -> tuple[str, InlineKeyboardMarkup]:
     groups = catalog()
     total = len(groups)
-    pages = max(1, (total + GROUP_PAGE_SIZE - 1) // GROUP_PAGE_SIZE)
-    page = max(0, min(page, pages - 1))
-    rows = [
-        [_button(f"{name.removesuffix('.env')} ({len(keys)})", f"g:{i}:0")]
-        for i, (name, keys) in enumerate(groups)
-        if page * GROUP_PAGE_SIZE <= i < (page + 1) * GROUP_PAGE_SIZE
-    ]
-    navigation: list[InlineKeyboardButton] = []
-    if page:
-        navigation.append(_button("<", f"h:{page - 1}"))
-    if page + 1 < pages:
-        navigation.append(_button(">", f"h:{page + 1}"))
-    if navigation:
-        rows.append(navigation)
+    rows, page, _ = indexed_selection_rows(
+        [f"{name.removesuffix('.env')} ({len(keys)})" for name, keys in groups],
+        window=page,
+        destination=lambda index: f"cfg:g:{index}:0",
+        change_window=lambda index: f"cfg:h:{index}",
+    )
     rows.append([
         _button(_tr(locale, "Search by name", "Поиск по названию"), "search")
     ])
@@ -156,20 +147,12 @@ def _group_page(locale: str, group_index: int, page: int = 0) -> tuple[str, Inli
     if group_index < 0 or group_index >= len(groups):
         raise ValueError("Invalid configuration group")
     group, keys = groups[group_index]
-    pages = max(1, (len(keys) + PAGE_SIZE - 1) // PAGE_SIZE)
-    page = max(0, min(page, pages - 1))
-    rows = [
-        [_button(key, f"k:{group_index}:{i}")]
-        for i, key in enumerate(keys)
-        if page * PAGE_SIZE <= i < (page + 1) * PAGE_SIZE
-    ]
-    nav = []
-    if page:
-        nav.append(_button("<", f"g:{group_index}:{page - 1}"))
-    if page + 1 < pages:
-        nav.append(_button(">", f"g:{group_index}:{page + 1}"))
-    if nav:
-        rows.append(nav)
+    rows, page, pages = indexed_selection_rows(
+        list(keys),
+        window=page,
+        destination=lambda index: f"cfg:k:{group_index}:{index}",
+        change_window=lambda index: f"cfg:g:{group_index}:{index}",
+    )
     rows.append([_button(_tr(locale, "Back to groups", "К категориям"), "h:0")])
     return f"{group} | {page + 1}/{pages} | {len(keys)} options", _markup(rows)
 
@@ -225,7 +208,7 @@ async def _key_page(
         [
             _button(
                 _tr(locale, "Back", "Назад"),
-                f"g:{group_index}:{key_index // PAGE_SIZE}",
+                f"g:{group_index}:{key_index // selection_page_size()}",
             ),
             _button(_tr(locale, "Categories", "Категории"), "h:0"),
         ],
@@ -236,18 +219,12 @@ async def _key_page(
 def _search_page(
     locale: str, token: str, record: SearchResults, page: int
 ) -> tuple[str, InlineKeyboardMarkup]:
-    pages = max(1, (len(record.keys) + PAGE_SIZE - 1) // PAGE_SIZE)
-    page = max(0, min(page, pages - 1))
-    rows = []
-    for i in range(page * PAGE_SIZE, min(len(record.keys), (page + 1) * PAGE_SIZE)):
-        rows.append([_button(record.keys[i], f"hit:{token}:{i}")])
-    nav = []
-    if page:
-        nav.append(_button("<", f"res:{token}:{page - 1}"))
-    if page + 1 < pages:
-        nav.append(_button(">", f"res:{token}:{page + 1}"))
-    if nav:
-        rows.append(nav)
+    rows, page, pages = indexed_selection_rows(
+        list(record.keys),
+        window=page,
+        destination=lambda index: f"cfg:hit:{token}:{index}",
+        change_window=lambda index: f"cfg:res:{token}:{index}",
+    )
     rows.append([_button(_tr(locale, "Categories", "Категории"), "h:0")])
     return (
         _tr(

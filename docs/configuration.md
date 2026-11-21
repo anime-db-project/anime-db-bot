@@ -41,7 +41,7 @@ Wikipedia page view (no bot restart). See [Wikipedia reader](wikipedia.md).
 
 | File | Settings |
 |---|---|
-| \`telegram.env\` | Bot API transport, users/admins, allowlist, callback/session caps, images, rich fallback methods and timeouts |
+| \`telegram.env\` | Bot API transport, users/admins, allowlist, callback/session caps, named selection page size, images, rich fallback methods and timeouts |
 | \`sources.env\` | API endpoints and credentials, upstream timeout/caching limits, parallel loading of staff and portraits |
 | \`runtime.env\` | Search defaults, search expansion and query budgets, provider health, HTTP connection/concurrency pool, Redis cache |
 | \`rate-limits.env\` | Per-user request ceilings and source-/operation-specific API rate limits |
