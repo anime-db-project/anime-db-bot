@@ -15,7 +15,7 @@ from bots.telegram.callbacks import (
     PagePickerCallback,
     resolve_key_or_legacy_index,
 )
-from bots.telegram.pagination import card_picker_callback
+from bots.telegram.pagination import card_picker_callback, selection_page_size
 from bots.telegram.rich_media import deliver_rich_media
 from bots.telegram.card.views.renderer import (
     edit_standard_text,
@@ -213,7 +213,14 @@ def _source_keyboard(
             ),
             InlineKeyboardButton(
                 text=text("common", "back", locale=locale),
-                callback_data=f"av:{token}:main:0",
+                callback_data=PagePickerCallback(
+                    "ci",
+                    token,
+                    f"at~{source_key}",
+                    page,
+                    page_count,
+                    page // selection_page_size(),
+                ).encode(),
             ),
         ]
     )

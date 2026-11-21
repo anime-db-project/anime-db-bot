@@ -189,7 +189,11 @@ def navigation_keyboard(
             [
                 InlineKeyboardButton(
                     text=text("common", "back", locale=locale),
-                    callback_data=f"av:{token}:main:0",
+                    callback_data=(
+                        f"ci:{token}:{current_section}"
+                        if page_count > 1 and current_section in PAGED_ENTRY_SECTIONS
+                        else f"av:{token}:main:0"
+                    ),
                 )
             ]
         )
@@ -247,7 +251,11 @@ def description_keyboard(
             ),
             InlineKeyboardButton(
                 text=text("common", "back", locale=locale),
-                callback_data=f"av:{token}:main:0",
+                callback_data=(
+                    f"ci:{token}:ad~{source_key}"
+                    if page_count > 1
+                    else f"av:{token}:main:0"
+                ),
             ),
         ]
     )
@@ -311,7 +319,11 @@ def source_section_keyboard(
         [
             InlineKeyboardButton(
                 text=text("common", "back", locale=locale),
-                callback_data=f"av:{token}:main:0",
+                callback_data=(
+                    f"ci:{token}:as~{section}~{source_key}"
+                    if page_count > 1
+                    else f"av:{token}:main:0"
+                ),
             )
         ]
     )
