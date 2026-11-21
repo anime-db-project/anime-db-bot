@@ -4,6 +4,7 @@ import asyncio
 import logging
 
 from core.canonicalization import canonical_genre_token
+from core.company_names import dedupe_company_names
 from core.contracts import AnimeSource
 from core.identity import AnimeIdentity
 from core.models import (
@@ -313,7 +314,7 @@ class AnimeAggregator(AggregationMergeSupport):
             score_sources_count=len(scores),
             genres=canonical_genres,
             studios=_merge_studios(records),
-            licensors=_dedupe_strings(
+            licensors=dedupe_company_names(
                 [value for record in records for value in record.licensors]
             ),
             source_materials=source_materials,

@@ -32,6 +32,7 @@ class SourceLoadProgress:
 class PeopleLoadProgress:
     sources: dict[str, SourceLoadProgress] = field(default_factory=dict)
     manifest_people: list[PersonCredit] = field(default_factory=list)
+    roster_published: bool = False
     portrait_cursor: int = 0
     portraits_complete: bool = False
     portrait_task: asyncio.Task[bool] | None = None
@@ -333,6 +334,14 @@ class PeopleProgressService:
         if tasks:
             await asyncio.gather(*tasks, return_exceptions=True)
         self._rebuild_manifest(anime, section, progress)
+        if self._manifest_complete(progress, None) and not progress.roster_published:
+            # The full lightweight roster is available before portrait batches.
+            for item in progress.sources.values():
+                if not item.portrait_only and item.manifest_people:
+                    self._merge_people(
+                        anime, section, item.source.name, item.manifest_people
+                    )
+            progress.roster_published = True
 
     @classmethod
     def _pool_targets(
@@ -536,7 +545,7 @@ class PeopleProgressService:
         def current_portraits() -> int:
             return len(people_state(anime, section, source)[1])
 
-        if not current_people() and self.scope_has_more(progress, source):
+        if progress.portrait_cursor == 0 and self.scope_has_more(progress, source):
             await self._await_portrait_batch(anime, section, progress)
 
         requested_page = max(0, int(requested_page))

@@ -15,6 +15,7 @@ from bots.telegram.card.views.rendering import (
     poster_html,
 )
 from bots.telegram.card.views.titles import preferred_title_keys
+from core.company_names import dedupe_company_names
 from core.models import AggregatedAnime, BroadcastSlot
 from core.source_keys import metadata_source_key
 from core.temporal import format_time
@@ -244,7 +245,12 @@ def _main_blocks(anime: AggregatedAnime, *, locale: str) -> list[tuple[str, list
         )
     if anime.licensors:
         production.append(
-            text("card", "licensors", locale=locale, value=", ".join(anime.licensors))
+            text(
+                "card",
+                "licensors",
+                locale=locale,
+                value=", ".join(dedupe_company_names(anime.licensors)),
+            )
         )
     if anime.franchise:
         production.append(
