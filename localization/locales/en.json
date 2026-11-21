@@ -328,6 +328,7 @@
     "discovery_sources": "Sources: {sources}",
     "discovery_relation": "Relation: {value}",
     "discovery_all_sources": "All sources",
+    "discovery_more_details": "Details",
     "discovery_open_card": "Open anime card"
   },
   "people": {
