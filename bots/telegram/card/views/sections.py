@@ -151,9 +151,7 @@ def anime_sections(
     }
 
 
-def description_pages(
-    anime: AggregatedAnime, source: str, *, locale: str
-) -> list[str]:
+def description_pages(anime: AggregatedAnime, source: str, *, locale: str) -> list[str]:
     """Exactly the same text/page boundaries for selection and reading."""
     description = anime.descriptions.get(source, "")
     value = text("card", "description_title", locale=locale, source=source)
