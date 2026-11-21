@@ -166,12 +166,17 @@ class WikipediaSourceTests(unittest.TestCase):
             callbacks,
             [
                 "wk:abc:r:0:0",
+                "noop",
                 "wk:abc:r:2:0",
                 "wk:abc:l:0",
                 "av:abc:main:0",
             ],
         )
         self.assertEqual(body.splitlines()[0], "<b>Plot</b>")
+        self.assertTrue(any(
+            button.text == "2/3"
+            for row in menu.inline_keyboard for button in row
+        ))
         self.assertNotIn("1/1", body)
         self.assertEqual(len(paginate_section(article.sections[1])), 1)
 

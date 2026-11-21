@@ -123,7 +123,7 @@ class WikipediaCallbackTests(unittest.IsolatedAsyncioTestCase):
         await self.click(f"wk:{self.token}:a:0")
         self.fake_client.article.assert_awaited_once()
         third = await self.click(f"wk:{self.token}:r:0:0")
-        self.assertIn("<b>Сюжет</b>", self.text_of(third))
+        self.assertIn("<h3>Сюжет</h3>", self.text_of(third))
         self.assertNotIn("1/1", self.text_of(third))
         self.assertIn('href="https://ru.wikipedia.org/wiki/Коноха"', self.text_of(third))
         self.assertNotIn("Отображение не удалось", self.text_of(third))

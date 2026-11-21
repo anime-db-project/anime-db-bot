@@ -294,7 +294,7 @@ class AppSettingsTests(unittest.TestCase):
                     encoding="utf-8",
                 )
             values = project_env_values(root)
-        self.assertEqual(len(values), 248)
+        self.assertEqual(len(values), 249)
         for key in (
             "BOT_ON_FAILURE",
             "BOT_ON_CLEAN_EXIT",
