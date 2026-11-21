@@ -358,7 +358,11 @@ def _keyboard(
         [
             InlineKeyboardButton(
                 text=text("common", "back", locale=locale),
-                callback_data=f"av:{token}:main:0",
+                callback_data=(
+                    f"ci:{token}:characters"
+                    if shown > 0
+                    else f"av:{token}:main:0"
+                ),
             )
         ]
     )

@@ -214,7 +214,13 @@ def _keyboard(
         [
             InlineKeyboardButton(
                 text=text("common", "back", locale=locale),
-                callback_data=ViewCallback(token, "main", 0).encode(),
+                callback_data=(
+                    f"ci:{token}:ps~{section}~{source_key}"
+                    if shown and source_key is not None
+                    else f"ci:{token}:{section}"
+                    if shown
+                    else ViewCallback(token, "main", 0).encode()
+                ),
             )
         ]
     )

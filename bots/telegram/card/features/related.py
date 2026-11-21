@@ -287,7 +287,13 @@ def related_keyboard(
         [
             InlineKeyboardButton(
                 text=text("common", "back", locale=locale),
-                callback_data=f"av:{token}:main:0",
+                callback_data=(
+                    f"ci:{token}:ar~{section}~{source_key}"
+                    if items and source_key != _ALL_SOURCE_KEY
+                    else f"ci:{token}:{section}"
+                    if items
+                    else f"av:{token}:main:0"
+                ),
             )
         ]
     )

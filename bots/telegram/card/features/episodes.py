@@ -523,7 +523,11 @@ def _episode_keyboard(
         [
             InlineKeyboardButton(
                 text=text("common", "back", locale=locale),
-                callback_data=f"av:{token}:main:0",
+                callback_data=(
+                    f"ci:{token}:episodes"
+                    if nav_total and nav_total > 0
+                    else f"av:{token}:main:0"
+                ),
             )
         ]
     )
