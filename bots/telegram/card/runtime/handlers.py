@@ -221,7 +221,11 @@ def build_dispatcher(mode_name: str, state: TelegramCardState) -> Dispatcher:
                 data,
                 locale=locale,
                 labels=labels,
-                back_callback=f"av:{token}:main:0",
+                back_callback=(
+                    f"av:{token}:trailers:0"
+                    if data.route.startswith("at~")
+                    else f"av:{token}:main:0"
+                ),
             )
         except ValueError:
             await callback.message.edit_text(

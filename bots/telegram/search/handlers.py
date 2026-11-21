@@ -975,6 +975,34 @@ async def _send_preview(
     await message.edit_text(text_value, reply_markup=keyboard)
 
 
+async def _send_results_list(
+    message: Message,
+    token: str,
+    session: SearchSession,
+    *,
+    edit: bool,
+) -> None:
+    """A named search-result chooser before showing individual previews."""
+    if not session.items:
+        await _send_preview(message, token, session, 0, edit=edit)
+        return
+    locale = get_user_locale(session.owner_user_id)
+    title = (
+        "Результаты поиска. Выберите аниме:"
+        if locale == "ru"
+        else "Search results. Choose an anime:"
+    )
+    keyboard = search_picker_keyboard(
+        PagePickerCallback("sp", token, "sr", 0, len(session.items), 0),
+        locale=locale,
+        labels=[item.title for item in session.items],
+    )
+    if edit:
+        await message.edit_text(title, reply_markup=keyboard)
+    else:
+        await message.answer(title, reply_markup=keyboard)
+
+
 async def _execute_query(
     message: Message,
     query: str,
@@ -1046,7 +1074,7 @@ async def _execute_query(
         return
 
     token = _remember_results(state, query, owner_user_id, result_set)
-    await _send_preview(message, token, state.sessions[token], 0, edit=False)
+    await _send_results_list(message, token, state.sessions[token], edit=False)
 
 
 async def _execute_image_search(
@@ -1101,7 +1129,7 @@ async def _execute_image_search(
         input_token,
         result_set,
     )
-    await _send_preview(message, token, state.sessions[token], 0, edit=True)
+    await _send_results_list(message, token, state.sessions[token], edit=True)
 
 
 def register_search_handlers(
@@ -1504,12 +1532,15 @@ def register_search_handlers(
             data.window,
         )
         await callback.answer()
-        await callback.message.edit_reply_markup(
+        await callback.message.edit_text(
+            "Результаты поиска. Выберите аниме:"
+            if locale == "ru"
+            else "Search results. Choose an anime:",
             reply_markup=search_picker_keyboard(
                 picker,
                 locale=locale,
                 labels=[item.title for item in session.items],
-            )
+            ),
         )
 
     @dp.callback_query(F.data.startswith("sr:"))

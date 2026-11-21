@@ -10,7 +10,11 @@ from aiogram.types import (
     Message,
 )
 
-from bots.telegram.callbacks import KeyedPageCallback, resolve_key_or_legacy_index
+from bots.telegram.callbacks import (
+    KeyedPageCallback,
+    PagePickerCallback,
+    resolve_key_or_legacy_index,
+)
 from bots.telegram.pagination import card_picker_callback
 from bots.telegram.rich_media import deliver_rich_media
 from bots.telegram.card.views.renderer import (
@@ -109,11 +113,18 @@ def _source_rows(
     sources: list[tuple[str, str]],
     *,
     selected_source_key: str | None = None,
+    counts: dict[str, int] | None = None,
 ) -> list[list[InlineKeyboardButton]]:
     buttons = [
         InlineKeyboardButton(
             text=("✓ " + source_name) if selected_source_key == key else source_name,
-            callback_data=KeyedPageCallback("at", token, key, 0).encode(),
+            callback_data=(
+                PagePickerCallback(
+                    "ci", token, f"at~{key}", 0, counts[key], 0
+                ).encode()
+                if counts and counts.get(key, 0) > 0
+                else KeyedPageCallback("at", token, key, 0).encode()
+            ),
         )
         for key, source_name in sources
     ]
@@ -125,8 +136,9 @@ def _chooser_keyboard(
     sources: list[tuple[str, str]],
     *,
     locale: str,
+    counts: dict[str, int] | None = None,
 ) -> InlineKeyboardMarkup:
-    rows = _source_rows(token, sources)
+    rows = _source_rows(token, sources, counts=counts)
     rows.append(
         [
             InlineKeyboardButton(
@@ -266,7 +278,13 @@ async def edit_trailers_view(
             content = text("card", "trailers_load_failed", locale=locale)
         else:
             content = text("card", "trailers_empty", locale=locale)
-        keyboard = _chooser_keyboard(token, sources, locale=locale)
+        keyboard = _chooser_keyboard(
+            token, sources, locale=locale,
+            counts={
+                key: len(session.trailers_by_source.get(source, []))
+                for key, source in sources
+            },
+        )
     else:
         source_key, source = _source_name_for_selector(session, source_key)
         all_items = session.trailers_by_source.get(source, [])
