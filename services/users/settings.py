@@ -19,7 +19,11 @@ _DEFAULT_PLATFORM = "telegram"
 
 
 def normalize_wikipedia_mode(value: object) -> str:
-    return str(value or "").strip().casefold() if str(value or "").strip().casefold() in {"clean", "raw"} else "clean"
+    return (
+        str(value or "").strip().casefold()
+        if str(value or "").strip().casefold() in {"clean", "raw"}
+        else "clean"
+    )
 
 
 def validate_wikipedia_mode(value: str) -> str:
@@ -125,7 +129,9 @@ class SQLiteUserSettingsStore:
                     )
                     connection.execute("DROP TABLE user_settings_legacy")
 
-                if "wikipedia_mode" not in self._table_columns(connection, "user_settings"):
+                if "wikipedia_mode" not in self._table_columns(
+                    connection, "user_settings"
+                ):
                     connection.execute(
                         "ALTER TABLE user_settings ADD COLUMN wikipedia_mode "
                         "TEXT NOT NULL DEFAULT 'clean'"
@@ -389,6 +395,7 @@ def touch_platform_user(platform: str, user_id: int) -> None:
 def list_platform_user_ids(platform: str) -> list[int]:
     return get_user_settings_store().list_user_ids(platform)
 
+
 def get_user_wikipedia_mode(
     user_id: int | None, platform: str = _DEFAULT_PLATFORM
 ) -> str:
@@ -398,6 +405,8 @@ def get_user_wikipedia_mode(
 def set_user_wikipedia_mode(
     user_id: int, mode: str, platform: str = _DEFAULT_PLATFORM
 ) -> str:
-    return get_user_settings_store().set_wikipedia_mode(
-        user_id, mode, platform=platform
-    ).wikipedia_mode
+    return (
+        get_user_settings_store()
+        .set_wikipedia_mode(user_id, mode, platform=platform)
+        .wikipedia_mode
+    )
