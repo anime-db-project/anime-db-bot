@@ -1,36 +1,44 @@
-"""Wikipedia screens for an anime card: independent title search and article reader.
+"""An uncluttered Wikipedia reader attached to a card, outside aggregation.
 
-A card does not imply an encyclopedia match. The user chooses a page from
-Wikipedia search results. All subsequent operations stay on that page and
-the article is loaded lazily outside the anime aggregator.
+The user's global /settings language selects Wikipedia. Search hits require an
+explicit choice. The article is rendered as flowing encyclopedic prose with
+major sections, linked text and direct previous/next section navigation.
 """
 from __future__ import annotations
 
 import html
 import logging
+import re
 
 from aiogram import Dispatcher, F
 from aiogram.exceptions import TelegramBadRequest
-from aiogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, Message
+from aiogram.types import (
+    CallbackQuery,
+    InlineKeyboardButton,
+    InlineKeyboardMarkup,
+    InputRichMessage,
+    Message,
+)
 
 from bots.telegram.card.runtime.state import AnimeCardSession, TelegramCardState
+from bots.telegram.card.ui.constants import RICH_MESSAGE_LIMIT, STANDARD_MESSAGE_LIMIT
 from bots.telegram.card.views.renderer import edit_standard_text
 from core.models import AggregatedAnime
 from services.users.settings import get_user_locale, get_user_wikipedia_mode
 from sources.providers.wikipedia import (
-    LANGUAGES,
+    JAPANESE_KANA,
     WikipediaArticle,
     WikipediaHit,
+    japanese_title_in_article,
     paginate_section,
     wiki_language,
     wikipedia_client,
 )
 
-SECTIONS_PER_PAGE = 7
-LANG_LABELS = {
-    "ru": "Русский", "en": "English", "ja": "日本語",
-    "de": "Deutsch", "es": "Español", "fr": "Français", "it": "Italiano",
-}
+SECTIONS_PER_PAGE = 18
+# Headers, source attribution and Telegram internals also consume characters.
+RICH_CHAPTER_BUDGET = RICH_MESSAGE_LIMIT - 750
+PLAIN_CHAPTER_BUDGET = STANDARD_MESSAGE_LIMIT - 450
 
 
 def _tr(locale: str, ru: str, en: str) -> str:
@@ -38,7 +46,7 @@ def _tr(locale: str, ru: str, en: str) -> str:
 
 
 def _button(label: str, action: str) -> InlineKeyboardButton:
-    return InlineKeyboardButton(text=label[:60], callback_data=action)
+    return InlineKeyboardButton(text=label, callback_data=action)
 
 
 def _back(token: str, locale: str) -> InlineKeyboardButton:
@@ -50,41 +58,55 @@ def _keyboard(rows: list[list[InlineKeyboardButton]]) -> InlineKeyboardMarkup:
 
 
 def _search_term(anime: AggregatedAnime, language: str) -> str:
-    names = anime.titles
+    titles = anime.titles
     keys = {
         "ru": ("russian", "romaji", "english"),
         "ja": ("japanese", "romaji", "english"),
     }.get(language, ("english", "romaji", "japanese", "russian"))
     for key in keys:
-        value = str(names.get(key) or "").strip()
-        if len(value) >= 2:
-            return value[:120]
+        candidate = str(titles.get(key) or "").strip()
+        if len(candidate) >= 2:
+            return candidate[:120]
     return str(anime.title).strip()[:120]
 
 
-def _language_rows(token: str, selected: str) -> list[list[InlineKeyboardButton]]:
-    choices = [
-        _button(
-            ("✓ " if code == selected else "") + LANG_LABELS[code],
-            f"wk:{token}:lang:{code}",
-        )
-        for code in LANGUAGES
-    ]
-    return [choices[index : index + 3] for index in range(0, len(choices), 3)]
+def _japanese_label(anime: AggregatedAnime, hit: WikipediaHit) -> str:
+    """No invented Japanese aliases: use one only when the hit mentions it."""
+    title = hit.title
+    japanese = str(anime.titles.get("japanese") or "").strip()
+    if (
+        japanese
+        and JAPANESE_KANA.search(japanese)
+        and japanese not in title
+        and japanese in hit.snippet
+    ):
+        return f"{title} ({japanese})"
+    return title
+
+
+def _reset_for_locale(session: AnimeCardSession, locale: str) -> str:
+    """Changing the global language invalidates a previous wiki page choice."""
+    language = wiki_language(locale)
+    if session.wikipedia_language != language:
+        session.wikipedia_language = language
+        session.wikipedia_pageid = None
+        session.wikipedia_hits = ()
+    return language
 
 
 async def _edit_html(
-    message: Message, value: str, keyboard: InlineKeyboardMarkup,
-    *, locale: str
+    message: Message, value: str, keyboard: InlineKeyboardMarkup, *,
+    locale: str,
 ) -> None:
-    """Safe text-mode fallback for Telegram installations rejecting HTML edits."""
+    """Use standard Telegram HTML for short menus, with a plain fallback."""
     try:
-        await message.edit_text(value, reply_markup=keyboard, parse_mode="HTML")
-    except TelegramBadRequest:
-        # The fallback must not expose literal HTML markup or crash the bot.
-        plain = html.unescape(
-            __import__("re").sub(r"<[^>]+>", "", value)
+        await message.edit_text(
+            value, reply_markup=keyboard, parse_mode="HTML",
         )
+    except TelegramBadRequest as exc:
+        if "message is not modified" in str(exc).casefold():
+            return
+        plain = html.unescape(re.sub(r"<[^>]+>", "", value))
         await edit_standard_text(
             message, plain, reply_markup=keyboard, locale=locale,
         )
@@ -93,54 +115,46 @@ async def _edit_html(
 async def _search_screen(
     message: Message, token: str, session: AnimeCardSession, *, locale: str,
 ) -> None:
-    language = session.wikipedia_language or wiki_language(locale)
-    hits: tuple[WikipediaHit, ...] = tuple(
-        item for item in session.wikipedia_hits if isinstance(item, WikipediaHit)
+    language = _reset_for_locale(session, locale)
+    hits = tuple(
+        hit for hit in session.wikipedia_hits if isinstance(hit, WikipediaHit)
     )
-    if session.wikipedia_language != language or not hits:
+    if not hits:
         term = _search_term(session.anime, language)
         hits = await wikipedia_client().search(language=language, title=term)
+        if not hits:
+            # Same Wikipedia language, different title spelling. Never infer
+            # a Wikipedia identity from the first text-search result.
+            japanese = str(session.anime.titles.get("japanese") or "").strip()
+            if JAPANESE_KANA.search(japanese) and japanese != term:
+                hits = await wikipedia_client().search(
+                    language=language, title=japanese,
+                )
         session.wikipedia_hits = hits
-        session.wikipedia_language = language
     rows = [
-        [_button(hit.title, f"wk:{token}:a:{index}")]
+        [_button(_japanese_label(session.anime, hit), f"wk:{token}:a:{index}")]
         for index, hit in enumerate(hits)
     ]
-    rows.extend(_language_rows(token, language))
     rows.append([_back(token, locale)])
-    title = _tr(locale, "Поиск Wikipedia", "Wikipedia search")
-    term = _search_term(session.anime, language)
-    visible = [
-        f"<b>{html.escape(title)}</b>",
-        _tr(
+    header = _tr(locale, "<b>Wikipedia</b>\nВыберите статью:",
+                 "<b>Wikipedia</b>\nChoose an article:")
+    if not hits:
+        header += "\n\n" + _tr(
             locale,
-            "Это найденные статьи, а не подтверждённые совпадения с аниме. "
-            "Выберите подходящую статью вручную.",
-            "These are search results, not verified anime matches. "
-            "Please choose the correct article yourself.",
-        ),
-        f"{html.escape(LANG_LABELS[language])}: {html.escape(term)}",
-    ]
-    if hits:
-        for index, hit in enumerate(hits[:7], start=1):
-            if hit.snippet:
-                visible.append(f"{index}. {html.escape(hit.title)} — {html.escape(hit.snippet)}")
-    else:
-        visible.append(_tr(
-            locale,
-            "Статей не найдено. Попробуйте другой язык.",
-            "No articles found. Try another language.",
-        ))
-    await _edit_html(message, "\n\n".join(visible), _keyboard(rows), locale=locale)
+            "Статья не найдена. Можно изменить язык в /settings.",
+            "No article found. Change your language in /settings if needed.",
+        )
+    await _edit_html(message, header, _keyboard(rows), locale=locale)
 
 
 async def _article(
-    session: AnimeCardSession, *, user_id: int
+    session: AnimeCardSession, *, user_id: int, locale: str,
 ) -> WikipediaArticle | None:
-    if session.wikipedia_pageid is None or session.wikipedia_language is None:
+    language = _reset_for_locale(session, locale)
+    if session.wikipedia_pageid is None:
         return None
     return await wikipedia_client().article(
-        language=session.wikipedia_language,
+        language=language,
         pageid=session.wikipedia_pageid,
         mode=get_user_wikipedia_mode(user_id),
     )
@@ -150,81 +164,138 @@ async def _chapters(
     message: Message, token: str, session: AnimeCardSession, *,
     locale: str, user_id: int, page: int = 0,
 ) -> None:
-    article = await _article(session, user_id=user_id)
+    article = await _article(session, user_id=user_id, locale=locale)
     if article is None:
         await _search_screen(message, token, session, locale=locale)
         return
-    chapters = article.sections
-    total_pages = max(1, (len(chapters) + SECTIONS_PER_PAGE - 1) // SECTIONS_PER_PAGE)
+    sections = article.sections
+    total_pages = max(1, (len(sections) + SECTIONS_PER_PAGE - 1) // SECTIONS_PER_PAGE)
     page = max(0, min(page, total_pages - 1))
     rows = [
-        [_button(section.title, f"wk:{token}:r:{i}:0")]
-        for i, section in enumerate(chapters)
-        if page * SECTIONS_PER_PAGE <= i < (page + 1) * SECTIONS_PER_PAGE
+        [_button(section.title, f"wk:{token}:r:{index}:0")]
+        for index, section in enumerate(sections)
+        if page * SECTIONS_PER_PAGE <= index < (page + 1) * SECTIONS_PER_PAGE
     ]
     if total_pages > 1:
-        nav = []
+        navigation = []
         if page:
-            nav.append(_button("◀️", f"wk:{token}:l:{page - 1}"))
-        nav.append(_button(f"{page + 1}/{total_pages}", f"wk:{token}:l:{page}"))
+            navigation.append(_button(
+                _tr(locale, "◀ Предыдущие", "◀ Previous"),
+                f"wk:{token}:l:{page - 1}",
+            ))
         if page + 1 < total_pages:
-            nav.append(_button("▶️", f"wk:{token}:l:{page + 1}"))
-        rows.append(nav)
+            navigation.append(_button(
+                _tr(locale, "Следующие ▶", "Next ▶"),
+                f"wk:{token}:l:{page + 1}",
+            ))
+        rows.append(navigation)
     rows.append([
-        _button(_tr(locale, "Другая статья", "Other article"), f"wk:{token}:search")
+        _button(_tr(locale, "Другие статьи", "Other articles"),
+                f"wk:{token}:search"),
+        _back(token, locale),
     ])
-    rows.append([_back(token, locale)])
-    mode = get_user_wikipedia_mode(user_id)
-    label = _tr(locale, "Очищенный" if mode == "clean" else "Полный RAW",
-                "Clean" if mode == "clean" else "Full RAW")
-    intro = (
-        f"<b>Wikipedia — {html.escape(article.title)}</b>\n\n"
-        + _tr(locale, "Выберите раздел статьи.", "Choose an article section.")
-        + f"\n{html.escape(LANG_LABELS[article.language])} · {label}\n"
-        + _tr(
-            locale,
-            "Подразделы включены в родительские разделы.",
-            "Subsections are included inside their parent sections.",
-        )
-        + f'\n\n<a href="{html.escape(article.url, quote=True)}">Wikipedia · '
-        + _tr(locale, "Оригинальная статья", "Original article") + "</a>"
+    japanese_title = japanese_title_in_article(
+        article, session.anime.titles.get("japanese")
     )
-    await _edit_html(message, intro, _keyboard(rows), locale=locale)
+    title = f"<b>Wikipedia — {html.escape(article.title)}</b>"
+    if japanese_title and japanese_title not in article.title:
+        title += f"\n{html.escape(japanese_title)}"
+    title += "\n\n" + _tr(locale, "Выберите раздел:", "Choose a section:")
+    await _edit_html(message, title, _keyboard(rows), locale=locale)
 
 
 def _chapter_page(
-    article: WikipediaArticle, section_index: int, page: int, *,
-    token: str, locale: str,
+    article: WikipediaArticle,
+    section_index: int,
+    page: int,
+    *,
+    token: str,
+    locale: str,
+    limit: int = RICH_CHAPTER_BUDGET,
 ) -> tuple[str, InlineKeyboardMarkup]:
     if not 0 <= section_index < len(article.sections):
         raise ValueError("Unknown Wikipedia section")
-    section = article.sections[section_index]
-    pages = paginate_section(section)
+    chapter = article.sections[section_index]
+    pages = paginate_section(chapter, limit=limit)
     page = max(0, min(page, len(pages) - 1))
-    # Page count is part of the displayed text, not only a keyboard control.
-    heading = (
-        f"<b>{html.escape(section.title)} — {page + 1}/{len(pages)}</b>"
-    )
+    heading = f"<b>{html.escape(chapter.title)}</b>"
+    if len(pages) > 1:
+        heading += f"\n{page + 1}/{len(pages)}"
     attribution = (
-        f'\n\n<a href="{html.escape(article.url, quote=True)}">'
-        "Wikipedia</a> · "
-        '<a href="https://creativecommons.org/licenses/by-sa/4.0/">'
+        f'\n\n<a href="{html.escape(article.url, quote=True)}">Wikipedia</a>'
+        ' · <a href="https://creativecommons.org/licenses/by-sa/4.0/">'
         "CC BY-SA 4.0</a>"
     )
-    rows = []
+    keyboard_rows: list[list[InlineKeyboardButton]] = []
+    # No within-section pager at all when content fits the message budget.
     if len(pages) > 1:
-        nav = []
+        page_navigation = []
         if page:
-            nav.append(_button("◀️", f"wk:{token}:r:{section_index}:{page - 1}"))
-        nav.append(_button(f"{page + 1}/{len(pages)}", f"wk:{token}:r:{section_index}:{page}"))
+            page_navigation.append(_button(
+                _tr(locale, "◀ Страница", "◀ Page"),
+                f"wk:{token}:r:{section_index}:{page - 1}",
+            ))
         if page + 1 < len(pages):
-            nav.append(_button("▶️", f"wk:{token}:r:{section_index}:{page + 1}"))
-        rows.append(nav)
-    rows.append([
-        _button(_tr(locale, "К разделам", "Sections"), f"wk:{token}:l:0"),
+            page_navigation.append(_button(
+                _tr(locale, "Страница ▶", "Page ▶"),
+                f"wk:{token}:r:{section_index}:{page + 1}",
+            ))
+        keyboard_rows.append(page_navigation)
+    # Cross-chapter navigation works from every chapter, even when it is
+    # short enough to fit in one message.
+    chapter_navigation = []
+    if section_index:
+        chapter_navigation.append(_button(
+            _tr(locale, "◀ Раздел", "◀ Section"),
+            f"wk:{token}:r:{section_index - 1}:0",
+        ))
+    if section_index + 1 < len(article.sections):
+        chapter_navigation.append(_button(
+            _tr(locale, "Раздел ▶", "Section ▶"),
+            f"wk:{token}:r:{section_index + 1}:0",
+        ))
+    if chapter_navigation:
+        keyboard_rows.append(chapter_navigation)
+    keyboard_rows.append([
+        _button(_tr(locale, "К разделам", "All sections"),
+                f"wk:{token}:l:{section_index // SECTIONS_PER_PAGE}"),
         _back(token, locale),
     ])
-    return heading + "\n\n" + pages[page] + attribution, _keyboard(rows)
+    return heading + "\n\n" + pages[page] + attribution, _keyboard(keyboard_rows)
+
+
+async def _render_chapter(
+    message: Message, token: str, session: AnimeCardSession,
+    article: WikipediaArticle, *, section_index: int, page: int, locale: str,
+) -> None:
+    # Prefer sendRichMessage/edit rich text for long Wikipedia paragraphs.
+    # If the Telegram API server rejects rich text, remember the fallback
+    # and paginate at the sendMessage limit only then.
+    plain_mode = session.wikipedia_plain_fallback
+    limit = PLAIN_CHAPTER_BUDGET if plain_mode else RICH_CHAPTER_BUDGET
+    body, keyboard = _chapter_page(
+        article, section_index, page, token=token, locale=locale, limit=limit,
+    )
+    if not plain_mode:
+        try:
+            await message.edit_text(
+                rich_message=InputRichMessage(html=body),
+                reply_markup=keyboard,
+            )
+            return
+        except TelegramBadRequest as exc:
+            if "message is not modified" in str(exc).casefold():
+                return
+            logging.warning(
+                "Wikipedia rich-message edit rejected, using standard HTML: %s",
+                type(exc).__name__,
+            )
+            session.wikipedia_plain_fallback = True
+            body, keyboard = _chapter_page(
+                article, section_index, page, token=token, locale=locale,
+                limit=PLAIN_CHAPTER_BUDGET,
+            )
+    await _edit_html(message, body, keyboard, locale=locale)
 
 
 async def edit_wikipedia_home(
@@ -232,22 +303,27 @@ async def edit_wikipedia_home(
     locale: str, user_id: int,
 ) -> None:
     try:
+        _reset_for_locale(session, locale)
         if session.wikipedia_pageid is None:
             await _search_screen(message, token, session, locale=locale)
         else:
-            await _chapters(message, token, session, locale=locale, user_id=user_id)
+            await _chapters(
+                message, token, session, locale=locale, user_id=user_id,
+            )
     except Exception:
         logging.exception("Wikipedia module could not load article/search")
         await _edit_html(
             message,
             _tr(
                 locale,
-                "Wikipedia сейчас недоступна. Попробуйте позже или выберите другой язык.",
-                "Wikipedia is unavailable. Retry later or choose another language.",
+                "Не удалось загрузить Wikipedia. Попробуйте ещё раз.",
+                "Wikipedia could not be loaded. Please retry.",
             ),
-            _keyboard(_language_rows(
-                token, session.wikipedia_language or wiki_language(locale)
-            ) + [[_back(token, locale)]]),
+            _keyboard([
+                [_button(_tr(locale, "Повторить", "Retry"),
+                         f"av:{token}:wikipedia:0")],
+                [_back(token, locale)],
+            ]),
             locale=locale,
         )
 
@@ -258,12 +334,17 @@ def register_wikipedia_handlers(dp: Dispatcher, state: TelegramCardState) -> Non
         locale = get_user_locale(callback.from_user.id)
         parts = str(callback.data or "").split(":")
         if len(parts) < 3:
-            await callback.answer(_tr(locale, "Неверная кнопка", "Invalid action"), show_alert=True)
+            await callback.answer(
+                _tr(locale, "Неверная кнопка", "Invalid action"), show_alert=True,
+            )
             return
         token = parts[1]
         session = state.anime_sessions.get(token)
         if session is None or session.owner_user_id != callback.from_user.id:
-            await callback.answer(_tr(locale, "Сессия недоступна", "Session unavailable"), show_alert=True)
+            await callback.answer(
+                _tr(locale, "Сессия недоступна", "Session unavailable"),
+                show_alert=True,
+            )
             return
         if callback.message is None:
             await callback.answer()
@@ -271,16 +352,14 @@ def register_wikipedia_handlers(dp: Dispatcher, state: TelegramCardState) -> Non
         action = parts[2]
         try:
             session.main_view_active = False
-            if action == "lang" and len(parts) == 4 and parts[3] in LANGUAGES:
-                session.wikipedia_language = parts[3]
+            _reset_for_locale(session, locale)
+            if action == "search" and len(parts) == 3:
                 session.wikipedia_pageid = None
                 session.wikipedia_hits = ()
                 await callback.answer()
-                await _search_screen(callback.message, token, session, locale=locale)
-            elif action == "search" and len(parts) == 3:
-                session.wikipedia_pageid = None
-                await callback.answer()
-                await _search_screen(callback.message, token, session, locale=locale)
+                await _search_screen(
+                    callback.message, token, session, locale=locale,
+                )
             elif action == "a" and len(parts) == 4:
                 index = int(parts[3])
                 if not 0 <= index < len(session.wikipedia_hits):
@@ -288,28 +367,37 @@ def register_wikipedia_handlers(dp: Dispatcher, state: TelegramCardState) -> Non
                 hit = session.wikipedia_hits[index]
                 if not isinstance(hit, WikipediaHit):
                     raise ValueError("Invalid Wikipedia result")
+                if hit.language != session.wikipedia_language:
+                    raise ValueError("Wikipedia search result language expired")
                 session.wikipedia_pageid = hit.pageid
-                session.wikipedia_language = hit.language
                 await callback.answer()
                 await _chapters(
-                    callback.message, token, session,
-                    locale=locale, user_id=callback.from_user.id,
+                    callback.message, token, session, locale=locale,
+                    user_id=callback.from_user.id,
                 )
             elif action == "l" and len(parts) == 4:
                 await callback.answer()
                 await _chapters(
-                    callback.message, token, session,
-                    locale=locale, user_id=callback.from_user.id, page=int(parts[3]),
+                    callback.message, token, session, locale=locale,
+                    user_id=callback.from_user.id, page=int(parts[3]),
                 )
             elif action == "r" and len(parts) == 5:
-                article = await _article(session, user_id=callback.from_user.id)
-                if article is None:
-                    raise ValueError("No selected Wikipedia article")
-                body, keyboard = _chapter_page(
-                    article, int(parts[3]), int(parts[4]), token=token, locale=locale,
+                article = await _article(
+                    session, user_id=callback.from_user.id, locale=locale,
                 )
+                if article is None:
+                    await callback.answer(
+                        _tr(locale, "Сменился язык бота. Откройте Wikipedia снова.",
+                            "Bot language changed. Reopen Wikipedia."),
+                        show_alert=True,
+                    )
+                    return
                 await callback.answer()
-                await _edit_html(callback.message, body, keyboard, locale=locale)
+                await _render_chapter(
+                    callback.message, token, session, article,
+                    section_index=int(parts[3]), page=int(parts[4]),
+                    locale=locale,
+                )
             else:
                 raise ValueError("Invalid Wikipedia action")
         except (ValueError, IndexError):
@@ -323,8 +411,10 @@ def register_wikipedia_handlers(dp: Dispatcher, state: TelegramCardState) -> Non
                 callback.message,
                 _tr(locale, "Не удалось загрузить Wikipedia. Повторите попытку.",
                     "Could not load Wikipedia. Please retry."),
-                _keyboard([[_button(
-                    _tr(locale, "К разделам", "Sections"), f"wk:{token}:l:0"
-                ), _back(token, locale)]]),
+                _keyboard([
+                    [_button(_tr(locale, "К разделам", "All sections"),
+                             f"wk:{token}:l:0")],
+                    [_back(token, locale)],
+                ]),
                 locale=locale,
             )
