@@ -483,7 +483,7 @@ class RelatedAnimeUiTests(unittest.TestCase):
         self.assertIn("ari:token:related~all:0", callbacks)
         self.assertIn("ci:token:ar~related~mal", callbacks)
         self.assertIn("ci:token:ar~related~anilist", callbacks)
-        self.assertIn("av:token:main:0", callbacks)
+        self.assertIn("ci:token:related", callbacks)
         self.assertTrue(
             any(value.startswith("cp:token:ar~related~all:") for value in callbacks)
         )
