@@ -125,6 +125,26 @@ class _PortraitOnlySource:
 
 
 class PeopleProgressServiceTests(unittest.IsolatedAsyncioTestCase):
+    async def test_preview_people_do_not_mark_manifest_as_complete(self) -> None:
+        source = _ManifestSource(count=56)
+        service = PeopleProgressService(
+            [source], _FakeAggregator(), portrait_batch_size=50
+        )
+        preview_person = source.people[0]
+        anime = AggregatedAnime(
+            title="Example",
+            sources=["AniList"],
+            external_ids={"anilist": "1"},
+            voices_by_source={"AniList": [preview_person]},
+            voices=[preview_person],
+        )
+        progress = service.build_progress(anime, "voices")
+        self.assertFalse(progress.sources["AniList"].manifest_complete)
+        await service.ensure(anime, "voices", progress, requested_page=0)
+        self.assertEqual(source.manifest_calls, 1)
+        self.assertEqual(len(anime.voices), 56)
+        self.assertEqual(len(anime.voices_by_source["AniList"]), 56)
+
     async def test_first_navigation_shows_all_people_from_manifest(self) -> None:
         source = _ManifestSource(count=141)
         service = PeopleProgressService(
