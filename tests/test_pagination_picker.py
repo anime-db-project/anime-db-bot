@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import unittest
+from types import SimpleNamespace
 from unittest.mock import patch
 
 from bots.telegram.callbacks import PagePickerCallback
@@ -10,11 +11,28 @@ from core.models import AggregatedAnime
 from bots.telegram.pagination import (
     card_picker_keyboard,
     card_route_callback,
+    indexed_selection_rows,
     search_picker_keyboard,
 )
 
 
 class PaginationPickerTests(unittest.TestCase):
+    def test_shared_selection_rows_use_configured_page_size(self) -> None:
+        settings = SimpleNamespace(telegram=SimpleNamespace(pagination_page_size=3))
+        with patch("bots.telegram.pagination.get_settings", return_value=settings):
+            rows, page, total_pages = indexed_selection_rows(
+                ["First", "Second", "Third", "Fourth", "Fifth"],
+                window=1,
+                destination=lambda index: f"select:{index}",
+                change_window=lambda window: f"window:{window}",
+            )
+        self.assertEqual(page, 1)
+        self.assertEqual(total_pages, 2)
+        self.assertEqual([row[0].text for row in rows[:2]], ["4. Fourth", "5. Fifth"])
+        self.assertEqual([row[0].callback_data for row in rows[:2]], ["select:3", "select:4"])
+        self.assertEqual(rows[-1][0].callback_data, "window:0")
+        self.assertEqual(rows[-1][1].text, "2/2")
+
     def test_source_picker_back_leads_to_its_parent(self) -> None:
         self.assertEqual(
             picker_parent_callback("token", "ar~related~mal"),

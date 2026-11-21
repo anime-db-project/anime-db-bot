@@ -16,6 +16,24 @@ from core.settings import (
 
 
 class AppSettingsTests(unittest.TestCase):
+    def test_telegram_selection_page_size_has_bounded_configuration(self) -> None:
+        self.assertEqual(
+            AppSettings.from_env({"BOT_TOKEN": "token"}).telegram.pagination_page_size,
+            10,
+        )
+        for size in (1, 3, 10, 30):
+            with self.subTest(size=size):
+                result = AppSettings.from_env(
+                    {"BOT_TOKEN": "token", "TELEGRAM_PAGINATION_PAGE_SIZE": str(size)}
+                )
+                self.assertEqual(result.telegram.pagination_page_size, size)
+        for invalid in ("0", "31", "-1", "not-an-integer"):
+            with self.subTest(invalid=invalid):
+                with self.assertRaisesRegex(ValueError, "TELEGRAM_PAGINATION_PAGE_SIZE"):
+                    AppSettings.from_env(
+                        {"BOT_TOKEN": "token", "TELEGRAM_PAGINATION_PAGE_SIZE": invalid}
+                    )
+
     def test_typed_environment_parsing(self) -> None:
         settings = AppSettings.from_env(
             {
