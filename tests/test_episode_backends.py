@@ -569,7 +569,7 @@ class EpisodeProjectionUiTests(unittest.IsolatedAsyncioTestCase):
         )
         self.assertFalse(any(button.text == "◀️" for button in season_buttons))
         self.assertTrue(
-            any(button.callback_data == "ci:token:apg~kitsu~3:0:1:0" for button in season_buttons)
+            any(button.callback_data == "ci:token:apg~kitsu~4:0:1:0" for button in season_buttons)
         )
 
         special_message = _CaptureMessage()

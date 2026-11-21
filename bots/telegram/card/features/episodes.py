@@ -451,8 +451,12 @@ def _episode_keyboard(
                 text=("✓ " if group.key == selected_episode_group else "")
                 + _episode_group_label(group, locale=locale),
                 callback_data=PagePickerCallback(
-                    "ci", token, f"apg~{backend}~{group.start}",
-                    0, group.count, 0,
+                    "ci",
+                    token,
+                    f"apg~{backend}~{group.start}",
+                    0,
+                    group.count,
+                    0,
                 ).encode(),
             )
             for group in episode_groups
