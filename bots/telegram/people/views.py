@@ -127,7 +127,7 @@ def _source_rows(
         [
             InlineKeyboardButton(
                 text=("✓ " + all_label) if selected_source_key is None else all_label,
-                callback_data=ViewCallback(token, section, 0).encode(),
+                callback_data=f"ci:{token}:{section}",
             )
         ]
     ]
@@ -136,7 +136,7 @@ def _source_rows(
             text=("✓ " + source_name)
             if selected_source_key == source_key
             else source_name,
-            callback_data=SectionSourceCallback(token, section, source_key, 0).encode(),
+            callback_data=f"ci:{token}:ps~{section}~{source_key}",
         )
         for source_key, source_name in sources
     ]

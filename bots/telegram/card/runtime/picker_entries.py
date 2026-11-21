@@ -253,6 +253,40 @@ async def prepare_initial_picker(
     locale: str,
 ) -> tuple[str, list[str]] | None:
     """Build an item chooser before showing a detail page for large sections."""
+    if section.startswith("ps~"):
+        from bots.telegram.card.ui.selectors import source_options
+        from bots.telegram.people.loading import (
+            ensure_lazy_people,
+            progress_key,
+            source_names,
+        )
+
+        parts = section.split("~")
+        if len(parts) != 3 or parts[1] not in {"staff", "voices"}:
+            return None
+        people_section, source_key = parts[1:]
+        progress = state.people_loads.get(progress_key(token, people_section))
+        available = dict(source_options(
+            source_names(session.anime, people_section, progress)
+        ))
+        source_name = available.get(source_key)
+        if source_name is None:
+            return None
+        await ensure_lazy_people(
+            state,
+            token,
+            session.anime,
+            message,
+            people_section,
+            locale=locale,
+            source=source_name,
+            requested_page=0,
+        )
+        without, _ = people_state(session.anime, people_section, source_name)
+        route = f"gx~as~{people_section}~{source_key}~{int(bool(without))}"
+        labels = labels_for_route(session, route, locale=locale)
+        return (route, labels) if labels else None
+
     if section in {"related", "recommendations"}:
         from bots.telegram.card.features.related import ensure_related_loaded
 
