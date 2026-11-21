@@ -23,7 +23,9 @@ def selection_page_size(block: str | None = None) -> int:
     settings = get_settings().telegram
     if block is None:
         return settings.pagination_page_size
-    return settings.pagination_block_page_sizes.get(block, settings.pagination_page_size)
+    return settings.pagination_block_page_sizes.get(
+        block, settings.pagination_page_size
+    )
 
 
 def picker_block_for_route(route: str) -> str | None:

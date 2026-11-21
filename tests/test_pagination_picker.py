@@ -44,7 +44,9 @@ class PaginationPickerTests(unittest.TestCase):
             )
             labels = [
                 button.text for row in picker.inline_keyboard
-                for button in row if button.callback_data.startswith("ap:")
+                for button in row
+                if button.callback_data.startswith("ap:")
+                and button.text != "← Назад"
             ]
             self.assertEqual(labels, ["4. 4 серия", "✓ 5. 5 серия", "6. 6 серия"])
 
