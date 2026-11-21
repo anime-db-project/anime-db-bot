@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import inspect
 from io import BytesIO
 from pathlib import Path
@@ -49,7 +50,7 @@ class UnifiedSearchUiTests(unittest.TestCase):
                 )
             return mock_message.answer.call_args.kwargs["reply_markup"]
 
-        markup = __import__("asyncio").run(run())
+        markup = asyncio.run(run())
         choices = [b for row in markup.inline_keyboard for b in row]
         self.assertEqual(
             [b.text for b in choices],

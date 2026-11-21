@@ -267,11 +267,11 @@ class CharacterUiTests(unittest.TestCase):
         self.assertIn("Роль: Главный", content)
         self.assertEqual(urls, ["https://img.example/cid.jpg"])
         self.assertEqual(
-            keyboard.inline_keyboard[1][0].callback_data, "av:token:characters:0"
+            keyboard.inline_keyboard[1][0].callback_data, "ci:token:characters"
         )
         self.assertEqual(
             keyboard.inline_keyboard[2][0].callback_data,
-            "ac:token:shikimori:0",
+            "ci:token:ac~shikimori",
         )
 
 

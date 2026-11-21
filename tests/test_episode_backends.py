@@ -282,8 +282,8 @@ class EpisodeBackendTests(unittest.TestCase):
         self.assertTrue(any(button.text == "4/12" for button in flattened))
         self.assertIn("cp:token:ap~anidb:3:12:0", callbacks)
         self.assertIn("ap:token:anidb:4", callbacks)
-        self.assertIn("ap:token:jikan:3", callbacks)
-        self.assertIn("ap:token:anidb:3", callbacks)
+        self.assertIn("ci:token:ap~jikan", callbacks)
+        self.assertIn("ci:token:ap~anidb", callbacks)
         self.assertIn("ap:token:segments-all:3", callbacks)
         self.assertIn("ap:token:segments-aniskip:3", callbacks)
         self.assertFalse(any(value.startswith("ae:") for value in callbacks))
@@ -602,7 +602,7 @@ class EpisodeProjectionUiTests(unittest.IsolatedAsyncioTestCase):
         self.assertFalse(any("⏱" in button.text for button in special_buttons))
         self.assertTrue(
             any(
-                button.callback_data == "ap:token:jikan:0" for button in special_buttons
+                button.callback_data == "ci:token:ap~jikan" for button in special_buttons
             )
         )
 
