@@ -21,7 +21,7 @@ class PaginationPickerTests(unittest.TestCase):
         )
         self.assertEqual(
             picker_parent_callback("token", "ap~jikan"),
-            "ci:token:episodes",
+            "av:token:main:0",
         )
         self.assertEqual(
             picker_parent_callback("token", "at~kitsu"),
