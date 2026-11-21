@@ -27,6 +27,16 @@ python -m scripts.config_report --check --strict
 The strict command also flags key names not present in the sample files.
 Unexpected names are warnings in normal mode, not automatically rejected.
 
+## Per-user Wikipedia reading preference
+
+The **/settings → Wikipedia · display mode** menu lets every Telegram user
+switch between Clean and Full RAW Wikipedia article output. This is a
+persistent **user preference**, not an environment variable and not
+restricted to administrators. It is stored in the existing user-settings
+database with automatic SQLite/PostgreSQL schema migration, without
+overwriting the user's language preference. Changes apply on the next
+Wikipedia page view (no bot restart). See [Wikipedia reader](wikipedia.md).
+
 ## Where to change what
 
 | File | Settings |
