@@ -31,6 +31,7 @@ from bots.telegram.card.views.rendering import (
 )
 from bots.telegram.card.views.sections import (
     anime_sections,
+    description_pages,
     format_people,
     format_screenshots,
     rich_view,
@@ -262,19 +263,7 @@ async def edit_description_view(
     keys = [key for key, _ in options]
     source_key = resolve_key_or_legacy_index(source_key, keys)
     source = dict(options)[source_key]
-    description = anime.descriptions.get(source, "")
-    text_value = text("card", "description_title", locale=locale, source=source)
-    if description:
-        text_value += f"\n\n{description}"
-    background = anime.backgrounds_by_source.get(source)
-    if background is None and source in {"MyAnimeList", "MAL (MyAnimeList) / Jikan"}:
-        background = anime.background
-    if background:
-        text_value += f"\n\n{text('card', 'extra_info', locale=locale)}\n{background}"
-    if not description and not background:
-        text_value += f"\n\n{text('common', 'no_data', locale=locale)}"
-
-    pages = split_text(text_value, RICH_MESSAGE_LIMIT, locale=locale)
+    pages = description_pages(anime, source, locale=locale)
     page = max(0, min(page, len(pages) - 1))
     keyboard = description_keyboard(token, source_key, page, len(pages), locale=locale)
 

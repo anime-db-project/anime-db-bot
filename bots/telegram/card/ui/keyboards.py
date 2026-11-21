@@ -8,6 +8,7 @@ from bots.telegram.card.ui.constants import (
     PAGED_ENTRY_SECTIONS,
     SOURCE_SELECTABLE_SECTIONS,
 )
+from bots.telegram.card.views.sections import description_pages
 from bots.telegram.card.ui.selectors import (
     description_source_options,
     ordered_mapping_items,
@@ -21,11 +22,17 @@ from localization import text
 def description_selection_rows(
     token: str,
     anime: AggregatedAnime,
+    *,
+    locale: str = "en",
 ) -> list[list[InlineKeyboardButton]]:
     buttons = [
         InlineKeyboardButton(
             text=source_name,
-            callback_data=KeyedPageCallback("ad", token, source_key, 0).encode(),
+            callback_data=(
+                f"ci:{token}:ad~{source_key}"
+                if len(description_pages(anime, source_name, locale=locale)) > 1
+                else KeyedPageCallback("ad", token, source_key, 0).encode()
+            ),
         )
         for source_key, source_name in description_source_options(anime)
     ]
@@ -151,7 +158,7 @@ def navigation_keyboard(
             rows.append(nav)
 
     if current_section == "description":
-        rows.extend(description_selection_rows(token, anime))
+        rows.extend(description_selection_rows(token, anime, locale=locale))
     elif current_section == "links":
         rows.extend(link_rows(anime))
     elif current_section in SOURCE_SELECTABLE_SECTIONS:

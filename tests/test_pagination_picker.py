@@ -3,6 +3,8 @@ from __future__ import annotations
 import unittest
 
 from bots.telegram.callbacks import PagePickerCallback
+from bots.telegram.card.ui.keyboards import description_selection_rows
+from core.models import AggregatedAnime
 from bots.telegram.pagination import (
     card_picker_keyboard,
     card_route_callback,
@@ -11,6 +13,22 @@ from bots.telegram.pagination import (
 
 
 class PaginationPickerTests(unittest.TestCase):
+    def test_description_source_uses_picker_only_when_long(self) -> None:
+        short = AggregatedAnime(
+            title="Test", descriptions={"Shikimori": "A short synopsis."}
+        )
+        long = AggregatedAnime(
+            title="Test", descriptions={"Shikimori": "This is a long synopsis. " * 4000}
+        )
+        short_row = description_selection_rows("token", short, locale="ru")
+        long_row = description_selection_rows("token", long, locale="ru")
+        self.assertEqual(
+            short_row[0][0].callback_data, "ad:token:shikimori:0"
+        )
+        self.assertEqual(
+            long_row[0][0].callback_data, "ci:token:ad~shikimori"
+        )
+
     def test_card_picker_uses_named_selection_pages(self) -> None:
         data = PagePickerCallback("cp", "token", "ap~jikan", 32, 75, 3)
         keyboard = card_picker_keyboard(data, locale="ru")

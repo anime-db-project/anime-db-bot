@@ -51,6 +51,18 @@ def labels_for_route(
             return labels[offset:]
         return labels
 
+    if kind == "ad" and len(parts) == 2:
+        from bots.telegram.card.ui.selectors import description_source_options
+        from bots.telegram.card.views.sections import description_pages
+
+        source = dict(description_source_options(session.anime)).get(parts[1])
+        if source is None:
+            return []
+        return [
+            f"Описание — часть {i + 1}" if locale == "ru" else f"Description — part {i + 1}"
+            for i, _ in enumerate(description_pages(session.anime, source, locale=locale))
+        ]
+
     if kind == "ar" and len(parts) == 3:
         from bots.telegram.card.features.related import _display_title, _items
 
