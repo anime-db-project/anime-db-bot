@@ -212,7 +212,10 @@ def build_dispatcher(mode_name: str, state: TelegramCardState) -> Dispatcher:
             route, labels = prepared
             data = PagePickerCallback("ci", token, route, 0, len(labels), 0)
         else:
+            assert data is not None
             labels = labels_for_route(session, data.route, locale=locale)
+        if data is None:
+            return
         try:
             keyboard = card_picker_keyboard(
                 data,

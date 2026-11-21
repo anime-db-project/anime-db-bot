@@ -188,11 +188,13 @@ async def prepare_initial_picker(
         if not labels:
             # A source may expose paged episodes without a full catalog.
             count = int(session.anime.episodes_total or 0)
+            if not count:
+                count = len(page.items) if page is not None else 0
             labels = [
                 f"{n} серия" if locale == "ru" else f"Episode {n}"
-                for n in range(1, min(max(count, 1), 5001))
+                for n in range(1, min(count, 5000) + 1)
             ]
-        return route, labels
+        return (route, labels) if labels else None
 
     if section == "characters":
         from bots.telegram.card.features.characters import (
