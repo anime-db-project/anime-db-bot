@@ -48,10 +48,15 @@ class PostgresUserSettingsStore(SQLiteUserSettingsStore):
                         platform TEXT NOT NULL,
                         user_id BIGINT NOT NULL,
                         locale TEXT NOT NULL DEFAULT 'en',
+                        wikipedia_mode TEXT NOT NULL DEFAULT 'clean',
                         updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
                         PRIMARY KEY (platform, user_id)
                     )
                     """
+                )
+                connection.execute(
+                    "ALTER TABLE user_settings ADD COLUMN IF NOT EXISTS "
+                    "wikipedia_mode TEXT NOT NULL DEFAULT 'clean'"
                 )
                 connection.execute(
                     """
