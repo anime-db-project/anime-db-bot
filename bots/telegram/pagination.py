@@ -343,10 +343,12 @@ def search_picker_keyboard(
                 )
             )
         rows.append(nav)
-    rows.append([
-        InlineKeyboardButton(
-            text=text("common", "back", locale=locale),
-            callback_data=TokenIndexCallback("sr", data.token, current).encode(),
-        )
-    ])
+    rows.append(
+        [
+            InlineKeyboardButton(
+                text=text("common", "back", locale=locale),
+                callback_data=TokenIndexCallback("sr", data.token, current).encode(),
+            )
+        ]
+    )
     return InlineKeyboardMarkup(inline_keyboard=rows)
