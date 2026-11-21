@@ -166,6 +166,7 @@ def _picker_keyboard(
     locale: str,
     destination: Callable[[int], str],
     labels: Sequence[str] | None = None,
+    back_callback: str | None = None,
 ) -> InlineKeyboardMarkup:
     total = max(1, int(data.total))
     current = max(0, min(int(data.current), total - 1))
@@ -188,7 +189,7 @@ def _picker_keyboard(
         [
             InlineKeyboardButton(
                 text=text("common", "back", locale=locale),
-                callback_data=destination(current),
+                callback_data=back_callback or destination(current),
             )
         ]
     )
@@ -200,12 +201,14 @@ def card_picker_keyboard(
     *,
     locale: str,
     labels: Sequence[str] | None = None,
+    back_callback: str | None = None,
 ) -> InlineKeyboardMarkup:
     return _picker_keyboard(
         data,
         locale=locale,
         destination=lambda index: card_route_callback(data.token, data.route, index),
         labels=labels,
+        back_callback=back_callback,
     )
 
 
