@@ -36,6 +36,12 @@ class AdminConfigCatalogTests(unittest.TestCase):
         self.assertIsNotNone(_find_key("MAPPINGS_AUTO_UPDATE"))
         self.assertIsNotNone(_find_key("API_ENABLED"))
 
+    def test_env_metadata_is_cached_but_values_are_not(self) -> None:
+        from scripts.console_config import documented_config_groups
+
+        self.assertIs(documented_config_groups(), documented_config_groups())
+        self.assertEqual(catalog(), documented_config_groups())
+
     def test_group_pages_are_bounded_and_search_works(self) -> None:
         for page in range(10):
             txt, keys = _groups_page("ru", page)

@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import asyncio
 from dataclasses import dataclass
+from functools import lru_cache
 import logging
 import secrets
 from typing import Callable
@@ -19,8 +20,12 @@ from aiogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMar
 from bots.session_store import ExpiringSessionStore
 from bots.telegram.pagination import indexed_selection_rows, selection_page_size
 from core.settings import ConfigFileError
-from scripts.config_report import example_groups
-from scripts.console_config import inspect_key, update_key, validate_key_value
+from scripts.console_config import (
+    documented_config_groups,
+    inspect_key,
+    update_key,
+    validate_key_value,
+)
 from services.users.access_control import is_telegram_admin
 from services.users.settings import get_user_locale
 
@@ -52,12 +57,8 @@ class SearchResults:
 
 
 def catalog() -> tuple[tuple[str, tuple[str, ...]], ...]:
-    """All shipped .env.example.d keys, including new versions automatically."""
-    return tuple(
-        (name, keys)
-        for name, keys in sorted(example_groups().items())
-        if name.endswith(".env") and name != ".env.example"
-    )
+    """Only metadata: never read active keys or return unmasked secrets."""
+    return documented_config_groups()
 
 
 def search_keys(query: str) -> tuple[str, ...]:
@@ -72,6 +73,7 @@ def search_keys(query: str) -> tuple[str, ...]:
     )
 
 
+@lru_cache(maxsize=512)
 def description_for(key: str, group: str) -> str:
     """Return nearby shipped comments, not remote/active environment values."""
     from core.settings import RESOURCE_DIR

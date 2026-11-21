@@ -5,6 +5,7 @@ returned in command results. Changes require a bot restart to become effective.
 """
 from __future__ import annotations
 
+from functools import lru_cache
 import os
 from pathlib import Path
 import re
@@ -21,9 +22,19 @@ SENSITIVE_MARKERS = (
 _KEY_LINE = re.compile(r"^\s*(?:export\s+)?([A-Z][A-Z0-9_]*)\s*=")
 
 
+@lru_cache(maxsize=1)
+def documented_config_groups() -> tuple[tuple[str, tuple[str, ...]], ...]:
+    """Reusable shipped ENV metadata, never active configuration or secrets."""
+    return tuple(
+        (name, keys)
+        for name, keys in sorted(example_groups(RESOURCE_DIR).items())
+        if name.endswith(".env") and name != ".env.example"
+    )
+
+
 def _group_for(key: str, root: Path) -> str:
-    for filename, keys in example_groups(RESOURCE_DIR).items():
-        if filename != ".env.example" and key in keys:
+    for filename, keys in documented_config_groups():
+        if key in keys:
             return filename
     raise ConfigFileError(f"Unknown configuration key: {key}")
 
