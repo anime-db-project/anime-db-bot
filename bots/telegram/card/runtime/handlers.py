@@ -37,12 +37,17 @@ from bots.telegram.card.features.related import (
     send_related_item,
 )
 from bots.telegram.card.ui.constants import SECTION_LABELS, SOURCE_SELECTABLE_SECTIONS
+from bots.telegram.card.text_expansion import continuation_keyboard, long_text_parts
+from bots.telegram.card.ui.keyboards import description_keyboard
+from bots.telegram.card.views.sections import description_pages
 from bots.telegram.card.features.episodes import edit_episode_detail, edit_episodes_view
 from bots.telegram.card.features.mapping_ids import edit_mapping_ids_view
 from bots.telegram.card.views.renderer import (
     edit_anime_view,
     edit_description_view,
     edit_source_section_view,
+    rich,
+    send_standard_text,
 )
 from bots.telegram.card.features.screenshots import (
     edit_screenshots_view,
@@ -346,6 +351,71 @@ def build_dispatcher(mode_name: str, state: TelegramCardState) -> Dispatcher:
             "Выберите элемент:" if locale == "ru" else "Choose an item:",
             reply_markup=keyboard,
         )
+
+    @dp.callback_query(F.data.startswith("tx:"))
+    async def text_continuation_callback_handler(callback: CallbackQuery) -> None:
+        """Reveal the next text-only chunk without replacing prior messages."""
+        locale = get_user_locale(callback.from_user.id)
+        parts = str(callback.data or "").split(":")
+        if len(parts) != 6 or parts[2] != "ad":
+            await callback.answer(
+                text("card", "invalid_command", locale=locale), show_alert=True
+            )
+            return
+        _, token, _, source_key, raw_page, raw_index = parts
+        session = _session_for_callback(callback, token, state)
+        if session is None:
+            await callback.answer(
+                text("card", "expired", locale=locale), show_alert=True
+            )
+            return
+        if callback.message is None:
+            await callback.answer()
+            return
+        try:
+            page, index = int(raw_page), int(raw_index)
+            sources = dict(description_source_options(session.anime))
+            if source_key not in sources:
+                raise ValueError("Unknown description source")
+            pages = description_pages(
+                session.anime, sources[source_key], locale=locale
+            )
+            if not 0 <= page < len(pages):
+                raise ValueError("Unknown description page")
+            parts_to_show = long_text_parts(pages[page], locale=locale)
+            if not 0 < index < len(parts_to_show):
+                raise ValueError("Unknown text continuation")
+        except ValueError:
+            await callback.answer(
+                text("card", "invalid_command", locale=locale), show_alert=True
+            )
+            return
+
+        base = description_keyboard(
+            token, source_key, page, len(pages), locale=locale
+        )
+        keyboard = continuation_keyboard(
+            base, token, "ad", source_key, page,
+            index + 1, len(parts_to_show), locale=locale,
+        )
+        await callback.answer()
+        try:
+            await callback.message.answer_rich(
+                rich(parts_to_show[index]), reply_markup=keyboard
+            )
+        except Exception:
+            await send_standard_text(
+                callback.message,
+                parts_to_show[index],
+                reply_markup=keyboard,
+                locale=locale,
+            )
+        # Remove only the consumed More button. Source, Back and
+        # other navigation remain available on older messages.
+        try:
+            await callback.message.edit_reply_markup(reply_markup=base)
+        except Exception:
+            pass
 
     @dp.callback_query(F.data.startswith("ad:"))
     async def description_source_callback_handler(callback: CallbackQuery) -> None:
