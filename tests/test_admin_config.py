@@ -12,7 +12,9 @@ from aiogram.types import (
 )
 
 from bots.telegram.admin_config import (
-    _find_key, _groups_page, _key_page, catalog, description_for, search_keys,
+    SearchResults,
+    _find_key, _group_page, _groups_page, _key_page, _search_page,
+    catalog, description_for, search_keys,
 )
 from bots.telegram.settings import _settings_keyboard, register_settings_handlers
 from scripts.config_report import example_groups
@@ -41,6 +43,31 @@ class AdminConfigCatalogTests(unittest.TestCase):
 
         self.assertIs(documented_config_groups(), documented_config_groups())
         self.assertEqual(catalog(), documented_config_groups())
+
+    def test_admin_pages_have_one_navigation_counter_and_localized_headings(self) -> None:
+        heading, keys_markup = _group_page("ru", 0)
+        self.assertIn("параметров", heading)
+        self.assertNotIn(" options", heading)
+        self.assertNotIn("1/", heading)
+        self.assertTrue(
+            any(
+                "/" in button.text
+                for row in keys_markup.inline_keyboard
+                for button in row
+            )
+        )
+        search_heading, search_markup = _search_page(
+            "ru", "t", SearchResults(owner_id=1, keys=tuple(
+                f"TEST_KEY_{n}" for n in range(15)
+            )), 0
+        )
+        self.assertIn("Найдено параметров: 15.", search_heading)
+        self.assertNotIn("Страница", search_heading)
+        self.assertTrue(any(
+            button.text == "1/2"
+            for row in search_markup.inline_keyboard
+            for button in row
+        ))
 
     def test_group_pages_are_bounded_and_search_works(self) -> None:
         for page in range(10):

@@ -149,14 +149,18 @@ def _group_page(locale: str, group_index: int, page: int = 0) -> tuple[str, Inli
     if group_index < 0 or group_index >= len(groups):
         raise ValueError("Invalid configuration group")
     group, keys = groups[group_index]
-    rows, page, pages = indexed_selection_rows(
+    rows, _, _ = indexed_selection_rows(
         list(keys),
         window=page,
         destination=lambda index: f"cfg:k:{group_index}:{index}",
         change_window=lambda index: f"cfg:g:{group_index}:{index}",
     )
     rows.append([_button(_tr(locale, "Back to groups", "К категориям"), "h:0")])
-    return f"{group} | {page + 1}/{pages} | {len(keys)} options", _markup(rows)
+    return (
+        f"{group} · "
+        + _tr(locale, f"{len(keys)} options", f"{len(keys)} параметров"),
+        _markup(rows),
+    )
 
 
 def _key_location(group_index: int, key_index: int) -> tuple[str, str]:
@@ -221,7 +225,7 @@ async def _key_page(
 def _search_page(
     locale: str, token: str, record: SearchResults, page: int
 ) -> tuple[str, InlineKeyboardMarkup]:
-    rows, page, pages = indexed_selection_rows(
+    rows, _, _ = indexed_selection_rows(
         list(record.keys),
         window=page,
         destination=lambda index: f"cfg:hit:{token}:{index}",
@@ -231,8 +235,8 @@ def _search_page(
     return (
         _tr(
             locale,
-            f"Found {len(record.keys)} options. Page {page + 1}/{pages}.",
-            f"Найдено параметров: {len(record.keys)}. Страница {page + 1}/{pages}.",
+            f"Found {len(record.keys)} options.",
+            f"Найдено параметров: {len(record.keys)}.",
         ),
         _markup(rows),
     )
