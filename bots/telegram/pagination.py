@@ -40,25 +40,27 @@ def indexed_selection_rows(
     window = max(0, min(int(window), pages - 1))
     start = window * size
     rows = [
-        [InlineKeyboardButton(
-            text=f"{'✓ ' if current == index else ''}{index + 1}. {labels[index]}",
-            callback_data=destination(index),
-        )]
+        [
+            InlineKeyboardButton(
+                text=f"{'✓ ' if current == index else ''}{index + 1}. {labels[index]}",
+                callback_data=destination(index),
+            )
+        ]
         for index in range(start, min(total, start + size))
     ]
     if pages > 1:
         navigation: list[InlineKeyboardButton] = []
         if window:
-            navigation.append(InlineKeyboardButton(
-                text="◀️", callback_data=change_window(window - 1)
-            ))
-        navigation.append(InlineKeyboardButton(
-            text=f"{window + 1}/{pages}", callback_data="noop"
-        ))
+            navigation.append(
+                InlineKeyboardButton(text="◀️", callback_data=change_window(window - 1))
+            )
+        navigation.append(
+            InlineKeyboardButton(text=f"{window + 1}/{pages}", callback_data="noop")
+        )
         if window + 1 < pages:
-            navigation.append(InlineKeyboardButton(
-                text="▶️", callback_data=change_window(window + 1)
-            ))
+            navigation.append(
+                InlineKeyboardButton(text="▶️", callback_data=change_window(window + 1))
+            )
         rows.append(navigation)
     return rows, window, pages
 
@@ -76,7 +78,6 @@ def _default_label(route: str, index: int, locale: str) -> str:
     if "screenshots" in route:
         return f"Скриншоты {number}" if locale == "ru" else f"Screenshots {number}"
     return f"Страница {number}" if locale == "ru" else f"Page {number}"
-
 
 
 def _window_for(current: int) -> int:
@@ -169,7 +170,8 @@ def _picker_keyboard(
     total = max(1, int(data.total))
     current = max(0, min(int(data.current), total - 1))
     names = [
-        str(labels[index]) if labels is not None and index < len(labels)
+        str(labels[index])
+        if labels is not None and index < len(labels)
         else _default_label(data.route, index, locale)
         for index in range(total)
     ]
@@ -182,12 +184,14 @@ def _picker_keyboard(
         ).encode(),
         current=current,
     )
-    rows.append([
-        InlineKeyboardButton(
-            text=text("common", "back", locale=locale),
-            callback_data=destination(current),
-        )
-    ])
+    rows.append(
+        [
+            InlineKeyboardButton(
+                text=text("common", "back", locale=locale),
+                callback_data=destination(current),
+            )
+        ]
+    )
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
