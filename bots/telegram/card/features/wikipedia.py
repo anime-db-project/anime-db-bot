@@ -21,6 +21,7 @@ from aiogram.types import (
 )
 
 from bots.telegram.card.runtime.state import AnimeCardSession, TelegramCardState
+from bots.telegram.pagination import indexed_selection_rows, selection_page_size
 from bots.telegram.card.ui.constants import RICH_MESSAGE_LIMIT, STANDARD_MESSAGE_LIMIT
 from bots.telegram.card.views.renderer import edit_standard_text
 from core.models import AggregatedAnime
@@ -36,7 +37,7 @@ from sources.providers.wikipedia import (
     wikipedia_client,
 )
 
-SECTIONS_PER_PAGE = 18
+SECTIONS_PER_PAGE = 10  # shared selector default
 # Headers, source attribution and Telegram internals also consume characters.
 RICH_CHAPTER_BUDGET = RICH_MESSAGE_LIMIT - 750
 PLAIN_CHAPTER_BUDGET = STANDARD_MESSAGE_LIMIT - 450
@@ -85,6 +86,11 @@ def _japanese_label(anime: AggregatedAnime, hit: WikipediaHit) -> str:
     return title
 
 
+def _japanese_hit(hit: WikipediaHit) -> bool:
+    """Reject results whose Wikipedia title/snippet lacks Japanese characters."""
+    return bool(JAPANESE_KANA.search(f"{hit.title} {hit.snippet}"))
+
+
 def _reset_for_locale(session: AnimeCardSession, locale: str) -> str:
     """Changing the global language invalidates a previous wiki page choice."""
     language = wiki_language(locale)
@@ -122,15 +128,16 @@ async def _search_screen(
     )
     if not hits:
         term = _search_term(session.anime, language)
-        hits = await wikipedia_client().search(language=language, title=term)
+        found = await wikipedia_client().search(language=language, title=term)
+        hits = tuple(hit for hit in found if _japanese_hit(hit))
         if not hits:
-            # Same Wikipedia language, different title spelling. Never infer
-            # a Wikipedia identity from the first text-search result.
+            # Also filter Japanese-title retry; never display a generic hit.
             japanese = str(session.anime.titles.get("japanese") or "").strip()
             if JAPANESE_KANA.search(japanese) and japanese != term:
-                hits = await wikipedia_client().search(
+                found = await wikipedia_client().search(
                     language=language, title=japanese,
                 )
+                hits = tuple(hit for hit in found if _japanese_hit(hit))
         session.wikipedia_hits = hits
     rows = [
         [_button(_japanese_label(session.anime, hit), f"wk:{token}:a:{index}")]
@@ -170,26 +177,12 @@ async def _chapters(
         await _search_screen(message, token, session, locale=locale)
         return
     sections = article.sections
-    total_pages = max(1, (len(sections) + SECTIONS_PER_PAGE - 1) // SECTIONS_PER_PAGE)
-    page = max(0, min(page, total_pages - 1))
-    rows = [
-        [_button(section.title, f"wk:{token}:r:{index}:0")]
-        for index, section in enumerate(sections)
-        if page * SECTIONS_PER_PAGE <= index < (page + 1) * SECTIONS_PER_PAGE
-    ]
-    if total_pages > 1:
-        navigation = []
-        if page:
-            navigation.append(_button(
-                _tr(locale, "◀ Предыдущие", "◀ Previous"),
-                f"wk:{token}:l:{page - 1}",
-            ))
-        if page + 1 < total_pages:
-            navigation.append(_button(
-                _tr(locale, "Следующие ▶", "Next ▶"),
-                f"wk:{token}:l:{page + 1}",
-            ))
-        rows.append(navigation)
+    rows, page, _ = indexed_selection_rows(
+        [section.title for section in sections],
+        window=page,
+        destination=lambda index: f"wk:{token}:r:{index}:0",
+        change_window=lambda target: f"wk:{token}:l:{target}",
+    )
     rows.append([
         _button(_tr(locale, "Другие статьи", "Other articles"),
                 f"wk:{token}:search"),
@@ -220,8 +213,6 @@ def _chapter_page(
     pages = paginate_section(chapter, limit=limit)
     page = max(0, min(page, len(pages) - 1))
     heading = f"<b>{html.escape(chapter.title)}</b>"
-    if len(pages) > 1:
-        heading += f"\n{page + 1}/{len(pages)}"
     attribution = (
         f'\n\n<a href="{html.escape(article.url, quote=True)}">Wikipedia</a>'
         ' · <a href="https://creativecommons.org/licenses/by-sa/4.0/">'
@@ -233,13 +224,15 @@ def _chapter_page(
         page_navigation = []
         if page:
             page_navigation.append(_button(
-                _tr(locale, "◀ Страница", "◀ Page"),
-                f"wk:{token}:r:{section_index}:{page - 1}",
+                "◀️", f"wk:{token}:r:{section_index}:{page - 1}",
             ))
+        page_navigation.append(_button(
+            f"{page + 1}/{len(pages)}",
+            f"wk:{token}:p:{section_index}:{page // selection_page_size()}",
+        ))
         if page + 1 < len(pages):
             page_navigation.append(_button(
-                _tr(locale, "Страница ▶", "Page ▶"),
-                f"wk:{token}:r:{section_index}:{page + 1}",
+                "▶️", f"wk:{token}:r:{section_index}:{page + 1}",
             ))
         keyboard_rows.append(page_navigation)
     # Cross-chapter navigation works from every chapter, even when it is
@@ -247,22 +240,60 @@ def _chapter_page(
     chapter_navigation = []
     if section_index:
         chapter_navigation.append(_button(
-            _tr(locale, "◀ Раздел", "◀ Section"),
+            "◀️",
             f"wk:{token}:r:{section_index - 1}:0",
         ))
     if section_index + 1 < len(article.sections):
         chapter_navigation.append(_button(
-            _tr(locale, "Раздел ▶", "Section ▶"),
+            "▶️",
             f"wk:{token}:r:{section_index + 1}:0",
         ))
     if chapter_navigation:
         keyboard_rows.append(chapter_navigation)
     keyboard_rows.append([
         _button(_tr(locale, "К разделам", "All sections"),
-                f"wk:{token}:l:{section_index // SECTIONS_PER_PAGE}"),
+                f"wk:{token}:l:{section_index // selection_page_size()}"),
         _back(token, locale),
     ])
     return heading + "\n\n" + pages[page] + attribution, _keyboard(keyboard_rows)
+
+
+async def _chapter_pages_index(
+    message: Message,
+    token: str,
+    article: WikipediaArticle,
+    *,
+    section_index: int,
+    window: int,
+    locale: str,
+    limit: int,
+) -> None:
+    if not 0 <= section_index < len(article.sections):
+        raise ValueError("Unknown Wikipedia section")
+    pages = paginate_section(article.sections[section_index], limit=limit)
+    rows, _, _ = indexed_selection_rows(
+        [
+            f"Страница {index + 1}" if locale == "ru" else f"Page {index + 1}"
+            for index in range(len(pages))
+        ],
+        window=window,
+        destination=lambda index: f"wk:{token}:r:{section_index}:{index}",
+        change_window=lambda target: f"wk:{token}:p:{section_index}:{target}",
+    )
+    rows.append([
+        _button(
+            _tr(locale, "К разделам", "All sections"),
+            f"wk:{token}:l:{section_index // selection_page_size()}",
+        ),
+        _back(token, locale),
+    ])
+    await _edit_html(
+        message,
+        f"<b>{html.escape(article.sections[section_index].title)}</b>\n\n"
+        + _tr(locale, "Выберите страницу:", "Choose a page:"),
+        _keyboard(rows),
+        locale=locale,
+    )
 
 
 async def _render_chapter(
@@ -381,6 +412,23 @@ def register_wikipedia_handlers(dp: Dispatcher, state: TelegramCardState) -> Non
                 await _chapters(
                     callback.message, token, session, locale=locale,
                     user_id=callback.from_user.id, page=int(parts[3]),
+                )
+            elif action == "p" and len(parts) == 5:
+                article = await _article(
+                    session, user_id=callback.from_user.id, locale=locale,
+                )
+                if article is None:
+                    raise ValueError("Wikipedia article expired")
+                await callback.answer()
+                await _chapter_pages_index(
+                    callback.message, token, article,
+                    section_index=int(parts[3]),
+                    window=int(parts[4]),
+                    locale=locale,
+                    limit=(
+                        PLAIN_CHAPTER_BUDGET if session.wikipedia_plain_fallback
+                        else RICH_CHAPTER_BUDGET
+                    ),
                 )
             elif action == "r" and len(parts) == 5:
                 article = await _article(
