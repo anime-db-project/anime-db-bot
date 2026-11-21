@@ -37,8 +37,10 @@ def picker_parent_callback(token: str, route: str) -> str:
         return f"ci:{token}:{parts[2]}"
     if kind == "gx" and len(parts) == 4 and parts[1] == "ac":
         return f"ci:{token}:characters"
-    if kind == "as" and len(parts) == 3 and parts[1] == "screenshots":
-        return f"ci:{token}:screenshots"
+    if kind == "as" and len(parts) == 3 and parts[1] in {
+        "screenshots", "titles", "popularity"
+    }:
+        return f"ci:{token}:{parts[1]}"
     if kind == "ad":
         return f"av:{token}:description:0"
     if kind == "at":
@@ -97,6 +99,22 @@ def labels_for_route(
             else f"Source IDs — part {i + 1}"
             for i, _ in enumerate(
                 mapping_ids_pages(session.anime.amdb_id or "", source_ids, locale=locale)
+            )
+        ]
+
+    if kind == "as" and len(parts) == 3 and parts[1] in {"titles", "popularity"}:
+        from bots.telegram.card.ui.selectors import source_section_options
+        from bots.telegram.card.views.sections import source_section_pages
+
+        source = dict(source_section_options(
+            session.anime, parts[1]
+        )).get(parts[2])
+        if source is None:
+            return []
+        return [
+            f"Страница {i + 1}" if locale == "ru" else f"Page {i + 1}"
+            for i, _ in enumerate(
+                source_section_pages(session.anime, parts[1], source, locale=locale)
             )
         ]
 

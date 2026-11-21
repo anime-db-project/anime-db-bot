@@ -38,6 +38,7 @@ from bots.telegram.card.views.sections import (
     screenshot_urls,
     screenshots_rich_html,
     source_section_text,
+    source_section_pages,
     view_pages,
 )
 from bots.telegram.card.ui.selectors import (
@@ -298,12 +299,7 @@ async def edit_source_section_view(
     keys = [key for key, _ in options]
     source_key = resolve_key_or_legacy_index(source_key, keys)
     source = dict(options)[source_key]
-    section_text = source_section_text(anime, section, source, locale=locale)
-    pages = split_text(
-        section_text,
-        RICH_MESSAGE_LIMIT,
-        locale=locale,
-    )
+    pages = source_section_pages(anime, section, source, locale=locale)
     page = max(0, min(page, len(pages) - 1))
     keyboard = source_section_keyboard(
         token,

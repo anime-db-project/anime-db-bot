@@ -8,7 +8,7 @@ from bots.telegram.card.ui.constants import (
     PAGED_ENTRY_SECTIONS,
     SOURCE_SELECTABLE_SECTIONS,
 )
-from bots.telegram.card.views.sections import description_pages
+from bots.telegram.card.views.sections import description_pages, source_section_pages
 from bots.telegram.card.ui.selectors import (
     description_source_options,
     ordered_mapping_items,
@@ -61,7 +61,11 @@ def source_section_selection_rows(
                     text=("✓ " + all_label)
                     if selected_source_key is None
                     else all_label,
-                    callback_data=f"av:{token}:{section}:0",
+                    callback_data=(
+                        f"ci:{token}:{section}"
+                        if section in PAGED_ENTRY_SECTIONS
+                        else f"av:{token}:{section}:0"
+                    ),
                 )
             ]
         )
@@ -74,6 +78,14 @@ def source_section_selection_rows(
             callback_data=(
                 f"ci:{token}:as~{section}~{source_key}"
                 if section == "screenshots"
+                or (
+                    section in {"titles", "popularity"}
+                    and len(
+                        source_section_pages(
+                            anime, section, source_name, locale=locale
+                        )
+                    ) > 1
+                )
                 else SectionSourceCallback(token, section, source_key, 0).encode()
             ),
         )

@@ -167,6 +167,17 @@ def description_pages(anime: AggregatedAnime, source: str, *, locale: str) -> li
     return split_text(value, RICH_MESSAGE_LIMIT, locale=locale)
 
 
+def source_section_pages(
+    anime: AggregatedAnime, section: str, source: str, *, locale: str
+) -> list[str]:
+    """Single shared text boundary for both source pages and source selectors."""
+    return split_text(
+        source_section_text(anime, section, source, locale=locale),
+        RICH_MESSAGE_LIMIT,
+        locale=locale,
+    )
+
+
 def view_pages(anime: AggregatedAnime, section: str, *, locale: str) -> list[str]:
     return split_text(
         anime_sections(anime, locale=locale).get(section)

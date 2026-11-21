@@ -121,7 +121,8 @@ def build_dispatcher(mode_name: str, state: TelegramCardState) -> Dispatcher:
             from bots.telegram.card.ui.constants import PAGED_ENTRY_SECTIONS
 
             source_route = section.startswith(
-                ("ar~", "at~", "ac~", "ap~", "ad~", "as~screenshots~", "ps~")
+                ("ar~", "at~", "ac~", "ap~", "ad~", "as~screenshots~",
+                 "as~titles~", "as~popularity~", "ps~")
             )
             if section not in PAGED_ENTRY_SECTIONS and not source_route:
                 await callback.answer(
