@@ -186,7 +186,9 @@ def build_dispatcher(mode_name: str, state: TelegramCardState) -> Dispatcher:
                                 [
                                     InlineKeyboardButton(
                                         text=text("common", "back", locale=locale),
-                                        callback_data=picker_parent_callback(token, section),
+                                        callback_data=picker_parent_callback(
+                                            token, section
+                                        ),
                                     )
                                 ]
                             ]
