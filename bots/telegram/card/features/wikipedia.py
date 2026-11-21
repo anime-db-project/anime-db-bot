@@ -233,7 +233,7 @@ def _chapter_page(
             ))
         page_navigation.append(_button(
             f"{page + 1}/{len(pages)}",
-            f"wk:{token}:p:{section_index}:{page // selection_page_size("wikipedia")}",
+            f"wk:{token}:p:{section_index}:{page // selection_page_size('wikipedia')}",
         ))
         if page + 1 < len(pages):
             page_navigation.append(_button(
@@ -257,7 +257,7 @@ def _chapter_page(
         keyboard_rows.append(chapter_navigation)
     keyboard_rows.append([
         _button(_tr(locale, "К разделам", "All sections"),
-                f"wk:{token}:l:{section_index // selection_page_size("wikipedia")}"),
+                f"wk:{token}:l:{section_index // selection_page_size('wikipedia')}"),
         _back(token, locale),
     ])
     return heading + "\n\n" + pages[page] + attribution, _keyboard(keyboard_rows)
@@ -289,7 +289,7 @@ async def _chapter_pages_index(
     rows.append([
         _button(
             _tr(locale, "К разделам", "All sections"),
-            f"wk:{token}:l:{section_index // selection_page_size("wikipedia")}",
+            f"wk:{token}:l:{section_index // selection_page_size('wikipedia')}",
         ),
         _back(token, locale),
     ])

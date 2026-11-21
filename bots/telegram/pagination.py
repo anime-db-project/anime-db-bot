@@ -329,7 +329,9 @@ def search_picker_keyboard(
                 )
             )
         nav.append(
-            InlineKeyboardButton(text=f"{start + 1}–{end}/{total}", callback_data="noop")
+            InlineKeyboardButton(
+                text=f"{start + 1}–{end}/{total}", callback_data="noop"
+            )
         )
         if window + 1 < count:
             nav.append(

@@ -216,7 +216,7 @@ async def _key_page(
         [
             _button(
                 _tr(locale, "Back", "Назад"),
-                f"g:{group_index}:{key_index // selection_page_size("settings")}",
+                f"g:{group_index}:{key_index // selection_page_size('settings')}",
             ),
             _button(_tr(locale, "Categories", "Категории"), "h:0"),
         ],
