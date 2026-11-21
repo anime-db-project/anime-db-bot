@@ -405,7 +405,7 @@ class RelatedAnimeUiTests(unittest.TestCase):
         ]
         self.assertEqual(
             callbacks,
-            ["av:token:related:0", "av:token:recommendations:0"],
+            ["av:token:wikipedia:0", "av:token:related:0", "av:token:recommendations:0"],
         )
 
     def test_fallback_main_keyboard_has_both_discovery_buttons(self) -> None:
