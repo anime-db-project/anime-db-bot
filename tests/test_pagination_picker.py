@@ -3,6 +3,7 @@ from __future__ import annotations
 import unittest
 
 from bots.telegram.callbacks import PagePickerCallback
+from bots.telegram.card.runtime.picker_entries import picker_parent_callback
 from bots.telegram.card.ui.keyboards import description_selection_rows
 from core.models import AggregatedAnime
 from bots.telegram.pagination import (
@@ -13,6 +14,24 @@ from bots.telegram.pagination import (
 
 
 class PaginationPickerTests(unittest.TestCase):
+    def test_source_picker_back_leads_to_its_parent(self) -> None:
+        self.assertEqual(
+            picker_parent_callback("token", "ar~related~mal"),
+            "ci:token:related",
+        )
+        self.assertEqual(
+            picker_parent_callback("token", "ap~jikan"),
+            "ci:token:episodes",
+        )
+        self.assertEqual(
+            picker_parent_callback("token", "at~kitsu"),
+            "av:token:trailers:0",
+        )
+        self.assertEqual(
+            picker_parent_callback("token", "ad~shikimori"),
+            "av:token:description:0",
+        )
+
     def test_description_source_uses_picker_only_when_long(self) -> None:
         short = AggregatedAnime(
             title="Test", descriptions={"Shikimori": "A short synopsis."}

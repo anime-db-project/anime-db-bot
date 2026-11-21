@@ -15,6 +15,25 @@ from localization import text
 from services.runtime.app_context import get_app_context
 
 
+def picker_parent_callback(token: str, route: str) -> str:
+    """Return to the meaningful parent when leaving a source-specific picker."""
+    parts = route.split("~")
+    kind = parts[0]
+    if kind == "ar" and len(parts) == 3 and parts[1] in {"related", "recommendations"}:
+        return f"ci:{token}:{parts[1]}"
+    if kind in {"ap", "apg"}:
+        return f"ci:{token}:episodes"
+    if kind == "ac":
+        return f"ci:{token}:characters"
+    if kind == "as" and len(parts) == 3 and parts[1] == "screenshots":
+        return f"ci:{token}:screenshots"
+    if kind == "ad":
+        return f"av:{token}:description:0"
+    if kind == "at":
+        return f"av:{token}:trailers:0"
+    return f"av:{token}:main:0"
+
+
 def _episode_labels(
     session: AnimeCardSession, backend: str, locale: str
 ) -> list[str]:
