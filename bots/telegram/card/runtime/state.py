@@ -37,6 +37,13 @@ class AnimeCardSession:
     popularity_errors: dict[str, str] = field(default_factory=dict)
     descriptions_loaded: bool = False
     description_errors: dict[str, str] = field(default_factory=dict)
+    # Wikipedia is a standalone, explicitly selected encyclopedia page.
+    # Keep only the search results / page ID in card state; article HTML is
+    # bounded in the Wikipedia provider's shared LRU cache, not here.
+    wikipedia_language: str | None = None
+    wikipedia_hits: tuple[object, ...] = ()
+    wikipedia_pageid: int | None = None
+
     # Only the main card can receive a delayed discovery keyboard update.
     main_view_active: bool = True
     related_loaded: bool = False
