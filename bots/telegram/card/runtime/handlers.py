@@ -16,6 +16,10 @@ from bots.telegram.pagination import card_picker_keyboard
 from bots.telegram.card.features.characters import edit_characters_view
 from bots.telegram.card.features.descriptions import ensure_descriptions_loaded
 from bots.telegram.card.features.popularity import ensure_popularity_loaded
+from bots.telegram.card.features.wikipedia import (
+    edit_wikipedia_home,
+    register_wikipedia_handlers,
+)
 from bots.telegram.card.features.related import (
     edit_related_view,
     parse_related_route,
@@ -58,6 +62,7 @@ def build_dispatcher(mode_name: str, state: TelegramCardState) -> Dispatcher:
     """Build the core Telegram dispatcher without search-provider-specific handlers."""
     dp = Dispatcher()
     register_settings_handlers(dp)
+    register_wikipedia_handlers(dp, state)
 
     @dp.message(CommandStart())
     async def start_handler(message: Message) -> None:
@@ -497,6 +502,15 @@ def build_dispatcher(mode_name: str, state: TelegramCardState) -> Dispatcher:
         # Keep the delayed related-button update on the main card only.
         raw_session.main_view_active = section == "main"
         await callback.answer()
+        if section == "wikipedia":
+            await edit_wikipedia_home(
+                callback.message,
+                token,
+                raw_session,
+                locale=locale,
+                user_id=callback.from_user.id,
+            )
+            return
         if section == "all_ids":
             await edit_mapping_ids_view(
                 callback.message,
