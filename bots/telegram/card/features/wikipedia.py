@@ -30,6 +30,7 @@ from sources.providers.wikipedia import (
     WikipediaArticle,
     WikipediaHit,
     japanese_title_in_article,
+    japanese_title_in_text,
     paginate_section,
     wiki_language,
     wikipedia_client,
@@ -78,7 +79,7 @@ def _japanese_label(anime: AggregatedAnime, hit: WikipediaHit) -> str:
         japanese
         and JAPANESE_KANA.search(japanese)
         and japanese not in title
-        and japanese in hit.snippet
+        and japanese_title_in_text((hit.title, hit.snippet), japanese)
     ):
         return f"{title} ({japanese})"
     return title
