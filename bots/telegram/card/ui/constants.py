@@ -19,6 +19,7 @@ SECTION_LABELS = {
     "screenshots": "section_screenshots",
     "related": "section_related",
     "recommendations": "section_recommendations",
+    "wikipedia": "section_wikipedia",
 }
 
 SOURCE_SELECTABLE_SECTIONS = {"titles", "staff", "voices", "popularity", "screenshots"}
