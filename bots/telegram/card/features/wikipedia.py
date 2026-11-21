@@ -24,7 +24,10 @@ from bots.telegram.card.runtime.state import AnimeCardSession, TelegramCardState
 from bots.telegram.pagination import indexed_selection_rows, selection_page_size
 from core.settings import get_settings
 from bots.telegram.card.ui.constants import RICH_MESSAGE_LIMIT, STANDARD_MESSAGE_LIMIT
-from bots.telegram.card.views.renderer import edit_standard_text
+from bots.telegram.card.views.renderer import (
+    edit_standard_text,
+    send_standard_text,
+)
 from core.models import AggregatedAnime
 from services.users.settings import get_user_locale, get_user_wikipedia_mode
 from sources.providers.wikipedia import (
@@ -66,6 +69,21 @@ def _rich_wikipedia_html(body: str) -> str:
         else:
             rendered.append(f"<p>{paragraph.replace(chr(10), '<br>')}</p>")
     return "".join(rendered)
+
+def _plain_wikipedia_with_links(body: str) -> str:
+    """Retain clickable/source URLs when rich HTML must fall back to sendMessage."""
+    links = re.compile(r'<a href="([^"]+)">(.*?)</a>', re.DOTALL)
+    with_links = links.sub(
+        lambda match: (
+            re.sub(r"<[^>]+>", "", match.group(2))
+            + " ("
+            + html.unescape(match.group(1))
+            + ")"
+        ),
+        body,
+    )
+    return html.unescape(re.sub(r"<[^>]+>", "", with_links))
+
 
 # Headers, source attribution and Telegram internals also consume characters.
 RICH_CHAPTER_BUDGET = RICH_MESSAGE_LIMIT - 750
@@ -498,27 +516,49 @@ def register_wikipedia_handlers(dp: Dispatcher, state: TelegramCardState) -> Non
                     article, section_index, next_page,
                     token=token, locale=locale, limit=limit,
                 )
-                # Send the continuation as a new message. Previous text
-                # remains intact, including inline article/source hyperlinks.
-                if not session.wikipedia_plain_fallback:
+                # Send the next part as another message without overwriting
+                # previously read content or stripping source hyperlinks.
+                if session.wikipedia_plain_fallback:
+                    await callback.message.answer(
+                        body, parse_mode="HTML", reply_markup=keyboard,
+                    )
+                else:
                     try:
                         await callback.message.answer_rich(
                             InputRichMessage(html=_rich_wikipedia_html(body)),
                             reply_markup=keyboard,
                         )
-                        return
                     except TelegramBadRequest:
-                        session.wikipedia_plain_fallback = True
-                        # Reopen in plain mode at a valid (possibly shorter)
-                        # page boundary rather than dropping any text.
-                        body, keyboard = _chapter_page(
-                            article, section_index, next_page,
-                            token=token, locale=locale,
-                            limit=_chapter_limit(plain=True),
+                        # Keep the rich page boundaries for subsequent clicks.
+                        # Plain text explicitly includes every link destination.
+                        await send_standard_text(
+                            callback.message,
+                            _plain_wikipedia_with_links(body),
+                            reply_markup=keyboard,
+                            locale=locale,
                         )
-                await callback.message.answer(
-                    body, parse_mode="HTML", reply_markup=keyboard,
-                )
+                # Consume only this More button; other chapter navigation
+                # remains on the older message.
+                try:
+                    previous = callback.message.reply_markup
+                    if previous is None:
+                        _, previous = _chapter_page(
+                            article, section_index, next_page - 1,
+                            token=token, locale=locale, limit=limit,
+                        )
+                    rows = [
+                        [
+                            button for button in row
+                            if button.callback_data != callback.data
+                        ]
+                        for row in previous.inline_keyboard
+                    ]
+                    rows = [row for row in rows if row]
+                    await callback.message.edit_reply_markup(
+                        reply_markup=_keyboard(rows),
+                    )
+                except Exception:
+                    logging.debug("Could not consume Wikipedia More button", exc_info=True)
             elif action == "r" and len(parts) == 5:
                 article = await _article(
                     session, user_id=callback.from_user.id, locale=locale,

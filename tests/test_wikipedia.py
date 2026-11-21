@@ -11,6 +11,7 @@ from aiogram.types import InlineKeyboardMarkup
 from bots.telegram.card.features.wikipedia import (
     _chapter_page,
     _rich_wikipedia_html,
+    _plain_wikipedia_with_links,
     _japanese_label,
     _search_term,
     _tr,
@@ -143,6 +144,16 @@ class WikipediaSourceTests(unittest.TestCase):
         plot = paginate_section(sections[1])
         self.assertEqual(len(plot), 1)
         self.assertIn("\n\n<b>First arc</b>\n\nA <i>ninja</i>", plot[0])
+
+    def test_plain_wikipedia_fallback_preserves_link_destinations(self) -> None:
+        plain = _plain_wikipedia_with_links(
+            '<b>Музыка</b>\n\n'
+            '<a href="https://ru.wikipedia.org/wiki/Наруто">Наруто</a> '
+            'и <a href="https://example.org/licence">CC BY-SA</a>'
+        )
+        self.assertIn("https://ru.wikipedia.org/wiki/Наруто", plain)
+        self.assertIn("https://example.org/licence", plain)
+        self.assertNotIn("<a ", plain)
 
     def test_rich_subheading_is_a_separate_block_before_its_paragraph(self) -> None:
         from sources.providers.wikipedia import WikipediaSection
