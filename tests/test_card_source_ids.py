@@ -41,7 +41,7 @@ class CardSourceIdTests(unittest.TestCase):
         )
         source = anime_sections(anime, locale="ru")["main"]
         rich = main_rich("token", anime, source, locale="ru").html or ""
-        self.assertIn("av:token:all_ids:0", rich)
+        self.assertIn("ci:token:all_ids", rich)
         self.assertIn("Показать все", rich)
         self.assertIn("<caption><b>ID источников</b></caption>", rich)
         source_caption = rich.index("<caption><b>Источники</b></caption>")
@@ -49,15 +49,15 @@ class CardSourceIdTests(unittest.TestCase):
         ids_caption = rich.index("<caption><b>ID источников</b></caption>")
         ids_position = rich.index("AMDB: 18472")
         table_end = rich.index("</table>", ids_position)
-        all_ids_button = rich.index('data="av:token:all_ids:0"')
+        all_ids_button = rich.index('data="ci:token:all_ids"')
         self.assertLess(source_caption, links_button)
         self.assertLess(links_button, ids_caption)
         self.assertLess(ids_caption, ids_position)
         self.assertLess(ids_position, table_end)
         self.assertLess(table_end, all_ids_button)
-        self.assertEqual(rich.count('data="av:token:all_ids:0"'), 1)
+        self.assertEqual(rich.count('data="ci:token:all_ids"'), 1)
         self.assertIn(
-            '<tg-button type="callback_data" data="av:token:all_ids:0">',
+            '<tg-button type="callback_data" data="ci:token:all_ids">',
             rich[table_end:],
         )
         self.assertNotIn('style="link"', rich[table_end:])
@@ -65,7 +65,7 @@ class CardSourceIdTests(unittest.TestCase):
         callbacks = [
             button.callback_data for row in fallback.inline_keyboard for button in row
         ]
-        self.assertIn("av:token:all_ids:0", callbacks)
+        self.assertIn("ci:token:all_ids", callbacks)
 
         unlinked = AggregatedAnime(title="Example")
         rich_without_anchor = (
@@ -77,7 +77,31 @@ class CardSourceIdTests(unittest.TestCase):
             ).html
             or ""
         )
-        self.assertNotIn("av:token:all_ids:0", rich_without_anchor)
+        self.assertNotIn("ci:token:all_ids", rich_without_anchor)
+
+    def test_long_id_lists_get_numbered_first_screen(self) -> None:
+        from unittest.mock import Mock, patch
+
+        from bots.telegram.card.runtime.picker_entries import labels_for_route
+        from bots.telegram.card.runtime.state import AnimeCardSession
+
+        anime = AggregatedAnime(title="Test", amdb_id="amdb:18472")
+        session = AnimeCardSession(anime=anime, owner_user_id=7)
+        resolver = Mock()
+        resolver.ids_for_anchor.return_value = {
+            f"provider_{i:04d}": (str(i) * 12,) for i in range(140)
+        }
+        context = Mock()
+        context.identity_resolver.mapping_resolver = resolver
+        with patch(
+            "bots.telegram.card.runtime.picker_entries.get_app_context",
+            return_value=context,
+        ):
+            labels = labels_for_route(session, "av~all_ids", locale="ru")
+        self.assertGreater(len(labels), 1)
+        self.assertEqual(labels[0], "ID источников — часть 1")
+        self.assertEqual(labels[1], "ID источников — часть 2")
+        resolver.ids_for_anchor.assert_called_once_with("amdb:18472")
 
     def test_full_id_pages_preserve_all_ids_and_back_navigation(self) -> None:
         source_ids = {
