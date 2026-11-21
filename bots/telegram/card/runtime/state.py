@@ -43,6 +43,7 @@ class AnimeCardSession:
     wikipedia_language: str | None = None
     wikipedia_hits: tuple[object, ...] = ()
     wikipedia_pageid: int | None = None
+    wikipedia_plain_fallback: bool = False
 
     # Only the main card can receive a delayed discovery keyboard update.
     main_view_active: bool = True
