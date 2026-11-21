@@ -20,10 +20,22 @@ def picker_parent_callback(token: str, route: str) -> str:
     parts = route.split("~")
     kind = parts[0]
     if kind == "ar" and len(parts) == 3 and parts[1] in {"related", "recommendations"}:
-        return f"ci:{token}:{parts[1]}"
-    if kind in {"ap", "apg"}:
+        # The all-sources selector is itself the entry screen: never return to
+        # the same callback and trigger Telegram's "message is not modified".
+        return (
+            f"av:{token}:main:0"
+            if parts[2] == "all"
+            else f"ci:{token}:{parts[1]}"
+        )
+    if kind == "ap":
+        return f"av:{token}:main:0"
+    if kind == "apg":
         return f"ci:{token}:episodes"
     if kind == "ac":
+        return f"ci:{token}:characters"
+    if kind == "gx" and len(parts) == 5 and parts[1] == "as":
+        return f"ci:{token}:{parts[2]}"
+    if kind == "gx" and len(parts) == 4 and parts[1] == "ac":
         return f"ci:{token}:characters"
     if kind == "as" and len(parts) == 3 and parts[1] == "screenshots":
         return f"ci:{token}:screenshots"

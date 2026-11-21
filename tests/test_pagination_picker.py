@@ -123,6 +123,27 @@ class PaginationPickerTests(unittest.TestCase):
             "av:token:all_ids:2",
         )
 
+    def test_selector_back_does_not_loop_to_itself(self) -> None:
+        from bots.telegram.card.runtime.picker_entries import (
+            picker_parent_callback,
+        )
+
+        cases = {
+            "ar~related~all": "av:token:main:0",
+            "ar~related~mal": "ci:token:related",
+            "ar~recommendations~all": "av:token:main:0",
+            "ar~recommendations~anilist": "ci:token:recommendations",
+            "ap~jikan": "av:token:main:0",
+            "apg~jikan~20": "ci:token:episodes",
+            "gx~as~voices~anilist~1": "ci:token:voices",
+            "gx~ac~shikimori~1": "ci:token:characters",
+            "at~mal": "av:token:trailers:0",
+            "ad~anilist": "av:token:description:0",
+        }
+        for route, expected in cases.items():
+            with self.subTest(route=route):
+                self.assertEqual(picker_parent_callback("token", route), expected)
+
     def test_people_source_route_preserves_source_key(self) -> None:
         route = "pv~as~staff~anilist~2"
         self.assertEqual(
