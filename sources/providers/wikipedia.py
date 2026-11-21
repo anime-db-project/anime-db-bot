@@ -14,6 +14,7 @@ from html import escape, unescape
 from html.parser import HTMLParser
 import re
 import time
+import unicodedata
 from urllib.parse import urljoin, urlparse
 
 import httpx
@@ -39,8 +40,9 @@ NOISE_SECTIONS = frozenset({
 VOID_TAGS = {"br", "hr", "img", "meta", "link", "input", "wbr", "source"}
 SKIP_TAGS = {"script", "style", "noscript", "iframe", "object", "svg", "form"}
 MAX_HTML_BYTES = 1_800_000
-MAX_TEXT_CHUNK = 300
-PAGE_HTML_LIMIT = 3000
+MAX_TEXT_CHUNK = 720
+PAGE_HTML_LIMIT = 30000
+JAPANESE_KANA = re.compile(r"[\u3040-\u30ff]")
 
 
 @dataclass(frozen=True, slots=True)
@@ -65,6 +67,7 @@ class WikipediaArticle:
     url: str
     sections: tuple[WikipediaSection, ...]
     revision_id: int | None = None
+    japanese_phrases: tuple[str, ...] = ()
 
 
 def wiki_language(locale: str) -> str:
@@ -108,7 +111,12 @@ class _MutableSection:
 
 
 class _WikipediaHTMLParser(HTMLParser):
-    """Extract bounded, safe Telegram HTML fragments from real MediaWiki HTML."""
+    """Convert article prose into balanced, safe Telegram HTML fragments.
+
+    Paragraphs stay paragraphs: inline markup does not create extra lines.
+    H2 headings divide major chapters; all nested H3-H6 headings belong to
+    their parent chapter. RAW retains visible wiki chrome, not executable HTML.
+    """
 
     def __init__(self, *, url: str, raw: bool, intro_title: str) -> None:
         super().__init__(convert_charrefs=True)
@@ -126,29 +134,39 @@ class _WikipediaHTMLParser(HTMLParser):
         self._italic = 0
 
     def _flush(self) -> None:
-        # Keep whitespace between linked/marked-up fragments, but never a
-        # paragraph made exclusively of formatting or whitespace.
-        parts = tuple(self._paragraph)
-        self._paragraph.clear()
-        if any(part.strip() and part.strip() != " " for part in parts):
-            self._current.paragraphs.append(parts)
+        if self._paragraph:
+            combined = "".join(self._paragraph)
+            if combined.strip():
+                self._current.paragraphs.append(tuple(self._paragraph))
+            self._paragraph.clear()
 
     def _append(self, string: str) -> None:
-        string = re.sub(r"\s+", " ", string)
-        if not string.strip():
-            if self._paragraph and not self._paragraph[-1].endswith(" "):
-                self._paragraph.append(" ")
+        # Preserve spaces around links and emphasized spans instead of making
+        # an artificial line break for each HTML text node.
+        normalized = re.sub(r"\s+", " ", string)
+        if not normalized:
             return
-        # Per-fragment tags remain balanced even when pages split mid-paragraph.
-        for index in range(0, len(string), MAX_TEXT_CHUNK):
-            chunk = escape(string[index : index + MAX_TEXT_CHUNK])
+        if normalized.isspace() and not self._paragraph:
+            return
+        # Each fragment is independently balanced, so splitting at the
+        # Telegram page budget never leaves an open <a>/<b>/<i> tag.
+        while normalized:
+            if len(normalized) <= MAX_TEXT_CHUNK:
+                piece, normalized = normalized, ""
+            else:
+                split = normalized.rfind(" ", 1, MAX_TEXT_CHUNK)
+                split = split if split > MAX_TEXT_CHUNK // 2 else MAX_TEXT_CHUNK
+                piece, normalized = normalized[:split], normalized[split:]
+            fragment = escape(piece)
             if self._link:
-                chunk = f'<a href="{escape(self._link, quote=True)}">{chunk}</a>'
+                fragment = (
+                    f'<a href="{escape(self._link, quote=True)}">{fragment}</a>'
+                )
             if self._italic:
-                chunk = f"<i>{chunk}</i>"
+                fragment = f"<i>{fragment}</i>"
             if self._bold:
-                chunk = f"<b>{chunk}</b>"
-            self._paragraph.append(chunk)
+                fragment = f"<b>{fragment}</b>"
+            self._paragraph.append(fragment)
 
     def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
         tag = tag.casefold()
@@ -162,7 +180,7 @@ class _WikipediaHTMLParser(HTMLParser):
         skipped = tag in SKIP_TAGS or (
             not self.raw
             and (
-                any(part in cls.split() or part in cls for part in NOISE_CLASSES)
+                any(name in cls.split() for name in NOISE_CLASSES)
                 or node_id in {"toc", "catlinks", "mw-normal-catlinks"}
                 or tag == "sup"
             )
@@ -171,25 +189,25 @@ class _WikipediaHTMLParser(HTMLParser):
             if tag not in VOID_TAGS:
                 self._skip_depth = 1
             return
-        if tag in ("h2", "h3", "h4", "h5", "h6"):
+        if tag in {"h2", "h3", "h4", "h5", "h6"}:
             self._flush()
             self._heading_level = int(tag[1])
             self._heading_text = []
             return
-        if tag in ("p", "div", "li", "tr", "br"):
-            if tag in ("p", "li", "tr", "br"):
-                self._flush()
+        if tag in {"p", "li", "tr", "blockquote"}:
+            self._flush()
             if tag == "li":
                 self._paragraph.append("• ")
-        if tag in ("td", "th"):
-            if self._paragraph:
-                self._paragraph.append(" | ")
+        elif tag == "br":
+            self._paragraph.append("\n")
+        elif tag in {"td", "th"} and self._paragraph:
+            self._paragraph.append(" | ")
         if tag == "a":
             self._link_stack.append(self._link)
             self._link = _safe_link(attr.get("href") or "", base=self.url)
-        if tag in ("b", "strong"):
+        elif tag in {"b", "strong"}:
             self._bold += 1
-        if tag in ("i", "em"):
+        elif tag in {"i", "em"}:
             self._italic += 1
 
     def handle_endtag(self, tag: str) -> None:
@@ -198,7 +216,7 @@ class _WikipediaHTMLParser(HTMLParser):
             self._skip_depth -= 1
             return
         if self._heading_level and tag == f"h{self._heading_level}":
-            title = " ".join("".join(self._heading_text).split()).strip()
+            title = " ".join("".join(self._heading_text).split())
             level = self._heading_level
             self._heading_level = 0
             self._heading_text = []
@@ -207,16 +225,20 @@ class _WikipediaHTMLParser(HTMLParser):
                     self._current = _MutableSection(title)
                     self.sections.append(self._current)
                 else:
-                    self._flush()
-                    self._current.paragraphs.append((f"<b>{escape(title)}</b>",))
+                    # A child heading is part of the chapter, not a chapter
+                    # on its own. Bold subheadings preserve the reading flow.
+                    markup = "b" if level < 5 else "i"
+                    self._current.paragraphs.append(
+                        (f"<{markup}>{escape(title)}</{markup}>",)
+                    )
             return
-        if tag in ("p", "li", "tr", "ul", "ol", "table", "blockquote"):
+        if tag in {"p", "li", "tr", "blockquote"}:
             self._flush()
         if tag == "a" and self._link_stack:
             self._link = self._link_stack.pop()
-        if tag in ("b", "strong"):
+        elif tag in {"b", "strong"}:
             self._bold = max(0, self._bold - 1)
-        if tag in ("i", "em"):
+        elif tag in {"i", "em"}:
             self._italic = max(0, self._italic - 1)
 
     def handle_data(self, data: str) -> None:
@@ -224,20 +246,47 @@ class _WikipediaHTMLParser(HTMLParser):
             return
         if self._heading_level:
             self._heading_text.append(data)
-            return
-        if data:
+        elif data:
             self._append(data)
 
     def finish(self) -> tuple[WikipediaSection, ...]:
         self._flush()
-        sections = []
+        sections: list[WikipediaSection] = []
         for item in self.sections:
             if not item.paragraphs:
                 continue
             if not self.raw and item.title.casefold().strip() in NOISE_SECTIONS:
                 continue
-            sections.append(WikipediaSection(item.title[:140], tuple(item.paragraphs)))
+            sections.append(WikipediaSection(item.title[:200], tuple(item.paragraphs)))
         return tuple(sections)
+
+
+class _JapaneseTextCollector(HTMLParser):
+    """Collect Japanese-bearing *page text*, never wiki HTML attributes."""
+
+    def __init__(self) -> None:
+        super().__init__(convert_charrefs=True)
+        self.phrases: list[str] = []
+
+    def handle_data(self, data: str) -> None:
+        if JAPANESE_KANA.search(data) and len(self.phrases) < 80:
+            self.phrases.append(" ".join(data.split())[:240])
+
+
+def japanese_title_in_article(
+    article: WikipediaArticle, original_title: str | None
+) -> str | None:
+    """Show the existing Japanese anime title only when found on this page."""
+    value = str(original_title or "").strip()
+    if not value or not JAPANESE_KANA.search(value):
+        return None
+    normalized = unicodedata.normalize("NFKC", value).casefold()
+    if any(
+        normalized in unicodedata.normalize("NFKC", phrase).casefold()
+        for phrase in article.japanese_phrases
+    ):
+        return value
+    return None
 
 
 def parse_wikipedia_html(
@@ -253,26 +302,42 @@ def parse_wikipedia_html(
     return parser.finish()
 
 
-def paginate_section(section: WikipediaSection, *, limit: int = PAGE_HTML_LIMIT) -> tuple[str, ...]:
-    """Split at paragraph/fragment boundaries, never within generated HTML tags."""
+def paginate_section(
+    section: WikipediaSection, *, limit: int = PAGE_HTML_LIMIT
+) -> tuple[str, ...]:
+    """Use one page until the actual Telegram message budget is exceeded.
+
+    Preserve blank lines between Wikipedia paragraphs. Split oversized
+    paragraphs only at balanced, self-contained HTML fragment boundaries.
+    """
     if limit < 200:
         raise ValueError("Invalid page budget")
     pages: list[str] = []
-    content = ""
+    current = ""
     for paragraph in section.paragraphs:
-        separator = "\n\n" if content else ""
-        for fragment in paragraph:
+        fragments = tuple(paragraph)
+        full_paragraph = "".join(fragments).strip()
+        if not full_paragraph:
+            continue
+        separator = "\n\n" if current else ""
+        if len(current) + len(separator) + len(full_paragraph) <= limit:
+            current += separator + full_paragraph
+            continue
+        if current:
+            pages.append(current)
+            current = ""
+        if len(full_paragraph) <= limit:
+            current = full_paragraph
+            continue
+        for fragment in fragments:
             if len(fragment) > limit:
-                raise ValueError("Wiki text fragment exceeds page limit")
-            if len(content) + len(separator) + len(fragment) > limit and content:
-                pages.append(content)
-                content = ""
-                separator = ""
-            content += separator + fragment
-            separator = ""
-        content += "\n"
-    if content.strip():
-        pages.append(content.strip())
+                raise ValueError("Wikipedia fragment exceeds page budget")
+            if len(current) + len(fragment) > limit and current:
+                pages.append(current.strip())
+                current = ""
+            current += fragment
+    if current.strip():
+        pages.append(current.strip())
     return tuple(pages or ("",))
 
 
@@ -354,6 +419,9 @@ class WikipediaClient:
         if not title or not isinstance(html, str):
             raise ValueError("Wikipedia article text is unavailable")
         url = wikipedia_page_url(language, title)
+        japanese = _JapaneseTextCollector()
+        japanese.feed(html)
+        japanese.close()
         parsed = parse_wikipedia_html(
             html,
             url=url,
@@ -367,6 +435,7 @@ class WikipediaClient:
             url=url,
             revision_id=int(payload["revid"]) if payload.get("revid") else None,
             sections=parsed,
+            japanese_phrases=tuple(japanese.phrases),
         )
         self._cache[key] = (time.monotonic() + self._cache_ttl, article)
         self._cache.move_to_end(key)
