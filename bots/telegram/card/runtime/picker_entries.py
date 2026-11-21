@@ -33,6 +33,8 @@ def picker_parent_callback(token: str, route: str) -> str:
         return f"ci:{token}:episodes"
     if kind == "ac":
         return f"ci:{token}:characters"
+    if kind == "ps" and len(parts) == 3 and parts[1] in {"staff", "voices"}:
+        return f"ci:{token}:{parts[1]}"
     if kind == "gx" and len(parts) == 5 and parts[1] == "as":
         return f"ci:{token}:{parts[2]}"
     if kind == "gx" and len(parts) == 4 and parts[1] == "ac":

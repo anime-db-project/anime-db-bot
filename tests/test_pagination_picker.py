@@ -168,6 +168,8 @@ class PaginationPickerTests(unittest.TestCase):
             "ap~jikan": "av:token:main:0",
             "apg~jikan~20": "ci:token:episodes",
             "gx~as~voices~anilist~1": "ci:token:voices",
+            "ps~voices~anilist": "ci:token:voices",
+            "ps~staff~anilist": "ci:token:staff",
             "gx~ac~shikimori~1": "ci:token:characters",
             "at~mal": "av:token:trailers:0",
             "ad~anilist": "av:token:description:0",
