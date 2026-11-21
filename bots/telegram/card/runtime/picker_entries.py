@@ -70,6 +70,24 @@ def labels_for_route(
             return labels[offset:]
         return labels
 
+    if kind == "av" and len(parts) == 2 and parts[1] == "all_ids":
+        from bots.telegram.card.features.mapping_ids import mapping_ids_pages
+
+        resolver = get_app_context().identity_resolver.mapping_resolver
+        source_ids = (
+            resolver.ids_for_anchor(session.anime.amdb_id)
+            if session.anime.amdb_id
+            else {}
+        )
+        return [
+            f"ID источников — часть {i + 1}"
+            if locale == "ru"
+            else f"Source IDs — part {i + 1}"
+            for i, _ in enumerate(
+                mapping_ids_pages(session.anime.amdb_id or "", source_ids, locale=locale)
+            )
+        ]
+
     if kind == "ad" and len(parts) == 2:
         from bots.telegram.card.ui.selectors import description_source_options
         from bots.telegram.card.views.sections import description_pages
@@ -298,6 +316,10 @@ async def prepare_initial_picker(
         route = "av~screenshots"
         labels = labels_for_route(session, route, locale=locale)
         return (route, labels) if labels else None
+
+    if section == "all_ids":
+        labels = labels_for_route(session, "av~all_ids", locale=locale)
+        return ("av~all_ids", labels) if len(labels) > 1 else None
 
     if section in {"titles", "popularity"}:
         from bots.telegram.card.views.sections import view_pages

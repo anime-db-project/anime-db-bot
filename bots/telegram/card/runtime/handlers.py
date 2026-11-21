@@ -204,6 +204,15 @@ def build_dispatcher(mode_name: str, state: TelegramCardState) -> Dispatcher:
                         page=0,
                         locale=locale,
                     )
+                elif section == "all_ids":
+                    await edit_mapping_ids_view(
+                        callback.message,
+                        token,
+                        session.anime,
+                        mapping_resolver=get_app_context().identity_resolver.mapping_resolver,
+                        page=0,
+                        locale=locale,
+                    )
                 elif section == "episodes":
                     await edit_episodes_view(
                         callback.message,

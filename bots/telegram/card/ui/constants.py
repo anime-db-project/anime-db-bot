@@ -39,6 +39,7 @@ PAGED_ENTRY_SECTIONS = frozenset({
     "characters",
     "screenshots",
     "episodes",
+    "all_ids",
     "related",
     "recommendations",
 })

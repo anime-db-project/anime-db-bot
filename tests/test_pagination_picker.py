@@ -117,6 +117,12 @@ class PaginationPickerTests(unittest.TestCase):
             "ac:token:anilist:1",
         )
 
+    def test_source_id_route_opens_original_card_page(self) -> None:
+        self.assertEqual(
+            card_route_callback("token", "av~all_ids", 2),
+            "av:token:all_ids:2",
+        )
+
     def test_people_source_route_preserves_source_key(self) -> None:
         route = "pv~as~staff~anilist~2"
         self.assertEqual(

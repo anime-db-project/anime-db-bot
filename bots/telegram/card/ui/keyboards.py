@@ -391,7 +391,7 @@ def fallback_main_keyboard(
             [
                 InlineKeyboardButton(
                     text=text("card", "all_ids_button", locale=locale),
-                    callback_data=f"av:{token}:all_ids:0",
+                    callback_data=f"ci:{token}:all_ids",
                 )
             ]
         )
