@@ -247,6 +247,24 @@ The interactive `/anime` command is the entry point for ordinary searches. Admin
 | `/mapping_overrides`, `/mapping_history [limit]` | Inspect overrides and mapping audit history |
 | `/mapping_set`, `/mapping_delete`, `/mapping_confirm`, `/mapping_cancel` | Stage mapping decisions, then confirm or cancel |
 
+## Wikipedia article reader
+
+An anime card now includes a separate **Wikipedia** inline button directly
+above Related and Recommendations. It is independent of anime aggregation:
+you explicitly select a search result, choose a major article section, and
+read its text in pages with **bold section titles, page numbers and inline
+links**. Lower-level subsections stay inside their parent chapter. No AI
+summary or automatic wiki-title-to-anime association is performed.
+
+Every user can choose **/settings → Wikipedia · display mode**:
+Clean (omit service/navigation noise) or Full RAW (retain all available
+visible service text while filtering executable HTML). This preference is
+persisted in SQLite or PostgreSQL and does not require restarting the bot.
+In the Recommendations screen, the card-opening action is now **Details**
+(«Подробнее»). Wikidata and anime-mapping-db are unchanged.
+
+[Wikipedia integration and safety details](docs/wikipedia.md).
+
 ## Administrator configuration in Telegram
 
 Authorized Telegram administrators can open **/settings → Bot configuration
