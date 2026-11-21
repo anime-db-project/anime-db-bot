@@ -241,7 +241,7 @@ class _WikipediaHTMLParser(HTMLParser):
 
 
 def parse_wikipedia_html(
-    value: str, *, url: str, mode: str, intro_title: str = "Введение"
+    value: str, *, url: str, mode: str, intro_title: str = "Introduction"
 ) -> tuple[WikipediaSection, ...]:
     if mode not in {"raw", "clean"}:
         raise ValueError("Invalid Wikipedia display mode")
