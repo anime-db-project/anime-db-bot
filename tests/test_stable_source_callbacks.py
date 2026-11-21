@@ -68,7 +68,7 @@ class StableSourceCallbackTests(unittest.TestCase):
             for button in row
             if button.callback_data
         ]
-        self.assertIn("as:token:voices:anilist:0", callbacks)
+        self.assertIn("ci:token:ps~voices~anilist", callbacks)
 
 
 if __name__ == "__main__":
