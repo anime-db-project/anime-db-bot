@@ -98,7 +98,11 @@ class WikipediaCallbackTests(unittest.IsolatedAsyncioTestCase):
     @staticmethod
     def text_of(messages: list[object]) -> str:
         return "\n".join(
-            str(getattr(item, "text", "")) for item in messages
+            str(
+                getattr(item, "text", None)
+                or getattr(getattr(item, "rich_message", None), "html", "")
+            )
+            for item in messages
         )
 
     async def test_user_selects_article_and_reads_parent_section(self) -> None:
@@ -124,14 +128,43 @@ class WikipediaCallbackTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(type(unauthorized[0]).__name__, "AnswerCallbackQuery")
         self.fake_client.search.assert_not_awaited()
 
-    async def test_language_switch_discards_article_selection(self) -> None:
+    async def test_global_settings_language_switch_invalidates_article(self) -> None:
         await self.click(f"av:{self.token}:wikipedia:0")
         await self.click(f"wk:{self.token}:a:0")
         self.assertEqual(self.state.anime_sessions[self.token].wikipedia_pageid, 123)
-        await self.click(f"wk:{self.token}:lang:en")
+        with patch(
+            "bots.telegram.card.features.wikipedia.get_user_locale",
+            return_value="en",
+        ):
+            await self.click(f"av:{self.token}:wikipedia:0")
         self.assertIsNone(self.state.anime_sessions[self.token].wikipedia_pageid)
         self.assertEqual(self.state.anime_sessions[self.token].wikipedia_language, "en")
         self.assertEqual(self.fake_client.search.await_count, 2)
+        self.assertEqual(
+            self.fake_client.search.await_args.kwargs["language"], "en"
+        )
+
+    async def test_search_menu_contains_only_article_buttons_not_descriptions(self) -> None:
+        first = await self.click(f"av:{self.token}:wikipedia:0")
+        body = self.text_of(first)
+        self.assertIn("Выберите статью:", body)
+        self.assertNotIn("Статья об аниме", body)
+        self.assertNotIn("Русский", body)
+        self.assertNotIn("Очищенный", body)
+        self.assertNotIn("Подразделы", body)
+        self.assertEqual(
+            len([method for method in first if type(method).__name__ == "EditMessageText"]),
+            1,
+        )
+        edited = next(
+            method for method in first if type(method).__name__ == "EditMessageText"
+        )
+        labels = [
+            button.text for row in edited.reply_markup.inline_keyboard
+            for button in row
+        ]
+        self.assertIn("Наруто", labels)
+        self.assertFalse(any("Русский" in label for label in labels))
 
 
 if __name__ == "__main__":
