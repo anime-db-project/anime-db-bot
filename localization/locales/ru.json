@@ -328,6 +328,7 @@
     "discovery_sources": "Источники: {sources}",
     "discovery_relation": "Связь: {value}",
     "discovery_all_sources": "Все источники",
+    "discovery_more_details": "Подробнее",
     "discovery_open_card": "Открыть карточку"
   },
   "people": {
