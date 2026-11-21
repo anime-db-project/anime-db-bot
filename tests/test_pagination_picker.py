@@ -221,7 +221,7 @@ class PaginationPickerTests(unittest.TestCase):
         keyboard = search_picker_keyboard(data, locale="ru")
         flattened = [button for row in keyboard.inline_keyboard for button in row]
 
-        self.assertTrue(any(button.text == "✓ 13. Страница 13" for button in flattened))
+        self.assertTrue(any(button.text == "✓ 13" for button in flattened))
         self.assertTrue(
             any(button.callback_data == "sr:token:17" for button in flattened)
         )

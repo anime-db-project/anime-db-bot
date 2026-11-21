@@ -33,33 +33,27 @@ async def _noop_aggregate(message, candidate, owner_user_id):
 
 
 class UnifiedSearchUiTests(unittest.TestCase):
-    def test_search_picker_first_screen_has_names_without_fake_back(self) -> None:
-        session = search_ui.SearchSession(
-            query="naruto",
-            owner_user_id=1,
-            items=[
-                SearchCandidate(title="Naruto", external_ids={"mal": "20"}),
-                SearchCandidate(title="Naruto Shippuden", external_ids={"mal": "1735"}),
-            ],
-        )
-        async def run() -> object:
-            mock_message = SimpleNamespace(answer=AsyncMock())
-            with patch.object(search_ui, "get_user_locale", return_value="ru"):
-                await search_ui._send_results_list(
-                    mock_message, "token", session, edit=False
-                )
-            return mock_message.answer.call_args.kwargs["reply_markup"]
+    def test_search_picker_retains_the_old_compact_number_grid(self) -> None:
+        from bots.telegram.callbacks import PagePickerCallback
+        from bots.telegram.pagination import search_picker_keyboard
 
-        markup = asyncio.run(run())
-        choices = [b for row in markup.inline_keyboard for b in row]
-        self.assertEqual(
-            [b.text for b in choices],
-            ["1. Naruto", "2. Naruto Shippuden"],
+        markup = search_picker_keyboard(
+            PagePickerCallback("sp", "token", "sr", 2, 24, 0),
+            locale="ru",
         )
         self.assertEqual(
-            [b.callback_data for b in choices],
-            ["sr:token:0", "sr:token:1"],
+            [button.text for button in markup.inline_keyboard[0]],
+            ["1", "2", "✓ 3", "4", "5"],
         )
+        self.assertEqual(
+            [button.callback_data for button in markup.inline_keyboard[0]],
+            [f"sr:token:{index}" for index in range(5)],
+        )
+        self.assertEqual(
+            markup.inline_keyboard[-1][0].callback_data,
+            "sr:token:2",
+        )
+        self.assertNotIn("Naruto", str(markup.model_dump()))
 
     def test_scope_parser_normalizes_provider_order(self) -> None:
         self.assertEqual(

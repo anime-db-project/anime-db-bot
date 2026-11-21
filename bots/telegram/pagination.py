@@ -290,19 +290,59 @@ def card_picker_keyboard(
 
 
 def search_picker_keyboard(
-    data: PagePickerCallback,
-    *,
-    locale: str,
-    labels: Sequence[str] | None = None,
-    show_back: bool = True,
+    data: PagePickerCallback, *, locale: str
 ) -> InlineKeyboardMarkup:
+    """Original search picker: compact 5-column numeric grid, no named list.
+
+    It replaces only the preview keyboard, without swapping its rich message.
+    The number of buttons per grid window still supports the search-specific
+    override and otherwise inherits the global Telegram selection limit.
+    """
     if data.route != "sr":
         raise ValueError(f"Unsupported search page-picker route: {data.route}")
-    return _picker_keyboard(
-        data,
-        locale=locale,
-        destination=lambda index: TokenIndexCallback("sr", data.token, index).encode(),
-        labels=labels,
-        show_back=show_back,
-        highlight_current=show_back,
-    )
+    total = max(1, int(data.total))
+    current = max(0, min(int(data.current), total - 1))
+    size = selection_page_size("search")
+    count = max(1, (total + size - 1) // size)
+    window = max(0, min(int(data.window), count - 1))
+    start = window * size
+    end = min(total, start + size)
+    buttons = [
+        InlineKeyboardButton(
+            text=f"✓ {index + 1}" if index == current else str(index + 1),
+            callback_data=TokenIndexCallback("sr", data.token, index).encode(),
+        )
+        for index in range(start, end)
+    ]
+    rows = [buttons[i : i + 5] for i in range(0, len(buttons), 5)]
+    if count > 1:
+        nav: list[InlineKeyboardButton] = []
+        if window:
+            nav.append(
+                InlineKeyboardButton(
+                    text="◀️",
+                    callback_data=PagePickerCallback(
+                        "sp", data.token, "sr", current, total, window - 1
+                    ).encode(),
+                )
+            )
+        nav.append(
+            InlineKeyboardButton(text=f"{start + 1}–{end}/{total}", callback_data="noop")
+        )
+        if window + 1 < count:
+            nav.append(
+                InlineKeyboardButton(
+                    text="▶️",
+                    callback_data=PagePickerCallback(
+                        "sp", data.token, "sr", current, total, window + 1
+                    ).encode(),
+                )
+            )
+        rows.append(nav)
+    rows.append([
+        InlineKeyboardButton(
+            text=text("common", "back", locale=locale),
+            callback_data=TokenIndexCallback("sr", data.token, current).encode(),
+        )
+    ])
+    return InlineKeyboardMarkup(inline_keyboard=rows)
