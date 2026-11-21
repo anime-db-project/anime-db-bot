@@ -30,3 +30,15 @@ ALL_SOURCE_LABELS = {
     "voices": "all_voices",
     "screenshots": "all_screenshots",
 }
+
+PAGED_ENTRY_SECTIONS = frozenset({
+    "titles",
+    "popularity",
+    "staff",
+    "voices",
+    "characters",
+    "screenshots",
+    "episodes",
+    "related",
+    "recommendations",
+})

@@ -5,6 +5,7 @@ from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 from bots.telegram.callbacks import KeyedPageCallback, SectionSourceCallback
 from bots.telegram.card.ui.constants import (
     ALL_SOURCE_LABELS,
+    PAGED_ENTRY_SECTIONS,
     SOURCE_SELECTABLE_SECTIONS,
 )
 from bots.telegram.card.ui.selectors import (
@@ -107,13 +108,13 @@ def navigation_keyboard(
             discovery_buttons.append(
                 InlineKeyboardButton(
                     text=text("card", "related_button", locale=locale),
-                    callback_data=f"av:{token}:related:0",
+                    callback_data=f"ci:{token}:related",
                 )
             )
         discovery_buttons.append(
             InlineKeyboardButton(
                 text=text("card", "recommendations_button", locale=locale),
-                callback_data=f"av:{token}:recommendations:0",
+                callback_data=f"ci:{token}:recommendations",
             )
         )
         rows.append(discovery_buttons)
@@ -315,21 +316,21 @@ def fallback_main_keyboard(
         [
             InlineKeyboardButton(
                 text=text("card", "section_staff", locale=locale),
-                callback_data=f"av:{token}:staff:0",
+                callback_data=f"ci:{token}:staff",
             ),
             InlineKeyboardButton(
                 text=text("card", "section_voices", locale=locale),
-                callback_data=f"av:{token}:voices:0",
+                callback_data=f"ci:{token}:voices",
             ),
         ],
         [
             InlineKeyboardButton(
                 text=text("card", "characters_button", locale=locale),
-                callback_data=f"av:{token}:characters:0",
+                callback_data=f"ci:{token}:characters",
             ),
             InlineKeyboardButton(
                 text=text("card", "screenshots_button", locale=locale),
-                callback_data=f"av:{token}:screenshots:0",
+                callback_data=f"ci:{token}:screenshots",
             ),
         ],
         [
@@ -339,7 +340,7 @@ def fallback_main_keyboard(
             ),
             InlineKeyboardButton(
                 text=text("card", "episodes_button", locale=locale),
-                callback_data=f"av:{token}:episodes:0",
+                callback_data=f"ci:{token}:episodes",
             ),
         ],
         [
@@ -364,13 +365,13 @@ def fallback_main_keyboard(
         discovery_buttons.append(
             InlineKeyboardButton(
                 text=text("card", "related_button", locale=locale),
-                callback_data=f"av:{token}:related:0",
+                callback_data=f"ci:{token}:related",
             )
         )
     discovery_buttons.append(
         InlineKeyboardButton(
             text=text("card", "recommendations_button", locale=locale),
-            callback_data=f"av:{token}:recommendations:0",
+            callback_data=f"ci:{token}:recommendations",
         )
     )
     rows.append(discovery_buttons)

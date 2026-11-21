@@ -4,6 +4,7 @@ import html
 
 from aiogram.types import InputRichMessage
 
+from bots.telegram.card.ui.constants import PAGED_ENTRY_SECTIONS
 from bots.telegram.card.ui.selectors import ordered_mapping_items
 from bots.telegram.card.views.release_schedule import format_release_datetime
 from bots.telegram.card.views.rendering import (
@@ -71,8 +72,13 @@ def _block_actions_html(
     token_value = html.escape(token, quote=True)
     buttons = []
     for label_key, section in actions:
+        action = (
+            f"ci:{token_value}:{section}"
+            if section in PAGED_ENTRY_SECTIONS
+            else f"av:{token_value}:{section}:0"
+        )
         buttons.append(
-            f'<tg-button type="callback_data" data="av:{token_value}:{section}:0">'
+            f'<tg-button type="callback_data" data="{action}">'
             f"{html.escape(text('card', label_key, locale=locale))}"
             "</tg-button>"
         )
