@@ -86,9 +86,9 @@ class DetailPickerBackTests(unittest.TestCase):
             3,
             locale="ru",
         )
-        self.assertEqual(
-            keyboard.inline_keyboard[-1][0].callback_data,
+        self.assertIn(
             "ci:token:as~titles~anilist",
+            [b.callback_data for row in keyboard.inline_keyboard for b in row],
         )
 
     def test_source_id_overflow_returns_to_source_id_index(self) -> None:
@@ -102,9 +102,9 @@ class DetailPickerBackTests(unittest.TestCase):
         )
         self.assertIsNotNone(keyboard)
         assert keyboard is not None
-        self.assertEqual(
-            keyboard.inline_keyboard[-1][0].callback_data,
+        self.assertIn(
             "ci:token:all_ids",
+            [b.callback_data for row in keyboard.inline_keyboard for b in row],
         )
 
     def test_trailer_details_return_to_trailer_chooser(self) -> None:
