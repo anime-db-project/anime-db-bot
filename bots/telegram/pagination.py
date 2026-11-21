@@ -67,6 +67,11 @@ def indexed_selection_rows(
 
 def _default_label(route: str, index: int, locale: str) -> str:
     number = index + 1
+    if route.startswith("apg~"):
+        try:
+            number += max(0, int(route.split("~")[2]))
+        except (IndexError, ValueError):
+            pass
     if route.startswith(("ap~", "apg~")):
         return f"{number} серия" if locale == "ru" else f"Episode {number}"
     if route.startswith("ar~"):

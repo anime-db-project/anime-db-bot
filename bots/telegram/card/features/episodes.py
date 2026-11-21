@@ -13,7 +13,11 @@ from aiogram.types import (
     Message,
 )
 
-from bots.telegram.callbacks import KeyedPageCallback, resolve_key_or_legacy_index
+from bots.telegram.callbacks import (
+    KeyedPageCallback,
+    PagePickerCallback,
+    resolve_key_or_legacy_index,
+)
 from bots.telegram.card.runtime.state import AnimeCardSession
 from bots.telegram.card.views.release_schedule import format_release_projection
 from bots.telegram.card.views.renderer import (
@@ -446,8 +450,9 @@ def _episode_keyboard(
             InlineKeyboardButton(
                 text=("✓ " if group.key == selected_episode_group else "")
                 + _episode_group_label(group, locale=locale),
-                callback_data=KeyedPageCallback(
-                    "ap", token, backend, group.start
+                callback_data=PagePickerCallback(
+                    "ci", token, f"apg~{backend}~{group.start}",
+                    0, group.count, 0,
                 ).encode(),
             )
             for group in episode_groups
