@@ -27,6 +27,27 @@ python -m scripts.config_report --check --strict
 The strict command also flags key names not present in the sample files.
 Unexpected names are warnings in normal mode, not automatically rejected.
 
+## Common Telegram selection pages
+
+All numbered item selectors share one page-size setting in
+`.env.d/telegram.env` (or the legacy `.env`):
+
+```dotenv
+TELEGRAM_PAGINATION_PAGE_SIZE=10
+```
+
+The default is **10 choices per page**; values from **1 through 30** are
+supported. It applies to anime search results, section and episode pickers,
+Wikipedia article/section/overflow-page choices, and the private administrator
+ENV categories, keys and search results. Changing it does not alter the
+Telegram message-length limits or the natural length of an episode/section
+detail. A bot restart is required to apply the change.
+
+Item details retain their previous/next arrows and page counter. **Back**
+returns from a detail to its named item list and from that list to its parent
+screen. Where the content fits in one natural page, the extra choice screen is
+skipped for text-only sections.
+
 ## Per-user Wikipedia reading preference
 
 The **/settings → Wikipedia · display mode** menu lets every Telegram user
