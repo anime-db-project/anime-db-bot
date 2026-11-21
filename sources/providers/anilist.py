@@ -32,7 +32,7 @@ from core.source_keys import SourceKey
 from localization import source_value_key
 
 DEFAULT_ANILIST_GRAPHQL_URL = "https://graphql.anilist.co"
-DEFAULT_PEOPLE_MAX_PAGES = 4
+DEFAULT_PEOPLE_MAX_PAGES = 12
 DEFAULT_PEOPLE_CACHE_TTL_SECONDS = 21600
 
 DETAIL_QUERY = """

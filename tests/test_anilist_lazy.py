@@ -9,6 +9,14 @@ from sources.providers.anilist import AniListSource, BY_ID_QUERY, DETAIL_QUERY
 
 
 class AniListLazyPeopleTests(unittest.IsolatedAsyncioTestCase):
+    def test_default_people_page_budget_covers_large_rosters(self) -> None:
+        from core.settings import AppSettings
+        from sources.providers.anilist import DEFAULT_PEOPLE_MAX_PAGES
+
+        self.assertEqual(DEFAULT_PEOPLE_MAX_PAGES, 12)
+        self.assertEqual(AppSettings.from_env({}).sources.anilist_people_max_pages, 12)
+
+
     async def test_main_metadata_query_does_not_request_people(self) -> None:
         self.assertNotIn("staff(page:", DETAIL_QUERY)
         self.assertNotIn("characters(page:", DETAIL_QUERY)

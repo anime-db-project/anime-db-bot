@@ -1193,7 +1193,7 @@ class AppSettings:
                 anilist_people_max_pages=_int(
                     values,
                     "ANILIST_PEOPLE_MAX_PAGES",
-                    4,
+                    12,
                     1,
                 ),
                 anilist_people_cache_ttl_seconds=_float(
