@@ -10,7 +10,7 @@ from aiogram.types import InlineKeyboardMarkup
 
 from bots.telegram.card.features.wikipedia import (
     _chapter_page,
-    _language_rows,
+    _japanese_label,
     _search_term,
     _tr,
 )
@@ -25,6 +25,8 @@ from sources.providers.wikipedia import (
     WikipediaArticle,
     WikipediaClient,
     WikipediaSection,
+    WikipediaHit,
+    japanese_title_in_article,
     _safe_link,
     paginate_section,
     parse_wikipedia_html,
@@ -122,6 +124,76 @@ class WikipediaSourceTests(unittest.TestCase):
             self.assertLessEqual(len(value), 500)
             self.assertEqual(value.count("<a "), value.count("</a>"))
 
+
+    def test_paragraph_flow_matches_wikipedia_not_one_line_per_link(self) -> None:
+        sections = parse_wikipedia_html(
+            EXAMPLE_WIKI_HTML,
+            url=wikipedia_page_url("en", "Naruto"),
+            mode="clean",
+        )
+        intro = paginate_section(sections[0])
+        self.assertEqual(len(intro), 1)
+        self.assertIn(
+            'Anime <a href="https://en.wikipedia.org/wiki/Naruto">Naruto</a>'
+            ' is a work about <b>ninjas</b> and ',
+            intro[0],
+        )
+        self.assertNotIn("</a>\n", intro[0])
+        plot = paginate_section(sections[1])
+        self.assertEqual(len(plot), 1)
+        self.assertIn("\n\n<b>First arc</b>\n\nA <i>ninja</i>", plot[0])
+
+    def test_short_chapter_has_only_cross_section_navigation(self) -> None:
+        article = WikipediaArticle(
+            pageid=123,
+            title="Naruto",
+            language="en",
+            url=wikipedia_page_url("en", "Naruto"),
+            sections=(
+                WikipediaSection("World", (("Short world text.",),)),
+                WikipediaSection("Plot", (("A scene.",),)),
+                WikipediaSection("Production", (("Behind the scenes.",),)),
+            ),
+        )
+        body, menu = _chapter_page(
+            article, 1, 0, token="abc", locale="en",
+        )
+        callbacks = [
+            button.callback_data
+            for row in menu.inline_keyboard for button in row
+        ]
+        self.assertEqual(
+            callbacks,
+            [
+                "wk:abc:r:0:0",
+                "wk:abc:r:2:0",
+                "wk:abc:l:0",
+                "av:abc:main:0",
+            ],
+        )
+        self.assertEqual(body.splitlines()[0], "<b>Plot</b>")
+        self.assertNotIn("1/1", body)
+        self.assertEqual(len(paginate_section(article.sections[1])), 1)
+
+    def test_japanese_alias_only_when_present_in_actual_wiki_article(self) -> None:
+        with_japanese = WikipediaArticle(
+            1, "Naruto", "en", "https://en.wikipedia.org/wiki/Naruto",
+            (), japanese_phrases=("Japanese title NARUTO -ナルト-",),
+        )
+        without_japanese = WikipediaArticle(
+            2, "Naruto", "en", "https://en.wikipedia.org/wiki/Naruto",
+            (), japanese_phrases=("English text only",),
+        )
+        self.assertEqual(
+            japanese_title_in_article(with_japanese, "ナルト"), "ナルト"
+        )
+        self.assertIsNone(
+            japanese_title_in_article(without_japanese, "ナルト")
+        )
+        self.assertIsNone(
+            japanese_title_in_article(with_japanese, "One Piece")
+        )
+
     def test_excessive_html_is_rejected(self) -> None:
         with self.assertRaises(ValueError):
             parse_wikipedia_html(
@@ -190,7 +262,7 @@ class WikipediaUiTests(unittest.TestCase):
             sections=(WikipediaSection("Сюжет", (paragraph,)),),
         )
         rendered, markup = _chapter_page(article, 0, 1, token="card", locale="ru")
-        self.assertIn("<b>Сюжет — 2/", rendered)
+        self.assertIn("<b>Сюжет</b>\n2/", rendered)
         self.assertIn('<a href="https://ru.wikipedia.org/wiki/Test">Тест</a>', rendered)
         self.assertIn("CC BY-SA 4.0", rendered)
         self.assertIn("wk:card:r:0:0", str(markup.model_dump()))
@@ -203,7 +275,18 @@ class WikipediaUiTests(unittest.TestCase):
         self.assertEqual(_search_term(anime, "ru"), "Наруто")
         self.assertEqual(_search_term(anime, "en"), "Naruto")
         self.assertEqual(_search_term(anime, "ja"), "ナルト")
-        self.assertEqual(len(_language_rows("tok", "ru")), 3)
+        self.assertEqual(
+            _japanese_label(
+                anime, WikipediaHit(10, "Наруто", "Оригинал ナルト", "ru")
+            ),
+            "Наруто (ナルト)",
+        )
+        self.assertEqual(
+            _japanese_label(
+                anime, WikipediaHit(11, "Наруто", "Японский оригинал не указан", "ru")
+            ),
+            "Наруто",
+        )
 
 
 class WikipediaPreferenceTests(unittest.TestCase):
