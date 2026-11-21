@@ -18,9 +18,21 @@ from localization import DEFAULT_LOCALE, normalize_locale
 _DEFAULT_PLATFORM = "telegram"
 
 
+def normalize_wikipedia_mode(value: object) -> str:
+    return str(value or "").strip().casefold() if str(value or "").strip().casefold() in {"clean", "raw"} else "clean"
+
+
+def validate_wikipedia_mode(value: str) -> str:
+    mode = str(value).strip().casefold()
+    if mode not in {"clean", "raw"}:
+        raise ValueError("Wikipedia mode must be 'clean' or 'raw'")
+    return mode
+
+
 @dataclass(frozen=True, slots=True)
 class UserSettings:
     locale: str = DEFAULT_LOCALE
+    wikipedia_mode: str = "clean"
 
 
 class SQLiteUserSettingsStore:
@@ -78,6 +90,7 @@ class SQLiteUserSettingsStore:
                 platform TEXT NOT NULL,
                 user_id INTEGER NOT NULL,
                 locale TEXT NOT NULL DEFAULT 'en',
+                wikipedia_mode TEXT NOT NULL DEFAULT 'clean',
                 updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
                 PRIMARY KEY (platform, user_id)
             )
@@ -111,6 +124,12 @@ class SQLiteUserSettingsStore:
                         (_DEFAULT_PLATFORM,),
                     )
                     connection.execute("DROP TABLE user_settings_legacy")
+
+                if "wikipedia_mode" not in self._table_columns(connection, "user_settings"):
+                    connection.execute(
+                        "ALTER TABLE user_settings ADD COLUMN wikipedia_mode "
+                        "TEXT NOT NULL DEFAULT 'clean'"
+                    )
 
                 connection.execute(
                     """
@@ -155,13 +174,16 @@ class SQLiteUserSettingsStore:
         with managed_sqlite_connection(self._connect()) as connection:
             row = connection.execute(
                 """
-                SELECT locale FROM user_settings
+                SELECT locale, wikipedia_mode FROM user_settings
                 WHERE platform = ? AND user_id = ?
                 """,
                 (platform_key, int(user_id)),
             ).fetchone()
         result = (
-            UserSettings(locale=normalize_locale(str(row[0])))
+            UserSettings(
+                locale=normalize_locale(str(row[0])),
+                wikipedia_mode=normalize_wikipedia_mode(row[1]),
+            )
             if row is not None
             else UserSettings(locale=self._default_locale)
         )
@@ -196,7 +218,10 @@ class SQLiteUserSettingsStore:
                 """,
                 (platform_key, int(user_id), normalized),
             )
-        result = UserSettings(locale=normalized)
+        # Preserve other preferences when the locale changes.
+        with self._cache_lock:
+            self._locales.pop((platform_key, int(user_id)), None)
+        result = self.get(user_id, platform=platform)
         with self._cache_lock:
             key = (platform_key, int(user_id))
             self._locales[key] = (time.monotonic() + self._cache_ttl_seconds, result)
@@ -204,6 +229,31 @@ class SQLiteUserSettingsStore:
             while len(self._locales) > self._cache_max_entries:
                 self._locales.popitem(last=False)
         return result
+
+    def set_wikipedia_mode(
+        self, user_id: int, mode: str, *, platform: str = _DEFAULT_PLATFORM
+    ) -> UserSettings:
+        platform_key = self._platform_key(platform)
+        normalized = validate_wikipedia_mode(mode)
+        self._ensure_schema()
+        # Retain the current language when first creating a preference row.
+        current = self.get(user_id, platform=platform)
+        with managed_sqlite_connection(self._connect()) as connection:
+            connection.execute(
+                """
+                INSERT INTO user_settings (
+                    platform, user_id, locale, wikipedia_mode, updated_at
+                )
+                VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)
+                ON CONFLICT(platform, user_id) DO UPDATE SET
+                    wikipedia_mode = excluded.wikipedia_mode,
+                    updated_at = CURRENT_TIMESTAMP
+                """,
+                (platform_key, int(user_id), current.locale, normalized),
+            )
+        with self._cache_lock:
+            self._locales.pop((platform_key, int(user_id)), None)
+        return self.get(user_id, platform=platform)
 
     def touch_user(self, platform: str, user_id: int) -> None:
         platform_key = self._platform_key(platform)
@@ -338,3 +388,16 @@ def touch_platform_user(platform: str, user_id: int) -> None:
 
 def list_platform_user_ids(platform: str) -> list[int]:
     return get_user_settings_store().list_user_ids(platform)
+
+def get_user_wikipedia_mode(
+    user_id: int | None, platform: str = _DEFAULT_PLATFORM
+) -> str:
+    return get_user_settings_store().get(user_id, platform=platform).wikipedia_mode
+
+
+def set_user_wikipedia_mode(
+    user_id: int, mode: str, platform: str = _DEFAULT_PLATFORM
+) -> str:
+    return get_user_settings_store().set_wikipedia_mode(
+        user_id, mode, platform=platform
+    ).wikipedia_mode
