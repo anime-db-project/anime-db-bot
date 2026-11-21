@@ -125,6 +125,23 @@ class _PortraitOnlySource:
 
 
 class PeopleProgressServiceTests(unittest.IsolatedAsyncioTestCase):
+    async def test_first_navigation_shows_all_people_from_manifest(self) -> None:
+        source = _ManifestSource(count=141)
+        service = PeopleProgressService(
+            [source], _FakeAggregator(), portrait_batch_size=50
+        )
+        anime = AggregatedAnime(
+            title="Example", sources=["AniList"], external_ids={"anilist": "1"}
+        )
+        progress = service.build_progress(anime, "voices")
+        await service.ensure(anime, "voices", progress, requested_page=0)
+        self.assertEqual(len(anime.voices), 141)
+        self.assertEqual(len(anime.voices_by_source["AniList"]), 141)
+        self.assertEqual(progress.portrait_cursor, 50)
+        await service.ensure(anime, "voices", progress, requested_page=0)
+        self.assertEqual(len(anime.voices), 141)
+        self.assertEqual(source.manifest_calls, 1)
+
     async def test_manifest_total_is_exact_before_portrait_batches(self) -> None:
         source = _ManifestSource(count=5)
         service = PeopleProgressService(
@@ -144,7 +161,8 @@ class PeopleProgressServiceTests(unittest.IsolatedAsyncioTestCase):
         await service.settle_manifests(anime, "voices", progress)
 
         self.assertEqual(service.scope_total_hint(anime, "voices", progress, None), 5)
-        self.assertEqual(anime.voices, [])
+        self.assertEqual(len(anime.voices), 5)
+        self.assertFalse(any(p.portraits for p in anime.voices))
         self.assertEqual(progress.portrait_cursor, 0)
 
     async def test_portraits_are_enriched_in_global_batches(self) -> None:
@@ -163,13 +181,15 @@ class PeopleProgressServiceTests(unittest.IsolatedAsyncioTestCase):
 
         await service.ensure(anime, "voices", progress, requested_page=1)
         self.assertEqual(progress.portrait_cursor, 2)
-        self.assertEqual(len(anime.voices), 2)
+        self.assertEqual(len(anime.voices), 5)
+        self.assertEqual(len([p for p in anime.voices if p.portraits]), 2)
         self.assertEqual(service.scope_total_hint(anime, "voices", progress, None), 5)
         self.assertTrue(service.scope_has_more(progress, None))
 
         await service.ensure(anime, "voices", progress, requested_page=3)
         self.assertEqual(progress.portrait_cursor, 4)
-        self.assertEqual(len(anime.voices), 4)
+        self.assertEqual(len(anime.voices), 5)
+        self.assertEqual(len([p for p in anime.voices if p.portraits]), 4)
         self.assertEqual(service.scope_total_hint(anime, "voices", progress, None), 5)
 
         await service.ensure(anime, "voices", progress, requested_page=5)
@@ -253,7 +273,8 @@ class PeopleProgressServiceTests(unittest.IsolatedAsyncioTestCase):
 
         self.assertEqual(service.scope_total_hint(anime, "voices", progress, None), 60)
         self.assertEqual(progress.portrait_cursor, 50)
-        self.assertEqual(len(anime.voices), 50)
+        self.assertEqual(len(anime.voices), 60)
+        self.assertEqual(len([p for p in anime.voices if p.portraits]), 50)
 
     async def test_slow_portrait_only_enrichment_never_blocks_batch_cursor(
         self,
@@ -277,7 +298,8 @@ class PeopleProgressServiceTests(unittest.IsolatedAsyncioTestCase):
         await asyncio.sleep(0)
 
         self.assertEqual(progress.portrait_cursor, 50)
-        self.assertEqual(len(anime.voices), 50)
+        self.assertEqual(len(anime.voices), 60)
+        self.assertEqual(len([p for p in anime.voices if p.portraits]), 50)
         self.assertEqual(shikimori.calls, 1)
         self.assertTrue(progress.enrichment_tasks)
 

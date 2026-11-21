@@ -9,6 +9,7 @@ from bots.telegram.card.views.renderer import (
     rich_view,
     source_section_text,
 )
+from core.company_names import dedupe_company_names
 from core.models import (
     AggregatedAnime,
     BroadcastSlot,
@@ -18,6 +19,15 @@ from core.models import (
 
 
 class CardRichLayoutTests(unittest.TestCase):
+    def test_licensors_deduplicate_registered_suffix_variants(self) -> None:
+        self.assertEqual(
+            dedupe_company_names([
+                "VIZ Media", "VIZ Media, LLC", "viz  media",
+                "Crunchyroll", "Muse Communication Co.,Ltd.",
+            ]),
+            ["VIZ Media", "Crunchyroll", "Muse Communication Co.,Ltd."],
+        )
+
     def _sample(self) -> AggregatedAnime:
         return AggregatedAnime(
             title="Tensei Shitara Slime Datta Ken",
