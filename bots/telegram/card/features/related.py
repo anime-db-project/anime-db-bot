@@ -219,7 +219,8 @@ def related_keyboard(
                 InlineKeyboardButton(
                     text=text(
                         "card",
-                        "discovery_more_details" if section == "recommendations"
+                        "discovery_more_details"
+                        if section == "recommendations"
                         else "discovery_open_card",
                         locale=locale,
                     ),
