@@ -42,7 +42,8 @@ SKIP_TAGS = {"script", "style", "noscript", "iframe", "object", "svg", "form"}
 MAX_HTML_BYTES = 1_800_000
 MAX_TEXT_CHUNK = 720
 PAGE_HTML_LIMIT = 30000
-JAPANESE_KANA = re.compile(r"[\u3040-\u30ff]")
+JAPANESE_KANA = re.compile(r"[\u3040-\u30ff\u3400-\u9fff々]")
+JAPANESE_NAME_PART = re.compile(r"[\u3040-\u30ff\u3400-\u9fff々ー]{3,}")
 
 
 @dataclass(frozen=True, slots=True)
@@ -273,20 +274,32 @@ class _JapaneseTextCollector(HTMLParser):
             self.phrases.append(" ".join(data.split())[:240])
 
 
-def japanese_title_in_article(
-    article: WikipediaArticle, original_title: str | None
+def japanese_title_in_text(
+    phrases: tuple[str, ...] | list[str], original_title: str | None
 ) -> str | None:
-    """Show the existing Japanese anime title only when found on this page."""
+    """Only use a Japanese alias if the page text contains its actual writing.
+
+    A mixed romanized/Japanese name (e.g. "NARUTO -ナルト-") may be written
+    in Wikipedia using only its kana portion. Matching a distinctive, 3+
+    character Japanese run is permitted; arbitrary unrelated CJK snippets
+    are never promoted to an anime's Japanese title.
+    """
     value = str(original_title or "").strip()
     if not value or not JAPANESE_KANA.search(value):
         return None
     normalized = unicodedata.normalize("NFKC", value).casefold()
-    if any(
-        normalized in unicodedata.normalize("NFKC", phrase).casefold()
-        for phrase in article.japanese_phrases
-    ):
-        return value
+    runs = JAPANESE_NAME_PART.findall(normalized)
+    for phrase in phrases:
+        cleaned = unicodedata.normalize("NFKC", phrase).casefold()
+        if normalized in cleaned or any(run in cleaned for run in runs):
+            return value
     return None
+
+
+def japanese_title_in_article(
+    article: WikipediaArticle, original_title: str | None
+) -> str | None:
+    return japanese_title_in_text(article.japanese_phrases, original_title)
 
 
 def parse_wikipedia_html(
