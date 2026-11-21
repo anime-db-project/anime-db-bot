@@ -13,6 +13,10 @@ from bots.telegram.callbacks import (
     resolve_key_or_legacy_index,
 )
 from bots.telegram.pagination import card_picker_keyboard
+from bots.telegram.card.runtime.picker_entries import (
+    labels_for_route,
+    prepare_initial_picker,
+)
 from bots.telegram.card.features.characters import edit_characters_view
 from bots.telegram.card.features.descriptions import ensure_descriptions_loaded
 from bots.telegram.card.features.popularity import ensure_popularity_loaded
@@ -101,6 +105,103 @@ def build_dispatcher(mode_name: str, state: TelegramCardState) -> Dispatcher:
     async def noop_callback(callback: CallbackQuery) -> None:
         await callback.answer()
 
+    @dp.callback_query(F.data.startswith("ci:"))
+    async def card_initial_picker_callback_handler(callback: CallbackQuery) -> None:
+        locale = get_user_locale(callback.from_user.id)
+        parts = (callback.data or "").split(":")
+        initial = len(parts) == 3
+        if initial:
+            token, section = parts[1:]
+            from bots.telegram.card.ui.constants import PAGED_ENTRY_SECTIONS
+
+            if section not in PAGED_ENTRY_SECTIONS:
+                await callback.answer(
+                    text("card", "invalid_command", locale=locale), show_alert=True
+                )
+                return
+            data = None
+        else:
+            data = PagePickerCallback.parse(callback.data, prefix="ci")
+            if data is None or data.total > 5000:
+                await callback.answer(
+                    text("card", "invalid_command", locale=locale), show_alert=True
+                )
+                return
+            token = data.token
+        session = _session_for_callback(callback, token, state)
+        if session is None:
+            await callback.answer(
+                text("card", "expired", locale=locale), show_alert=True
+            )
+            return
+        if callback.message is None:
+            await callback.answer()
+            return
+        session.main_view_active = False
+        await callback.answer()
+        if initial:
+            try:
+                prepared = await prepare_initial_picker(
+                    state, token, session, section, callback.message, locale=locale
+                )
+            except Exception:
+                import logging
+
+                logging.exception("Failed to prepare initial card picker")
+                prepared = None
+            if prepared is None:
+                if section in {"related", "recommendations"}:
+                    await edit_related_view(
+                        callback.message, token, session, section=section,
+                        page=0, locale=locale,
+                    )
+                elif section == "episodes":
+                    await edit_episodes_view(
+                        callback.message, token, session, view_page=0,
+                        backend=None, locale=locale,
+                    )
+                elif section == "characters":
+                    await edit_characters_view(
+                        callback.message, token, session, source_key=None,
+                        page=0, locale=locale,
+                    )
+                elif section == "screenshots":
+                    await edit_screenshots_view(
+                        callback.message, token, session, source_key=None,
+                        page=0, locale=locale,
+                    )
+                elif section in {"staff", "voices"}:
+                    from bots.telegram.people.portraits import _edit_people_view
+
+                    await _edit_people_view(
+                        state, callback.message, token, session.anime,
+                        section, None, 0, locale=locale,
+                    )
+                else:
+                    await edit_anime_view(
+                        callback.message, token, session.anime, section=section,
+                        page=0, locale=locale,
+                    )
+                return
+            route, labels = prepared
+            data = PagePickerCallback("ci", token, route, 0, len(labels), 0)
+        else:
+            labels = labels_for_route(session, data.route, locale=locale)
+        try:
+            keyboard = card_picker_keyboard(
+                data, locale=locale, labels=labels,
+                back_callback=f"av:{token}:main:0",
+            )
+        except ValueError:
+            await callback.message.edit_text(
+                text("card", "invalid_command", locale=locale)
+            )
+            return
+        await callback.message.edit_text(
+            "Выберите элемент:" if locale == "ru" else "Choose an item:",
+            reply_markup=keyboard,
+        )
+
     @dp.callback_query(F.data.startswith("cp:"))
     async def card_page_picker_callback_handler(callback: CallbackQuery) -> None:
         locale = get_user_locale(callback.from_user.id)
@@ -120,14 +221,20 @@ def build_dispatcher(mode_name: str, state: TelegramCardState) -> Dispatcher:
             await callback.answer()
             return
         try:
-            keyboard = card_picker_keyboard(data, locale=locale)
+            keyboard = card_picker_keyboard(
+                data, locale=locale,
+                labels=labels_for_route(session, data.route, locale=locale),
+            )
         except ValueError:
             await callback.answer(
                 text("card", "invalid_command", locale=locale), show_alert=True
             )
             return
         await callback.answer()
-        await callback.message.edit_reply_markup(reply_markup=keyboard)
+        await callback.message.edit_text(
+            "Выберите элемент:" if locale == "ru" else "Choose an item:",
+            reply_markup=keyboard,
+        )
 
     @dp.callback_query(F.data.startswith("ad:"))
     async def description_source_callback_handler(callback: CallbackQuery) -> None:
