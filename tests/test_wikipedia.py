@@ -227,9 +227,10 @@ class WikipediaPreferenceTests(unittest.TestCase):
 
     def test_migrates_preexisting_user_settings_column(self) -> None:
         import sqlite3
+        from contextlib import closing
         with TemporaryDirectory() as path:
             p = Path(path) / "old.db"
-            with sqlite3.connect(p) as conn:
+            with closing(sqlite3.connect(p)) as conn, conn:
                 conn.execute(
                     "CREATE TABLE user_settings ("
                     "platform TEXT NOT NULL, user_id INTEGER NOT NULL, "
