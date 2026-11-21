@@ -187,6 +187,10 @@ class WikipediaSourceTests(unittest.TestCase):
         self.assertEqual(
             japanese_title_in_article(with_japanese, "ナルト"), "ナルト"
         )
+        self.assertEqual(
+            japanese_title_in_article(with_japanese, "NARUTO -ナルト-"),
+            "NARUTO -ナルト-",
+        )
         self.assertIsNone(
             japanese_title_in_article(without_japanese, "ナルト")
         )
