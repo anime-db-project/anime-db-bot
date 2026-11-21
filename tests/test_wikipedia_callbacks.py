@@ -66,11 +66,17 @@ class WikipediaCallbackTests(unittest.IsolatedAsyncioTestCase):
         )
         self.client_patch.start()
         self.locale_patch.start()
+        self.card_locale_patch = patch(
+            "bots.telegram.card.runtime.handlers.get_user_locale",
+            return_value="ru",
+        )
+        self.card_locale_patch.start()
         self.mode_patch.start()
 
     async def asyncTearDown(self) -> None:
         self.client_patch.stop()
         self.locale_patch.stop()
+        self.card_locale_patch.stop()
         self.mode_patch.stop()
         await self.bot.session.close()
 
@@ -107,7 +113,10 @@ class WikipediaCallbackTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_user_selects_article_and_reads_parent_section(self) -> None:
         first = await self.click(f"av:{self.token}:wikipedia:0")
-        self.assertIn("Наруто", self.text_of(first))
+        self.assertIn("Наруто", str(
+            next(item for item in first
+                 if type(item).__name__ == "EditMessageText").reply_markup
+        ))
         self.fake_client.search.assert_awaited_once()
         self.fake_client.article.assert_not_awaited()
         # A search hit is not auto-promoted into a confirmed article.
