@@ -6,6 +6,12 @@ from types import SimpleNamespace
 from bots.telegram.card.features.characters import _keyboard as characters_keyboard
 from bots.telegram.card.features.episodes import _episode_keyboard
 from bots.telegram.card.features.related import related_keyboard
+from bots.telegram.card.features.trailers import _source_keyboard as trailers_keyboard
+from bots.telegram.card.ui.keyboards import (
+    description_keyboard,
+    navigation_keyboard,
+    source_section_keyboard,
+)
 from bots.telegram.people.views import _keyboard as people_keyboard
 from core.models import AggregatedAnime
 from core.related_anime import AggregatedAnimeReference
@@ -59,6 +65,62 @@ class DetailPickerBackTests(unittest.TestCase):
         self.assertEqual(
             keyboard.inline_keyboard[-1][0].callback_data,
             "ci:token:ar~related~mal",
+        )
+
+    def test_long_description_returns_to_description_pages(self) -> None:
+        keyboard = description_keyboard(
+            "token", "shikimori", 1, 3, locale="ru"
+        )
+        self.assertEqual(
+            keyboard.inline_keyboard[-1][1].callback_data,
+            "ci:token:ad~shikimori",
+        )
+
+    def test_long_source_text_returns_to_source_pages(self) -> None:
+        keyboard = source_section_keyboard(
+            "token",
+            AggregatedAnime(title="Anime"),
+            "titles",
+            "anilist",
+            1,
+            3,
+            locale="ru",
+        )
+        self.assertEqual(
+            keyboard.inline_keyboard[-1][0].callback_data,
+            "ci:token:as~titles~anilist",
+        )
+
+    def test_source_id_overflow_returns_to_source_id_index(self) -> None:
+        keyboard = navigation_keyboard(
+            "token",
+            AggregatedAnime(title="Anime"),
+            "all_ids",
+            1,
+            3,
+            locale="ru",
+        )
+        self.assertIsNotNone(keyboard)
+        assert keyboard is not None
+        self.assertEqual(
+            keyboard.inline_keyboard[-1][0].callback_data,
+            "ci:token:all_ids",
+        )
+
+    def test_trailer_details_return_to_trailer_chooser(self) -> None:
+        keyboard = trailers_keyboard(
+            "token",
+            [],
+            "jikan",
+            [],
+            offset=2,
+            page=2,
+            page_count=3,
+            locale="ru",
+        )
+        self.assertEqual(
+            keyboard.inline_keyboard[-1][1].callback_data,
+            "ci:token:at~jikan:2:3:0",
         )
 
     def test_episode_details_return_to_episode_list(self) -> None:
