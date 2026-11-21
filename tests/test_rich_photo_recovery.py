@@ -51,7 +51,7 @@ class RichPhotoRecoveryTests(unittest.IsolatedAsyncioTestCase):
         self.assertNotIn("<img", second.args[0].html)
         self.assertIn("<table", second.args[0].html)
         self.assertIn("<tg-button-row", second.args[0].html)
-        self.assertIn('data="av:token:all_ids:0"', second.args[0].html)
+        self.assertIn('data="ci:token:all_ids"', second.args[0].html)
         message.answer.assert_not_awaited()
 
         # A recent failure skips the same failing strategy for this gallery.
