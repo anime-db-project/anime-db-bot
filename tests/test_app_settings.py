@@ -40,6 +40,19 @@ class AppSettingsTests(unittest.TestCase):
                         **variables, "TELEGRAM_PAGINATION_EPISODES_PAGE_SIZE": invalid
                     })
 
+    def test_long_text_chunk_size_is_bounded_and_configurable(self) -> None:
+        self.assertEqual(AppSettings.from_env({}).telegram.long_text_chunk_size, 4000)
+        self.assertEqual(
+            AppSettings.from_env({
+                "TELEGRAM_LONG_TEXT_CHUNK_SIZE": "1200"
+            }).telegram.long_text_chunk_size,
+            1200,
+        )
+        for invalid in ("199", "30001", "invalid"):
+            with self.subTest(invalid=invalid):
+                with self.assertRaisesRegex(ValueError, "TELEGRAM_LONG_TEXT_CHUNK_SIZE"):
+                    AppSettings.from_env({"TELEGRAM_LONG_TEXT_CHUNK_SIZE": invalid})
+
     def test_telegram_selection_page_size_has_bounded_configuration(self) -> None:
         self.assertEqual(
             AppSettings.from_env({"BOT_TOKEN": "token"}).telegram.pagination_page_size,

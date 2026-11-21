@@ -10,6 +10,7 @@ from aiogram.types import InlineKeyboardMarkup
 
 from bots.telegram.card.features.wikipedia import (
     _chapter_page,
+    _rich_wikipedia_html,
     _japanese_label,
     _search_term,
     _tr,
@@ -142,6 +143,44 @@ class WikipediaSourceTests(unittest.TestCase):
         plot = paginate_section(sections[1])
         self.assertEqual(len(plot), 1)
         self.assertIn("\n\n<b>First arc</b>\n\nA <i>ninja</i>", plot[0])
+
+    def test_rich_subheading_is_a_separate_block_before_its_paragraph(self) -> None:
+        from sources.providers.wikipedia import WikipediaSection
+
+        article = WikipediaArticle(
+            pageid=12, title="Наруто", language="ru",
+            url="https://ru.wikipedia.org/wiki/Наруто",
+            sections=(WikipediaSection("История", (
+                ("<b>Музыка</b>",),
+                ("Музыкальные темы и композиции.",),
+            )),),
+        )
+        body, _ = _chapter_page(article, 0, 0, token="t", locale="ru")
+        rich = _rich_wikipedia_html(body)
+        self.assertIn("<h3>Музыка</h3><p>Музыкальные темы", rich)
+        self.assertIn('href="https://ru.wikipedia.org/wiki/Наруто"', rich)
+
+    def test_wikipedia_read_more_is_numbered_and_keeps_attribution(self) -> None:
+        article = WikipediaArticle(
+            pageid=12, title="Наруто", language="ru",
+            url="https://ru.wikipedia.org/wiki/Наруто",
+            sections=(WikipediaSection("Сюжет", tuple(
+                (f"Абзац {i}: " + "текст " * 80,)
+                for i in range(40)
+            )),),
+        )
+        body, keyboard = _chapter_page(
+            article, 0, 0, token="t", locale="ru", limit=4000,
+        )
+        labels = [button.text for row in keyboard.inline_keyboard for button in row]
+        callbacks = [
+            button.callback_data for row in keyboard.inline_keyboard
+            for button in row
+        ]
+        self.assertTrue(any(label.startswith("1/") for label in labels))
+        self.assertIn("wk:t:m:0:1", callbacks)
+        self.assertIn("CC BY-SA 4.0", body)
+        self.assertIn("Wikipedia", body)
 
     def test_short_chapter_has_only_cross_section_navigation(self) -> None:
         article = WikipediaArticle(

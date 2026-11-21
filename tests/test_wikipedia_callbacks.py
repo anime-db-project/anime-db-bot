@@ -128,6 +128,24 @@ class WikipediaCallbackTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn('href="https://ru.wikipedia.org/wiki/Коноха"', self.text_of(third))
         self.assertNotIn("Отображение не удалось", self.text_of(third))
 
+    async def test_show_more_sends_next_chunk_without_overwriting_previous(self) -> None:
+        self.fake_client.article.return_value = WikipediaArticle(
+            123, "Наруто", "ru", "https://ru.wikipedia.org/wiki/Наруто",
+            (WikipediaSection("Сюжет", tuple(
+                (f"Абзац {i}: " + "много слов " * 50,)
+                for i in range(25)
+            )),),
+        )
+        await self.click(f"av:{self.token}:wikipedia:0")
+        await self.click(f"wk:{self.token}:a:0")
+        first = await self.click(f"wk:{self.token}:r:0:0")
+        self.assertIn(f"wk:{self.token}:m:0:1", str(first))
+        continuation = await self.click(f"wk:{self.token}:m:0:1")
+        methods = [type(item).__name__ for item in continuation]
+        self.assertTrue(any(name.startswith("Send") for name in methods))
+        self.assertFalse(any(name == "EditMessageText" for name in methods))
+        self.assertIn("CC BY-SA 4.0", self.text_of(continuation))
+
     async def test_search_omits_results_without_japanese_text(self) -> None:
         self.fake_client.search.return_value = (
             WikipediaHit(501, "General article", "No Japanese writing", "ru"),

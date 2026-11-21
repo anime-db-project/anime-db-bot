@@ -377,9 +377,7 @@ def build_dispatcher(mode_name: str, state: TelegramCardState) -> Dispatcher:
             sources = dict(description_source_options(session.anime))
             if source_key not in sources:
                 raise ValueError("Unknown description source")
-            pages = description_pages(
-                session.anime, sources[source_key], locale=locale
-            )
+            pages = description_pages(session.anime, sources[source_key], locale=locale)
             if not 0 <= page < len(pages):
                 raise ValueError("Unknown description page")
             parts_to_show = long_text_parts(pages[page], locale=locale)
@@ -391,12 +389,16 @@ def build_dispatcher(mode_name: str, state: TelegramCardState) -> Dispatcher:
             )
             return
 
-        base = description_keyboard(
-            token, source_key, page, len(pages), locale=locale
-        )
+        base = description_keyboard(token, source_key, page, len(pages), locale=locale)
         keyboard = continuation_keyboard(
-            base, token, "ad", source_key, page,
-            index + 1, len(parts_to_show), locale=locale,
+            base,
+            token,
+            "ad",
+            source_key,
+            page,
+            index + 1,
+            len(parts_to_show),
+            locale=locale,
         )
         await callback.answer()
         try:
