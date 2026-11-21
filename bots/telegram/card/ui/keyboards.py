@@ -96,6 +96,12 @@ def navigation_keyboard(
     rows: list[list[InlineKeyboardButton]] = []
 
     if current_section == "main":
+        rows.append([
+            InlineKeyboardButton(
+                text="Wikipedia",
+                callback_data=f"av:{token}:wikipedia:0",
+            )
+        ])
         discovery_buttons: list[InlineKeyboardButton] = []
         if show_related:
             discovery_buttons.append(
@@ -347,6 +353,12 @@ def fallback_main_keyboard(
             ),
         ],
     ]
+    rows.append([
+        InlineKeyboardButton(
+            text="Wikipedia",
+            callback_data=f"av:{token}:wikipedia:0",
+        )
+    ])
     discovery_buttons: list[InlineKeyboardButton] = []
     if show_related:
         discovery_buttons.append(
