@@ -6,10 +6,11 @@ from unittest.mock import AsyncMock, Mock, patch
 from bots.telegram.card.runtime.picker_entries import (
     labels_for_route,
     prepare_initial_picker,
+    source_character_choices,
 )
 from bots.telegram.card.runtime.state import AnimeCardSession
 from bots.telegram.pagination import card_route_callback
-from core.models import AggregatedAnime, PersonCredit
+from core.models import AggregatedAnime, CharacterRecord, PersonCredit
 
 
 class SourceScopedInitialPickerTests(unittest.IsolatedAsyncioTestCase):
@@ -73,6 +74,37 @@ class SourceScopedInitialPickerTests(unittest.IsolatedAsyncioTestCase):
                 state, "token", session, "ps~voices~unknown", Mock(), locale="en"
             )
         self.assertIsNone(choice)
+
+    async def test_selected_character_source_groups_unpictured_people(self) -> None:
+        anime = AggregatedAnime(
+            title="Example",
+            sources=["Shikimori"],
+            characters_by_source={
+                "Shikimori": [
+                    CharacterRecord(name="No portrait 1"),
+                    CharacterRecord(name="No portrait 2"),
+                    CharacterRecord(
+                        name="Portrait character",
+                        portraits={"Shikimori": ["https://images.example/char.png"]},
+                    ),
+                ]
+            },
+        )
+        session = AnimeCardSession(
+            anime=anime,
+            owner_user_id=1,
+            characters_loaded=True,
+            character_key_by_source={"Shikimori": "shikimori"},
+        )
+        choice = source_character_choices(session, "shikimori", locale="ru")
+        self.assertIsNotNone(choice)
+        assert choice is not None
+        route, labels = choice
+        self.assertEqual(route, "gx~ac~shikimori~1")
+        self.assertEqual(labels, ["Без портретов (2)", "Portrait character"])
+        self.assertEqual(card_route_callback("token", route, 0), "ac:token:shikimori:0")
+        self.assertEqual(card_route_callback("token", route, 1), "ac:token:shikimori:1")
+        self.assertIsNone(source_character_choices(session, "unknown", locale="ru"))
 
     async def test_unpictured_staff_appears_as_one_group_not_many_dead_links(self) -> None:
         people = [PersonCredit(name=f"Staff {n}") for n in range(5)]

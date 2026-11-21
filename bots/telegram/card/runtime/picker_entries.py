@@ -48,6 +48,35 @@ def picker_parent_callback(token: str, route: str) -> str:
     return f"av:{token}:main:0"
 
 
+def source_character_choices(
+    session: AnimeCardSession,
+    selector: str,
+    *,
+    locale: str,
+) -> tuple[str, list[str]] | None:
+    """Use the same grouped portrait navigation for source-specific characters.
+
+    The old numbered source picker counted every unpictured character as an
+    individual page although all of them share page 0. Resolve the source
+    first, then use the same grouped route as the main character selector.
+    """
+    from bots.telegram.card.features.characters import (
+        _character_state,
+        _source_name_for_selector,
+    )
+
+    try:
+        source_key, source_name = _source_name_for_selector(session, selector)
+    except ValueError:
+        return None
+    if source_key is None or source_name is None:
+        return None
+    _, without, _ = _character_state(session, source_name)
+    route = f"gx~ac~{source_key}~{int(bool(without))}"
+    labels = labels_for_route(session, route, locale=locale)
+    return (route, labels) if labels else None
+
+
 def _episode_labels(
     session: AnimeCardSession, backend: str, locale: str
 ) -> list[str]:

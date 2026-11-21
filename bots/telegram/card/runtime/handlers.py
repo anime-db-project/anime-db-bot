@@ -21,6 +21,7 @@ from bots.telegram.pagination import card_picker_keyboard
 from bots.telegram.card.runtime.picker_entries import (
     labels_for_route,
     picker_parent_callback,
+    source_character_choices,
     prepare_initial_picker,
 )
 from bots.telegram.card.features.characters import edit_characters_view
@@ -174,6 +175,10 @@ def build_dispatcher(mode_name: str, state: TelegramCardState) -> Dispatcher:
                         "episodes",
                         callback.message,
                         locale=locale,
+                    )
+                elif source_route and section.startswith("ac~"):
+                    prepared = source_character_choices(
+                        session, section.split("~", 1)[1], locale=locale
                     )
                 elif source_route and section.startswith("ps~"):
                     prepared = await prepare_initial_picker(
