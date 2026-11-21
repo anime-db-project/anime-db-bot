@@ -125,6 +125,33 @@ class _PortraitOnlySource:
 
 
 class PeopleProgressServiceTests(unittest.IsolatedAsyncioTestCase):
+    async def test_fallback_people_loader_ignores_truncated_preview(self) -> None:
+        class FullOnlySource:
+            name = "AniList"
+            source_key = "anilist"
+
+            def __init__(self) -> None:
+                self.calls = 0
+
+            async def load_staff(self, identity):
+                del identity
+                self.calls += 1
+                return [PersonCredit(name=f"Staff {n}") for n in range(56)]
+
+        source = FullOnlySource()
+        service = PeopleProgressService([source], _FakeAggregator())
+        anime = AggregatedAnime(
+            title="Example", sources=["AniList"],
+            external_ids={"anilist": "1"},
+            staff_by_source={"AniList": [PersonCredit(name="Staff 0")]},
+            staff=[PersonCredit(name="Staff 0")],
+        )
+        progress = service.build_progress(anime, "staff")
+        self.assertFalse(progress.sources["AniList"].manifest_complete)
+        await service.ensure(anime, "staff", progress, requested_page=0)
+        self.assertEqual(len(anime.staff), 56)
+        self.assertEqual(source.calls, 1)
+
     async def test_preview_people_do_not_mark_manifest_as_complete(self) -> None:
         source = _ManifestSource(count=56)
         service = PeopleProgressService(

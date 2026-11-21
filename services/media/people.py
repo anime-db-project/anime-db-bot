@@ -77,9 +77,10 @@ class PeopleProgressService:
                 source=source,
                 manifest_people=without_portraits(existing),
                 portrait_pool=list(existing),
-                # Existing metadata may be a truncated search preview. Only
-                # a real manifest request can establish the complete roster.
-                manifest_complete=bool(existing) and not callable(manifest_loader),
+                # Existing card metadata may contain only a source preview.
+                # Even a source without a separate manifest method must
+                # perform its full loader before claiming an exact roster.
+                manifest_complete=False,
             )
         self._rebuild_manifest(anime, section, progress)
         return progress
