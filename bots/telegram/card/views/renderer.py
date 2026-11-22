@@ -6,14 +6,16 @@ from collections.abc import Awaitable, Callable
 from aiogram.types import InlineKeyboardMarkup, InputRichMessage, Message
 
 from bots.telegram.callbacks import resolve_key_or_legacy_index
-from bots.telegram.rich_media import deliver_rich_media
-from bots.telegram.card.ui.constants import RICH_MESSAGE_LIMIT, STANDARD_MESSAGE_LIMIT
-from bots.telegram.card.text_expansion import continuation_keyboard, long_text_parts
+from bots.telegram.card.ui.constants import STANDARD_MESSAGE_LIMIT
 from bots.telegram.card.ui.keyboards import (
     description_keyboard,
     fallback_main_keyboard,
     navigation_keyboard,
     source_section_keyboard,
+)
+from bots.telegram.card.ui.selectors import (
+    description_source_options,
+    source_section_options,
 )
 from bots.telegram.card.views.main import display_anime_title, main_rich
 from bots.telegram.card.views.popularity import (
@@ -28,6 +30,8 @@ from bots.telegram.card.views.rendering import (
     plain_text_to_rich_html,
     poster_html,
     rich,
+)
+from bots.telegram.card.views.rendering import (
     split_text as _split_text,
 )
 from bots.telegram.card.views.sections import (
@@ -38,17 +42,14 @@ from bots.telegram.card.views.sections import (
     rich_view,
     screenshot_urls,
     screenshots_rich_html,
-    source_section_text,
     source_section_pages,
+    source_section_text,
     view_pages,
 )
-from bots.telegram.card.ui.selectors import (
-    description_source_options,
-    source_section_options,
-)
 from bots.telegram.card.views.titles import _titles_table_html, format_titles
+from bots.telegram.rich_media import deliver_rich_media
 from core.models import AggregatedAnime
-from localization import DEFAULT_LOCALE, text
+from localization import DEFAULT_LOCALE
 
 __all__ = [
     "anime_sections",
@@ -107,8 +108,9 @@ async def send_standard_text(
     reply_markup: InlineKeyboardMarkup | None = None,
     *,
     locale: str = DEFAULT_LOCALE,
+    limit: int = STANDARD_MESSAGE_LIMIT,
 ) -> Message | None:
-    chunks = split_text(text_value, STANDARD_MESSAGE_LIMIT, locale=locale)
+    chunks = split_text(text_value, limit, locale=locale)
     sent: Message | None = None
     for index, chunk in enumerate(chunks):
         sent = await message.answer(
@@ -190,7 +192,11 @@ async def send_anime_view(
             else keyboard
         )
         sent = await send_standard_text(
-            message, text_value, reply_markup=fallback, locale=locale
+            message,
+            text_value,
+            reply_markup=fallback,
+            locale=locale,
+            limit=STANDARD_MESSAGE_LIMIT if section == "main" else 4050,
         )
         return sent, True
 
@@ -249,6 +255,7 @@ async def edit_anime_view(
             text_value,
             reply_markup=fallback,
             locale=locale,
+            limit=STANDARD_MESSAGE_LIMIT if section == "main" else 4050,
         )
 
 
@@ -268,14 +275,10 @@ async def edit_description_view(
     pages = description_pages(anime, source, locale=locale)
     page = max(0, min(page, len(pages) - 1))
     keyboard = description_keyboard(token, source_key, page, len(pages), locale=locale)
-    parts = long_text_parts(pages[page], locale=locale)
-    keyboard = continuation_keyboard(
-        keyboard, token, "ad", source_key, page, 1, len(parts), locale=locale
-    )
 
     try:
         await message.edit_text(
-            rich_message=rich(parts[0]),
+            rich_message=rich(pages[page]),
             reply_markup=keyboard,
         )
     except Exception:
@@ -284,9 +287,10 @@ async def edit_description_view(
         )
         await edit_standard_text(
             message,
-            parts[0],
+            pages[page],
             reply_markup=keyboard,
             locale=locale,
+            limit=4050,
         )
 
 
@@ -358,4 +362,5 @@ async def edit_source_section_view(
             pages[page],
             reply_markup=keyboard,
             locale=locale,
+            limit=4050,
         )

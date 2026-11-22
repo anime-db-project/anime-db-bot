@@ -1,20 +1,18 @@
 from __future__ import annotations
 
-import html
-from tempfile import TemporaryDirectory
-from pathlib import Path
-from unittest.mock import AsyncMock, patch
 import unittest
+from pathlib import Path
+from tempfile import TemporaryDirectory
+from unittest.mock import patch
 
 from aiogram.types import InlineKeyboardMarkup
 
 from bots.telegram.card.features.wikipedia import (
     _chapter_page,
-    _rich_wikipedia_html,
-    _plain_wikipedia_with_links,
     _japanese_label,
+    _plain_wikipedia_with_links,
+    _rich_wikipedia_html,
     _search_term,
-    _tr,
 )
 from bots.telegram.card.ui.keyboards import (
     fallback_main_keyboard,
@@ -26,16 +24,15 @@ from sources.providers.wikipedia import (
     MAX_HTML_BYTES,
     WikipediaArticle,
     WikipediaClient,
-    WikipediaSection,
     WikipediaHit,
-    japanese_title_in_article,
+    WikipediaSection,
     _safe_link,
+    japanese_title_in_article,
     paginate_section,
     parse_wikipedia_html,
     wikipedia_api_url,
     wikipedia_page_url,
 )
-
 
 EXAMPLE_WIKI_HTML = """
 <div class="mw-parser-output">
@@ -72,10 +69,14 @@ class WikipediaSourceTests(unittest.TestCase):
         self.assertIsNone(_safe_link("javascript:alert(1)", base=base))
         self.assertIsNone(_safe_link("data:text/html;base64,xxx", base=base))
         self.assertIsNone(_safe_link("https://user:pass@example.org", base=base))
-        self.assertEqual(_safe_link("/wiki/Japan", base=base), "https://en.wikipedia.org/wiki/Japan")
+        self.assertEqual(
+            _safe_link("/wiki/Japan", base=base), "https://en.wikipedia.org/wiki/Japan"
+        )
         self.assertEqual(_safe_link("#Reception", base=base), base + "#Reception")
 
-    def test_clean_mode_strips_service_sections_but_keeps_parent_child_and_links(self) -> None:
+    def test_clean_mode_strips_service_sections_but_keeps_parent_child_and_links(
+        self,
+    ) -> None:
         sections = parse_wikipedia_html(
             EXAMPLE_WIKI_HTML,
             url=wikipedia_page_url("en", "Naruto"),
@@ -106,7 +107,9 @@ class WikipediaSourceTests(unittest.TestCase):
             mode="raw",
         )
         joined = "\n".join(
-            fragment for section in sections for paragraph in section.paragraphs
+            fragment
+            for section in sections
+            for paragraph in section.paragraphs
             for fragment in paragraph
         )
         self.assertIn("References", [section.title for section in sections])
@@ -126,7 +129,6 @@ class WikipediaSourceTests(unittest.TestCase):
             self.assertLessEqual(len(value), 500)
             self.assertEqual(value.count("<a "), value.count("</a>"))
 
-
     def test_paragraph_flow_matches_wikipedia_not_one_line_per_link(self) -> None:
         sections = parse_wikipedia_html(
             EXAMPLE_WIKI_HTML,
@@ -137,7 +139,7 @@ class WikipediaSourceTests(unittest.TestCase):
         self.assertEqual(len(intro), 1)
         self.assertIn(
             'Anime <a href="https://en.wikipedia.org/wiki/Naruto">Naruto</a>'
-            ' is a work about <b>ninjas</b> and ',
+            " is a work about <b>ninjas</b> and ",
             intro[0],
         )
         self.assertNotIn("</a>\n", intro[0])
@@ -147,7 +149,7 @@ class WikipediaSourceTests(unittest.TestCase):
 
     def test_plain_wikipedia_fallback_preserves_link_destinations(self) -> None:
         plain = _plain_wikipedia_with_links(
-            '<b>Музыка</b>\n\n'
+            "<b>Музыка</b>\n\n"
             '<a href="https://ru.wikipedia.org/wiki/Наруто">Наруто</a> '
             'и <a href="https://example.org/licence">CC BY-SA</a>'
         )
@@ -159,37 +161,53 @@ class WikipediaSourceTests(unittest.TestCase):
         from sources.providers.wikipedia import WikipediaSection
 
         article = WikipediaArticle(
-            pageid=12, title="Наруто", language="ru",
+            pageid=12,
+            title="Наруто",
+            language="ru",
             url="https://ru.wikipedia.org/wiki/Наруто",
-            sections=(WikipediaSection("История", (
-                ("<b>Музыка</b>",),
-                ("Музыкальные темы и композиции.",),
-            )),),
+            sections=(
+                WikipediaSection(
+                    "История",
+                    (
+                        ("<b>Музыка</b>",),
+                        ("Музыкальные темы и композиции.",),
+                    ),
+                ),
+            ),
         )
         body, _ = _chapter_page(article, 0, 0, token="t", locale="ru")
         rich = _rich_wikipedia_html(body)
-        self.assertIn("<h3>Музыка</h3><p>Музыкальные темы", rich)
+        self.assertIn("<p><b>Музыка</b></p><p>Музыкальные темы", rich)
+        self.assertNotIn("<h3>", rich)
         self.assertIn('href="https://ru.wikipedia.org/wiki/Наруто"', rich)
 
     def test_wikipedia_read_more_is_numbered_and_keeps_attribution(self) -> None:
         article = WikipediaArticle(
-            pageid=12, title="Наруто", language="ru",
+            pageid=12,
+            title="Наруто",
+            language="ru",
             url="https://ru.wikipedia.org/wiki/Наруто",
-            sections=(WikipediaSection("Сюжет", tuple(
-                (f"Абзац {i}: " + "текст " * 80,)
-                for i in range(40)
-            )),),
+            sections=(
+                WikipediaSection(
+                    "Сюжет", tuple((f"Абзац {i}: " + "текст " * 80,) for i in range(40))
+                ),
+            ),
         )
         body, keyboard = _chapter_page(
-            article, 0, 0, token="t", locale="ru", limit=4000,
+            article,
+            0,
+            0,
+            token="t",
+            locale="ru",
+            limit=4000,
         )
         labels = [button.text for row in keyboard.inline_keyboard for button in row]
         callbacks = [
-            button.callback_data for row in keyboard.inline_keyboard
-            for button in row
+            button.callback_data for row in keyboard.inline_keyboard for button in row
         ]
         self.assertTrue(any(label.startswith("1/") for label in labels))
-        self.assertIn("wk:t:m:0:1", callbacks)
+        self.assertIn("wk:t:r:0:1", callbacks)
+        self.assertFalse(any(":m:" in value for value in callbacks if value))
         self.assertIn("CC BY-SA 4.0", body)
         self.assertIn("Wikipedia", body)
 
@@ -206,11 +224,14 @@ class WikipediaSourceTests(unittest.TestCase):
             ),
         )
         body, menu = _chapter_page(
-            article, 1, 0, token="abc", locale="en",
+            article,
+            1,
+            0,
+            token="abc",
+            locale="en",
         )
         callbacks = [
-            button.callback_data
-            for row in menu.inline_keyboard for button in row
+            button.callback_data for row in menu.inline_keyboard for button in row
         ]
         self.assertEqual(
             callbacks,
@@ -223,40 +244,42 @@ class WikipediaSourceTests(unittest.TestCase):
             ],
         )
         self.assertEqual(body.splitlines()[0], "<b>Plot</b>")
-        self.assertTrue(any(
-            button.text == "2/3"
-            for row in menu.inline_keyboard for button in row
-        ))
+        self.assertTrue(
+            any(button.text == "2/3" for row in menu.inline_keyboard for button in row)
+        )
         self.assertNotIn("1/1", body)
         self.assertEqual(len(paginate_section(article.sections[1])), 1)
 
     def test_japanese_alias_only_when_present_in_actual_wiki_article(self) -> None:
         with_japanese = WikipediaArticle(
-            1, "Naruto", "en", "https://en.wikipedia.org/wiki/Naruto",
-            (), japanese_phrases=("Japanese title NARUTO -ナルト-",),
+            1,
+            "Naruto",
+            "en",
+            "https://en.wikipedia.org/wiki/Naruto",
+            (),
+            japanese_phrases=("Japanese title NARUTO -ナルト-",),
         )
         without_japanese = WikipediaArticle(
-            2, "Naruto", "en", "https://en.wikipedia.org/wiki/Naruto",
-            (), japanese_phrases=("English text only",),
+            2,
+            "Naruto",
+            "en",
+            "https://en.wikipedia.org/wiki/Naruto",
+            (),
+            japanese_phrases=("English text only",),
         )
-        self.assertEqual(
-            japanese_title_in_article(with_japanese, "ナルト"), "ナルト"
-        )
+        self.assertEqual(japanese_title_in_article(with_japanese, "ナルト"), "ナルト")
         self.assertEqual(
             japanese_title_in_article(with_japanese, "NARUTO -ナルト-"),
             "NARUTO -ナルト-",
         )
-        self.assertIsNone(
-            japanese_title_in_article(without_japanese, "ナルト")
-        )
-        self.assertIsNone(
-            japanese_title_in_article(with_japanese, "One Piece")
-        )
+        self.assertIsNone(japanese_title_in_article(without_japanese, "ナルト"))
+        self.assertIsNone(japanese_title_in_article(with_japanese, "One Piece"))
 
     def test_excessive_html_is_rejected(self) -> None:
         with self.assertRaises(ValueError):
             parse_wikipedia_html(
-                "a" * (MAX_HTML_BYTES + 1), url="https://en.wikipedia.org/wiki/Test",
+                "a" * (MAX_HTML_BYTES + 1),
+                url="https://en.wikipedia.org/wiki/Test",
                 mode="clean",
             )
 
@@ -264,20 +287,34 @@ class WikipediaSourceTests(unittest.TestCase):
 class WikipediaClientTests(unittest.IsolatedAsyncioTestCase):
     async def test_search_and_article_requests_are_read_only_and_cached(self) -> None:
         client = WikipediaClient()
+
         async def fake_query(lang, params):
             self.assertEqual(lang, "en")
             if params["action"] == "query":
                 self.assertEqual(params["list"], "search")
-                return {"query": {"search": [
-                    {"pageid": 123, "title": "Naruto", "snippet": "Japanese <span>anime</span>"},
-                    {"pageid": 125, "title": "Other Naruto", "snippet": ""},
-                ]}}
+                return {
+                    "query": {
+                        "search": [
+                            {
+                                "pageid": 123,
+                                "title": "Naruto",
+                                "snippet": "Japanese <span>anime</span>",
+                            },
+                            {"pageid": 125, "title": "Other Naruto", "snippet": ""},
+                        ]
+                    }
+                }
             self.assertEqual(params["action"], "parse")
             self.assertEqual(params["pageid"], 123)
-            return {"parse": {
-                "pageid": 123, "title": "Naruto", "revid": 77,
-                "text": EXAMPLE_WIKI_HTML,
-            }}
+            return {
+                "parse": {
+                    "pageid": 123,
+                    "title": "Naruto",
+                    "revid": 77,
+                    "text": EXAMPLE_WIKI_HTML,
+                }
+            }
+
         with patch.object(client, "_query", side_effect=fake_query) as query:
             hits = await client.search(language="en", title="Naruto")
             self.assertEqual(len(hits), 2)
@@ -296,27 +333,37 @@ class WikipediaClientTests(unittest.IsolatedAsyncioTestCase):
 
 
 class WikipediaUiTests(unittest.TestCase):
-    def test_wikipedia_above_related_and_recommendations_in_both_card_modes(self) -> None:
+    def test_wikipedia_above_related_and_recommendations_in_both_card_modes(
+        self,
+    ) -> None:
         anime = AggregatedAnime(title="Naruto")
         for markup in (
-            navigation_keyboard("token", anime, "main", 0, 1, locale="ru", show_related=True),
+            navigation_keyboard(
+                "token", anime, "main", 0, 1, locale="ru", show_related=True
+            ),
             fallback_main_keyboard("token", locale="ru", show_related=True),
         ):
             self.assertIsInstance(markup, InlineKeyboardMarkup)
             actions = [
-                b.callback_data for row in markup.inline_keyboard for b in row if b.callback_data
+                b.callback_data
+                for row in markup.inline_keyboard
+                for b in row
+                if b.callback_data
             ]
             self.assertLess(
                 actions.index("av:token:wikipedia:0"), actions.index("ci:token:related")
             )
             self.assertLess(
-                actions.index("av:token:wikipedia:0"), actions.index("ci:token:recommendations")
+                actions.index("av:token:wikipedia:0"),
+                actions.index("ci:token:recommendations"),
             )
 
     def test_article_has_header_with_page_number_and_attached_links(self) -> None:
         paragraph = ('<a href="https://ru.wikipedia.org/wiki/Test">Тест</a> ',) * 600
         article = WikipediaArticle(
-            pageid=10, title="Тест", language="ru",
+            pageid=10,
+            title="Тест",
+            language="ru",
             url="https://ru.wikipedia.org/wiki/Test",
             sections=(WikipediaSection("Сюжет", (paragraph,)),),
         )
@@ -335,9 +382,7 @@ class WikipediaUiTests(unittest.TestCase):
         self.assertEqual(_search_term(anime, "en"), "Naruto")
         self.assertEqual(_search_term(anime, "ja"), "ナルト")
         self.assertEqual(
-            _japanese_label(
-                anime, WikipediaHit(10, "Наруто", "Оригинал ナルト", "ru")
-            ),
+            _japanese_label(anime, WikipediaHit(10, "Наруто", "Оригинал ナルト", "ru")),
             "Наруто (ナルト)",
         )
         self.assertEqual(
@@ -370,6 +415,7 @@ class WikipediaPreferenceTests(unittest.TestCase):
     def test_migrates_preexisting_user_settings_column(self) -> None:
         import sqlite3
         from contextlib import closing
+
         with TemporaryDirectory() as path:
             p = Path(path) / "old.db"
             with closing(sqlite3.connect(p)) as conn, conn:

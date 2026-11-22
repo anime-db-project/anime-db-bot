@@ -4,7 +4,9 @@ import html
 
 from aiogram.types import InputRichMessage
 
+from bots.telegram.card.text_expansion import long_text_parts
 from bots.telegram.card.ui.constants import RICH_MESSAGE_LIMIT
+from bots.telegram.card.ui.selectors import ordered_mapping_items
 from bots.telegram.card.views.main import _main_text, main_rich
 from bots.telegram.card.views.popularity import format_popularity
 from bots.telegram.card.views.rendering import (
@@ -13,7 +15,6 @@ from bots.telegram.card.views.rendering import (
     rich,
     split_text,
 )
-from bots.telegram.card.ui.selectors import ordered_mapping_items
 from bots.telegram.card.views.titles import _titles_table_html, format_titles
 from core.canonicalization import display_person_name, localize_role_token
 from core.models import AggregatedAnime
@@ -164,27 +165,26 @@ def description_pages(anime: AggregatedAnime, source: str, *, locale: str) -> li
         value += f"\n\n{text('card', 'extra_info', locale=locale)}\n{background}"
     if not description and not background:
         value += f"\n\n{text('common', 'no_data', locale=locale)}"
-    return split_text(value, RICH_MESSAGE_LIMIT, locale=locale)
+    return long_text_parts(value, locale=locale)
 
 
 def source_section_pages(
     anime: AggregatedAnime, section: str, source: str, *, locale: str
 ) -> list[str]:
     """Single shared text boundary for both source pages and source selectors."""
-    return split_text(
-        source_section_text(anime, section, source, locale=locale),
-        RICH_MESSAGE_LIMIT,
-        locale=locale,
+    return long_text_parts(
+        source_section_text(anime, section, source, locale=locale), locale=locale
     )
 
 
 def view_pages(anime: AggregatedAnime, section: str, *, locale: str) -> list[str]:
-    return split_text(
-        anime_sections(anime, locale=locale).get(section)
-        or text("common", "no_data", locale=locale),
-        RICH_MESSAGE_LIMIT,
-        locale=locale,
+    value = anime_sections(anime, locale=locale).get(section) or text(
+        "common", "no_data", locale=locale
     )
+    # Preserve the main anime card; paginate all other long text in place.
+    if section == "main":
+        return split_text(value, RICH_MESSAGE_LIMIT, locale=locale)
+    return long_text_parts(value, locale=locale)
 
 
 def rich_view(

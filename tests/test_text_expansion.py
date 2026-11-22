@@ -1,51 +1,65 @@
 from __future__ import annotations
 
 import unittest
-from unittest.mock import patch
 from types import SimpleNamespace
+from unittest.mock import patch
 
-from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
-
-from bots.telegram.card.text_expansion import (
-    continuation_keyboard,
-    long_text_parts,
+from bots.telegram.card.text_expansion import long_text_parts
+from bots.telegram.card.ui.keyboards import description_keyboard
+from bots.telegram.card.views.sections import (
+    description_pages,
+    source_section_pages,
+    view_pages,
 )
+from core.models import AggregatedAnime
 
 
-class LongTextExpansionTests(unittest.TestCase):
-    def test_twelve_thousand_characters_become_three_clicks(self) -> None:
-        settings = SimpleNamespace(
-            telegram=SimpleNamespace(long_text_chunk_size=4000)
-        )
+class LongTextPaginationTests(unittest.TestCase):
+    def test_twelve_thousand_characters_become_three_inline_pages(self) -> None:
+        settings = SimpleNamespace(telegram=SimpleNamespace(long_text_chunk_size=4000))
         with patch(
             "bots.telegram.card.text_expansion.get_settings",
             return_value=settings,
         ):
             parts = long_text_parts("x" * 12000, locale="ru")
-        self.assertEqual([len(part) for part in parts], [4000, 4000, 4000])
-        self.assertEqual("".join(parts), "x" * 12000)
+            self.assertEqual([len(part) for part in parts], [4000, 4000, 4000])
+            self.assertEqual("".join(parts), "x" * 12000)
 
-    def test_more_button_preserves_original_navigation(self) -> None:
-        base = InlineKeyboardMarkup(inline_keyboard=[[
-            InlineKeyboardButton(text="Источники", callback_data="av:t:description:0"),
-            InlineKeyboardButton(text="Назад", callback_data="av:t:main:0"),
-        ]])
-        next_markup = continuation_keyboard(
-            base, "token", "ad", "shikimori", 0, 1, 3, locale="ru"
+            anime = AggregatedAnime(
+                title="Example",
+                descriptions={"AniList": "x" * 12000},
+            )
+            description = description_pages(anime, "AniList", locale="ru")
+            self.assertGreater(len(description), 1)
+            self.assertTrue(all(len(part) <= 4000 for part in description))
+            keyboard = description_keyboard(
+                "token", "anilist", 0, len(description), locale="ru"
+            )
+            callbacks = [
+                button.callback_data
+                for row in keyboard.inline_keyboard
+                for button in row
+            ]
+            self.assertIn("ad:token:anilist:1", callbacks)
+            self.assertFalse(
+                any(value.startswith("tx:") for value in callbacks if value)
+            )
+
+    def test_non_main_views_use_configured_limit(self) -> None:
+        settings = SimpleNamespace(telegram=SimpleNamespace(long_text_chunk_size=4000))
+        anime = AggregatedAnime(
+            title="Example",
+            synonyms=["abc" * 2000],
+            descriptions={"AniList": "x" * 12000},
         )
-        self.assertIsNotNone(next_markup)
-        assert next_markup is not None
-        self.assertEqual(
-            next_markup.inline_keyboard[0][0].callback_data,
-            "tx:token:ad:shikimori:0:1",
-        )
-        self.assertEqual(next_markup.inline_keyboard[-1], base.inline_keyboard[0])
-        self.assertIs(
-            continuation_keyboard(
-                base, "token", "ad", "shikimori", 0, 3, 3, locale="ru"
-            ),
-            base,
-        )
+        with patch(
+            "bots.telegram.card.text_expansion.get_settings",
+            return_value=settings,
+        ):
+            for page in view_pages(anime, "titles", locale="ru"):
+                self.assertLessEqual(len(page), 4000)
+            for page in source_section_pages(anime, "titles", "AniList", locale="ru"):
+                self.assertLessEqual(len(page), 4000)
 
 
 if __name__ == "__main__":

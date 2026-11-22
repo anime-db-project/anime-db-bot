@@ -24,11 +24,13 @@ same filter. Choose the correct page explicitly; when the
 5. Reading a section shows a bold heading and the original flowing Wikipedia
    prose, its paragraph breaks, lists, links and subheadings.
    **Previous/next section** arrow-only buttons work even for short sections.
-   Overflow pages use arrow / page-count / arrow navigation; the count opens
-   a numbered selection list of up to the configured page size.
-6. Page arrows appear **only when the section exceeds the applicable
-   message size limit**: rich Telegram HTML first, standard Telegram HTML
-   as a fallback. Page numbering is shown only for longer sections.
+   Overflow pages use arrow / page-count / arrow navigation while editing
+   the same message; the count opens the numbered page selector.
+6. Chapters exceeding the configurable long-text budget (4000 characters
+   by default, subject to Telegram's effective message limit) use the
+   existing numbered page navigation instead of separate "Show more"
+   messages. All pages use the same flowing prose/paragraph formatting,
+   preserving the source's inline links and emphasis.
 7. A Japanese original title appears only when its exact writing from the
    anime metadata is actually present in the selected Wikipedia page.
    Search-result button titles can also include that spelling, but only
@@ -71,8 +73,8 @@ ordinary users, not only Telegram administrators.
   Wikipedia result identities never enter anime-mapping-db.
 - Wikipedia prose is preserved as continuous paragraphs, not split into a
   newline for every link or inline markup. Short sections have no page controls.
-  Larger sections are paginated at balanced HTML-fragment boundaries only
-  when they exceed the rich-message or standard-message limit.
+  Larger sections are paginated at balanced HTML-fragment boundaries using
+  the configured long-text budget. Navigation edits the same message.
 - No AI rewriting, summarization or speculative Japanese aliases are used.
 - Each block has a Wikipedia link and CC BY-SA 4.0 attribution. No Wikipedia
   images are copied into the bot without separately checking licenses.
