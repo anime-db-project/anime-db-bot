@@ -25,7 +25,9 @@ same filter. Choose the correct page explicitly; when the
    prose, its paragraph breaks, lists, links and subheadings.
    **Previous/next section** arrow-only buttons work even for short sections.
    Overflow pages use arrow / page-count / arrow navigation while editing
-   the same message; the count opens the numbered page selector.
+   the same message; the within-chapter count opens the numbered page selector.
+   The separate chapter counter (for example 15/23) opens the first page
+   of the article section index (Contents).
 6. Chapters exceeding the configurable long-text budget (4000 characters
    by default, subject to Telegram's effective message limit) use the
    existing numbered page navigation instead of separate "Show more"
@@ -46,6 +48,8 @@ Every user can open **/settings → Wikipedia · display mode** and select:
 - **Clean** (default): omit editing links, navigation templates, infoboxes,
   citation/navigation boilerplate and selected service sections while
   retaining genuine article headings, text, lists and safe inline links.
+  Nested image and line-break tags inside infoboxes remain filtered, so
+  Naruto Introduction begins with article prose instead of table fields.
 - **Full RAW**: preserve all available *visible article text* including
   editorial/service elements and chapters, still grouped by headings.
 

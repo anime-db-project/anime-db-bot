@@ -323,8 +323,10 @@ def _chapter_page(
                 f"wk:{token}:r:{section_index - 1}:0",
             )
         )
+    # The chapter counter opens the first page of the section index.
+    # The separate within-chapter page counter keeps its own "p" route.
     chapter_navigation.append(
-        _button(f"{section_index + 1}/{len(article.sections)}", "noop")
+        _button(f"{section_index + 1}/{len(article.sections)}", f"wk:{token}:l:0")
     )
     if section_index + 1 < len(article.sections):
         chapter_navigation.append(

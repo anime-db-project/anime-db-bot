@@ -5,16 +5,17 @@ an explicit user choice from title-search results, not an assumed identity match
 Parsed HTML keeps useful inline links; clean mode removes navigation/editing
 noise, while raw mode retains visible editorial and service blocks.
 """
+
 from __future__ import annotations
 
+import re
+import time
+import unicodedata
 from collections import OrderedDict
 from dataclasses import dataclass, field
 from functools import lru_cache
 from html import escape, unescape
 from html.parser import HTMLParser
-import re
-import time
-import unicodedata
 from urllib.parse import urljoin, urlparse
 
 import httpx
@@ -25,18 +26,48 @@ USER_AGENT = (
     "Wikipedia read-only integration)"
 )
 NOISE_CLASSES = (
-    "mw-editsection", "navbox", "infobox", "metadata", "reflist",
-    "reference", "references", "hatnote", "ambox", "ombox", "tmbox",
-    "noprint", "printfooter", "catlinks", "mw-collapsible", "thumb",
-    "toc", "portal", "sidebar", "sistersitebox", "mw-empty-elt",
+    "mw-editsection",
+    "navbox",
+    "infobox",
+    "metadata",
+    "reflist",
+    "reference",
+    "references",
+    "hatnote",
+    "ambox",
+    "ombox",
+    "tmbox",
+    "noprint",
+    "printfooter",
+    "catlinks",
+    "mw-collapsible",
+    "thumb",
+    "toc",
+    "portal",
+    "sidebar",
+    "sistersitebox",
+    "mw-empty-elt",
     "authority-control",
 )
-NOISE_SECTIONS = frozenset({
-    "примечания", "сноски", "литература", "внешние ссылки",
-    "источники", "references", "notes", "external links",
-    "further reading", "bibliography", "出典", "脚注", "外部リンク",
-    "参考文献", "注釈",
-})
+NOISE_SECTIONS = frozenset(
+    {
+        "примечания",
+        "сноски",
+        "литература",
+        "внешние ссылки",
+        "источники",
+        "references",
+        "notes",
+        "external links",
+        "further reading",
+        "bibliography",
+        "出典",
+        "脚注",
+        "外部リンク",
+        "参考文献",
+        "注釈",
+    }
+)
 VOID_TAGS = {"br", "hr", "img", "meta", "link", "input", "wbr", "source"}
 SKIP_TAGS = {"script", "style", "noscript", "iframe", "object", "svg", "form"}
 MAX_HTML_BYTES = 1_800_000
@@ -160,9 +191,7 @@ class _WikipediaHTMLParser(HTMLParser):
                 piece, normalized = normalized[:split], normalized[split:]
             fragment = escape(piece)
             if self._link:
-                fragment = (
-                    f'<a href="{escape(self._link, quote=True)}">{fragment}</a>'
-                )
+                fragment = f'<a href="{escape(self._link, quote=True)}">{fragment}</a>'
             if self._italic:
                 fragment = f"<i>{fragment}</i>"
             if self._bold:
@@ -214,7 +243,12 @@ class _WikipediaHTMLParser(HTMLParser):
     def handle_endtag(self, tag: str) -> None:
         tag = tag.casefold()
         if self._skip_depth:
-            self._skip_depth -= 1
+            # HTMLParser emits an end callback for self-closing tags such as
+            # <img/> and <br/>. They never increased the skipped subtree
+            # depth, so they must not decrease it either. Otherwise an
+            # infobox with images leaks table rows into the clean introduction.
+            if tag not in VOID_TAGS:
+                self._skip_depth -= 1
             return
         if self._heading_level and tag == f"h{self._heading_level}":
             title = " ".join("".join(self._heading_text).split())
@@ -360,7 +394,9 @@ class WikipediaClient:
     def __init__(self, *, cache_size: int = 8, cache_ttl: float = 1800.0) -> None:
         self._cache_size = max(1, cache_size)
         self._cache_ttl = max(30.0, cache_ttl)
-        self._cache: OrderedDict[tuple[str, int, str], tuple[float, WikipediaArticle]] = OrderedDict()
+        self._cache: OrderedDict[
+            tuple[str, int, str], tuple[float, WikipediaArticle]
+        ] = OrderedDict()
 
     async def _query(self, language: str, params: dict[str, str | int]) -> dict:
         url = wikipedia_api_url(language)
@@ -371,7 +407,9 @@ class WikipediaClient:
             follow_redirects=False,
             trust_env=False,
         ) as client:
-            response = await client.get(url, params={**params, "format": "json", "formatversion": 2})
+            response = await client.get(
+                url, params={**params, "format": "json", "formatversion": 2}
+            )
             response.raise_for_status()
             if len(response.content) > MAX_HTML_BYTES:
                 raise ValueError("Wikipedia response too large")
@@ -384,14 +422,17 @@ class WikipediaClient:
         title = " ".join(str(title).split())[:140]
         if len(title) < 2:
             return ()
-        data = await self._query(language, {
-            "action": "query",
-            "list": "search",
-            "srsearch": title,
-            "srnamespace": 0,
-            "srlimit": 7,
-            "srprop": "snippet",
-        })
+        data = await self._query(
+            language,
+            {
+                "action": "query",
+                "list": "search",
+                "srsearch": title,
+                "srnamespace": 0,
+                "srlimit": 7,
+                "srprop": "snippet",
+            },
+        )
         results = data.get("query", {}).get("search", [])
         return tuple(
             WikipediaHit(
@@ -416,13 +457,16 @@ class WikipediaClient:
         if cached and cached[0] > time.monotonic():
             self._cache.move_to_end(key)
             return cached[1]
-        data = await self._query(language, {
-            "action": "parse",
-            "pageid": int(pageid),
-            "prop": "text|revid",
-            "redirects": 1,
-            "disabletoc": 1,
-        })
+        data = await self._query(
+            language,
+            {
+                "action": "parse",
+                "pageid": int(pageid),
+                "prop": "text|revid",
+                "redirects": 1,
+                "disabletoc": 1,
+            },
+        )
         payload = data.get("parse")
         if not isinstance(payload, dict):
             raise ValueError("Wikipedia page was not found")

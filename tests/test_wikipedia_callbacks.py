@@ -176,6 +176,42 @@ class WikipediaCallbackTests(unittest.IsolatedAsyncioTestCase):
             self.assertNotIn("<h3>", self.text_of(page))
         self.assertNotEqual(self.text_of(first), self.text_of(second))
 
+    async def test_section_count_opens_first_contents_window(self) -> None:
+        self.fake_client.article.return_value = WikipediaArticle(
+            123,
+            "Наруто",
+            "ru",
+            "https://ru.wikipedia.org/wiki/Наруто",
+            tuple(
+                WikipediaSection(f"Раздел {i}", ((f"Текст {i}",),)) for i in range(23)
+            ),
+        )
+        await self.click(f"av:{self.token}:wikipedia:0")
+        await self.click(f"wk:{self.token}:a:0")
+        section = await self.click(f"wk:{self.token}:r:14:0")
+        edit = next(
+            method for method in section if type(method).__name__ == "EditMessageText"
+        )
+        counter = next(
+            button
+            for row in edit.reply_markup.inline_keyboard
+            for button in row
+            if button.text == "15/23"
+        )
+        self.assertEqual(counter.callback_data, f"wk:{self.token}:l:0")
+        index = await self.click(counter.callback_data)
+        contents = next(
+            method for method in index if type(method).__name__ == "EditMessageText"
+        )
+        self.assertIn("Оглавление", self.text_of(index))
+        labels = [
+            button.text
+            for row in contents.reply_markup.inline_keyboard
+            for button in row
+        ]
+        self.assertIn("1. Раздел 0", labels)
+        self.assertNotIn("15. Раздел 14", labels)
+
     async def test_search_omits_results_without_japanese_text(self) -> None:
         self.fake_client.search.return_value = (
             WikipediaHit(501, "General article", "No Japanese writing", "ru"),

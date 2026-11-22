@@ -100,6 +100,73 @@ class WikipediaSourceTests(unittest.TestCase):
         self.assertNotIn("alert(", music)
         self.assertNotIn("Link list", music)
 
+    def test_clean_intro_drops_infobox_even_with_self_closing_media(self) -> None:
+        # A real Wikipedia infobox includes nested <img/> and <br/> tags.
+        # They must not prematurely end the parser's skipped subtree.
+        sample = (
+            '<div class="mw-parser-output">'
+            '<table class="infobox" data-name="Карточка аниманга">'
+            "<tbody><tr><th>Наруто</th></tr>"
+            '<tr><td><img alt="Обложка" src="/cover.jpg" />'
+            "<br /><span>Обложка первого тома</span></td></tr>"
+            "<tr><th>Автор</th><td>Масаси Кисимото</td></tr>"
+            "<tr><th>Жанр / тематика</th><td>Приключения</td></tr>"
+            "</tbody></table>"
+            "<p>«Наруто» — японская манга о ниндзя.</p>"
+            "<h2>Сюжет</h2><p>Основная история.</p>"
+            "</div>"
+        )
+        url = wikipedia_page_url("ru", "Наруто")
+        cleaned = parse_wikipedia_html(sample, url=url, mode="clean")
+        self.assertEqual(
+            [section.title for section in cleaned], ["Introduction", "Сюжет"]
+        )
+        self.assertEqual(
+            ["".join(part) for part in cleaned[0].paragraphs],
+            ["«Наруто» — японская манга о ниндзя."],
+        )
+        raw = parse_wikipedia_html(sample, url=url, mode="raw")
+        raw_text = " ".join(
+            "".join(part) for section in raw for part in section.paragraphs
+        )
+        self.assertIn("Автор", raw_text)
+        self.assertIn("Масаси Кисимото", raw_text)
+        self.assertIn("Приключения", raw_text)
+
+    def test_section_counter_opens_first_index_page_without_changing_text_pager(
+        self,
+    ) -> None:
+        long_paragraphs = tuple(("длинный текст " * 18,) for _ in range(15))
+        sections = tuple(
+            WikipediaSection(
+                f"Раздел {index}",
+                long_paragraphs if index == 14 else ((f"Текст {index}",),),
+            )
+            for index in range(23)
+        )
+        article = WikipediaArticle(
+            pageid=123,
+            title="Наруто",
+            language="ru",
+            url=wikipedia_page_url("ru", "Наруто"),
+            sections=sections,
+        )
+        _, keyboard = _chapter_page(
+            article,
+            14,
+            0,
+            token="a",
+            locale="ru",
+            limit=700,
+        )
+        buttons = [button for row in keyboard.inline_keyboard for button in row]
+        # Page 1/N within the chapter still opens the chapter page picker.
+        page_button = next(button for button in buttons if button.text.startswith("1/"))
+        self.assertEqual(page_button.callback_data, "wk:a:p:14:0")
+        # Chapter 15/23 always goes to the beginning of the section index.
+        chapter_button = next(button for button in buttons if button.text == "15/23")
+        self.assertEqual(chapter_button.callback_data, "wk:a:l:0")
+
     def test_raw_mode_keeps_editorial_noise_but_never_executable_html(self) -> None:
         sections = parse_wikipedia_html(
             EXAMPLE_WIKI_HTML,
@@ -237,7 +304,7 @@ class WikipediaSourceTests(unittest.TestCase):
             callbacks,
             [
                 "wk:abc:r:0:0",
-                "noop",
+                "wk:abc:l:0",
                 "wk:abc:r:2:0",
                 "wk:abc:l:0",
                 "av:abc:main:0",
