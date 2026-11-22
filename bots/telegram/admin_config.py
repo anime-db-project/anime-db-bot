@@ -129,6 +129,11 @@ def _groups_page(locale: str, page: int = 0) -> tuple[str, InlineKeyboardMarkup]
     rows.append([
         _button(_tr(locale, "Search by name", "Поиск по названию"), "search")
     ])
+    # Return to the original /settings message without issuing a new command.
+    rows.append([InlineKeyboardButton(
+        text=_tr(locale, "Back to settings", "Назад к настройкам"),
+        callback_data="settings:back",
+    )])
     count = sum(len(keys) for _group, keys in groups)
     header = _tr(
         locale,

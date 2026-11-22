@@ -55,11 +55,15 @@ def _rich_wikipedia_html(body: str) -> str:
     Keep source inline links/emphasis and paragraph spacing, independent of
     where a section is split into pages.
     """
-    return "".join(
+    paragraphs = [
         f"<p>{paragraph.strip().replace(chr(10), '<br>')}</p>"
         for paragraph in body.split("\n\n")
         if paragraph.strip()
-    )
+    ]
+    # Rich-message renderers can collapse adjacent <p> margins. Make the
+    # blank line explicit between the heading, prose paragraphs and the
+    # final Wikipedia / CC BY-SA attribution.
+    return "<p><br></p>".join(paragraphs)
 
 
 def _plain_wikipedia_with_links(body: str) -> str:

@@ -86,6 +86,16 @@ class AdminConfigCatalogTests(unittest.TestCase):
             for button in row
         ))
 
+    def test_env_root_has_back_to_settings_in_both_languages(self) -> None:
+        for locale, expected in (("ru", "Назад к настройкам"), ("en", "Back to settings")):
+            _header, markup = _groups_page(locale, 0)
+            back_buttons = [
+                button for row in markup.inline_keyboard for button in row
+                if button.callback_data == "settings:back"
+            ]
+            self.assertEqual(len(back_buttons), 1)
+            self.assertEqual(back_buttons[0].text, expected)
+
     def test_group_pages_are_bounded_and_search_works(self) -> None:
         for page in range(10):
             txt, keys = _groups_page("ru", page)
@@ -214,6 +224,23 @@ class AdminConfigIntegrationTests(unittest.IsolatedAsyncioTestCase):
     @staticmethod
     def body(messages: list[object]) -> str:
         return "\n".join(str(getattr(m, "text", "")) for m in messages)
+
+    async def test_env_back_opens_original_settings_in_place(self) -> None:
+        await self.message("/settings")
+        config = await self.callback("cfg:h:0")
+        menu = next(
+            m for m in config if type(m).__name__ == "EditMessageText"
+        )
+        self.assertIn("settings:back", str(menu.reply_markup))
+        back = await self.callback("settings:back")
+        edited = next(
+            m for m in back if type(m).__name__ == "EditMessageText"
+        )
+        self.assertIn("cfg:h:0", str(edited.reply_markup))
+        self.assertIn("settings:wiki", str(edited.reply_markup))
+        self.assertFalse(any(
+            type(m).__name__ == "SendMessage" for m in back
+        ))
 
     async def test_command_and_callback_denied_to_nonadmin(self) -> None:
         response = await self.message("/admin_config", user_id=99)

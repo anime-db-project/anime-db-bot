@@ -244,9 +244,43 @@ class WikipediaSourceTests(unittest.TestCase):
         )
         body, _ = _chapter_page(article, 0, 0, token="t", locale="ru")
         rich = _rich_wikipedia_html(body)
-        self.assertIn("<p><b>Музыка</b></p><p>Музыкальные темы", rich)
+        self.assertIn("<p><b>Музыка</b></p><p><br></p><p>Музыкальные темы", rich)
         self.assertNotIn("<h3>", rich)
         self.assertIn('href="https://ru.wikipedia.org/wiki/Наруто"', rich)
+
+    def test_wikipedia_rich_prose_has_explicit_blank_lines_and_attribution_gap(
+        self,
+    ) -> None:
+        article = WikipediaArticle(
+            pageid=12,
+            title="Наруто",
+            language="ru",
+            url="https://ru.wikipedia.org/wiki/Наруто",
+            sections=(
+                WikipediaSection(
+                    "Введение",
+                    (
+                        ("Первый абзац.",),
+                        ("Второй абзац.",),
+                    ),
+                ),
+            ),
+        )
+        body, _ = _chapter_page(article, 0, 0, token="a", locale="ru")
+        self.assertIn("<b>Введение</b>\n\nПервый абзац.", body)
+        self.assertIn("Первый абзац.\n\nВторой абзац.", body)
+        self.assertIn("Второй абзац.\n\n<a href=", body)
+        rich_body = _rich_wikipedia_html(body)
+        separator = "<p><br></p>"
+        self.assertEqual(rich_body.count(separator), 3)
+        self.assertIn(
+            f"<p><b>Введение</b></p>{separator}<p>Первый абзац.</p>",
+            rich_body,
+        )
+        self.assertIn(
+            f"<p>Второй абзац.</p>{separator}<p><a href=",
+            rich_body,
+        )
 
     def test_wikipedia_read_more_is_numbered_and_keeps_attribution(self) -> None:
         article = WikipediaArticle(
