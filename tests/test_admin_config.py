@@ -87,7 +87,7 @@ class AdminConfigCatalogTests(unittest.TestCase):
         ))
 
     def test_env_root_has_back_to_settings_in_both_languages(self) -> None:
-        for locale, expected in (("ru", "Назад к настройкам"), ("en", "Back to settings")):
+        for locale, expected in (("ru", "← Настройки"), ("en", "← Settings")):
             _header, markup = _groups_page(locale, 0)
             back_buttons = [
                 button for row in markup.inline_keyboard for button in row

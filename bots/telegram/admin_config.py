@@ -20,6 +20,7 @@ from aiogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMar
 from bots.session_store import ExpiringSessionStore
 from bots.telegram.pagination import indexed_selection_rows, selection_page_size
 from core.settings import ConfigFileError
+from localization import text
 from scripts.console_config import (
     documented_config_groups,
     inspect_key,
@@ -131,7 +132,7 @@ def _groups_page(locale: str, page: int = 0) -> tuple[str, InlineKeyboardMarkup]
     ])
     # Return to the original /settings message without issuing a new command.
     rows.append([InlineKeyboardButton(
-        text=_tr(locale, "Back to settings", "Назад к настройкам"),
+        text=text("settings", "back", locale=locale),
         callback_data="settings:back",
     )])
     count = sum(len(keys) for _group, keys in groups)
