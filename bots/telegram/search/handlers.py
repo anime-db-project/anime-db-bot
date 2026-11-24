@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import html
 import logging
 import re
 import secrets
@@ -94,6 +95,10 @@ class SearchSession:
     image_matches: list[list[ImageSearchMatch]] = field(default_factory=list)
     image_input_token: str | None = None
     preview_seen: bool = False
+    preview_active: bool = True
+    preview_index: int = 0
+    picker_open: bool = False
+    preview_lock: asyncio.Lock = field(default_factory=asyncio.Lock)
 
 
 @dataclass(slots=True)
@@ -743,7 +748,19 @@ def _preview_rich(
     *,
     media_value: str | None = None,
 ) -> InputRichMessage:
-    body = plain_text_to_rich_html(text_value)
+    # The first paragraph is a heading; source/value rows remain a table.
+    parts = text_value.split("\n\n")
+    body = plain_text_to_rich_html(parts[0])
+    for group in parts[1:]:
+        rows = []
+        for line in group.splitlines():
+            label, sep, value = line.partition(": ")
+            if sep:
+                rows.append(f"<tr><th>{html.escape(label)}</th><td>{html.escape(value)}</td></tr>")
+            else:
+                rows.append(f'<tr><td colspan="2">{html.escape(line)}</td></tr>')
+        if rows:
+            body += "<table bordered striped compact>" + "".join(rows) + "</table>"
     poster_url = _preview_poster_url(candidate)
     if not poster_url:
         return InputRichMessage(html=body)
@@ -875,7 +892,7 @@ async def _send_preview(
     index: int,
     *,
     edit: bool,
-) -> None:
+) -> Message | None:
     locale = get_user_locale(session.owner_user_id)
     if not session.items:
         value = text("search", "nothing", locale=locale)
@@ -894,11 +911,12 @@ async def _send_preview(
         if edit:
             await message.edit_text(value, reply_markup=keyboard)
         else:
-            await message.answer(value, reply_markup=keyboard)
-        return
+            return await message.answer(value, reply_markup=keyboard)
+        return None
 
     index = max(0, min(index, len(session.items) - 1))
     session.preview_seen = True
+    session.preview_index = index
     candidate = session.items[index]
     matches = (
         session.image_matches[index] if index < len(session.image_matches) else None
@@ -920,8 +938,6 @@ async def _send_preview(
     # place. Pagination itself remains a single edit per click.
     if not edit:
         sent_message = await message.answer(text_value, reply_markup=keyboard)
-        if not poster_url:
-            return
         try:
             result = await sent_message.edit_text(
                 rich_message=_preview_rich(
@@ -937,7 +953,7 @@ async def _send_preview(
                 "Initial rich search preview upgrade failed; keeping plain text",
                 exc_info=True,
             )
-        return
+        return sent_message
 
     cached_file_id = session.poster_file_ids.get(poster_url) if poster_url else None
 
@@ -992,6 +1008,41 @@ async def _execute_query(
 ) -> None:
     locale = get_user_locale(owner_user_id)
     parsed_direct = _parse_direct_query(query, direct_lookup.source_keys)
+    token = None
+    preview = None
+
+    async def publish(result):
+        nonlocal token, preview
+        if not result.items:
+            return
+        if token is None:
+            token = _remember_results(state, query, owner_user_id, result)
+            session = state.sessions[token]
+            async with session.preview_lock:
+                preview = await _send_preview(message, token, session, 0, edit=False)
+            return
+        session = state.sessions.get(token)
+        if session is None or not session.preview_active or preview is None:
+            return
+        async with session.preview_lock:
+            if not session.preview_active:
+                return
+            # Keep published index -> identity stable, including stale buttons.
+            for item in result.items:
+                index = next((i for i, old in enumerate(session.items)
+                              if old.identity.matches(item.identity)), None)
+                if index is None:
+                    if len(session.items) < default_service.settings.collection_max_items:
+                        session.items.append(item)
+                else:
+                    session.items[index] = item
+            session.complete = result.complete
+            session.errors = dict(result.errors)
+            if not session.picker_open:
+                try:
+                    await _send_preview(preview, token, session, session.preview_index, edit=True)
+                except Exception:
+                    logging.debug("Progressive search preview refresh failed", exc_info=True)
 
     try:
         if parsed_direct is not None:
@@ -1020,8 +1071,10 @@ async def _execute_query(
             service = _service_for(
                 provider_keys, default_service, provider_map, state.service_cache
             )
-            result_set = await service.collect(query)
+            result_set = await service.collect(query, on_partial=publish)
             if len(provider_keys) > 1 and default_service.settings.expansion_enabled:
+                if token is None and result_set.items:
+                    await publish(SearchResultSet(items=result_set.items, complete=False, errors=result_set.errors))
                 try:
                     result_set = await asyncio.wait_for(
                         expand_text_search(
@@ -1044,11 +1097,15 @@ async def _execute_query(
             exc,
             exc_info=True,
         )
-        await message.answer(_ui(locale, "failed"))
+        if token is None:
+            await message.answer(_ui(locale, "failed"))
         return
 
-    token = _remember_results(state, query, owner_user_id, result_set)
-    await _send_preview(message, token, state.sessions[token], 0, edit=False)
+    if token is not None:
+        await publish(result_set)
+    else:
+        token = _remember_results(state, query, owner_user_id, result_set)
+        await _send_preview(message, token, state.sessions[token], 0, edit=False)
 
 
 async def _execute_image_search(
@@ -1508,9 +1565,13 @@ def register_search_handlers(
         await callback.answer()
         # Restore the original number-grid picker on the existing preview.
         # Editing only the keyboard keeps the cover/preview text unchanged.
-        await callback.message.edit_reply_markup(
-            reply_markup=search_picker_keyboard(picker, locale=locale)
-        )
+        async with session.preview_lock:
+            if not session.preview_active:
+                return
+            session.picker_open = True
+            await callback.message.edit_reply_markup(
+                reply_markup=search_picker_keyboard(picker, locale=locale)
+            )
 
     @dp.callback_query(F.data.startswith("sr:"))
     async def result_page_callback(callback: CallbackQuery) -> None:
@@ -1546,7 +1607,11 @@ def register_search_handlers(
             return
 
         await callback.answer()
-        await _send_preview(callback.message, token, session, index, edit=True)
+        async with session.preview_lock:
+            if not session.preview_active:
+                return
+            session.picker_open = False
+            await _send_preview(callback.message, token, session, index, edit=True)
 
     @dp.callback_query(F.data.startswith("sd:"))
     async def result_details_callback(callback: CallbackQuery) -> None:
@@ -1581,8 +1646,12 @@ def register_search_handlers(
             )
             return
 
-        candidate = session.items[index]
         await callback.answer()
+        async with session.preview_lock:
+            if not session.preview_active:
+                return
+            session.preview_active = False
+            candidate = session.items[index]
         await aggregate_callback(callback.message, candidate, session.owner_user_id)
 
     return state

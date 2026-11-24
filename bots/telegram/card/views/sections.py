@@ -24,7 +24,7 @@ from localization import DEFAULT_LOCALE, text
 def format_people(title: str, people, *, locale: str) -> str:
     if not people:
         return f"{title}:\n{text('common', 'no_data', locale=locale)}"
-    lines = [f"{title}:"]
+    lines = [f"{title}:", ""]
     for person in people:
         roles = ", ".join(
             localize_role_token(role, locale=locale)
@@ -155,9 +155,8 @@ def anime_sections(
 def description_pages(anime: AggregatedAnime, source: str, *, locale: str) -> list[str]:
     """Exactly the same text/page boundaries for selection and reading."""
     description = anime.descriptions.get(source, "")
-    value = text("card", "description_title", locale=locale, source=source)
-    if description:
-        value += f"\n\n{description}"
+    heading = text("card", "description_title", locale=locale, source=source)
+    value = description
     background = anime.backgrounds_by_source.get(source)
     if background is None and source in {"MyAnimeList", "MAL (MyAnimeList) / Jikan"}:
         background = anime.background
@@ -165,7 +164,7 @@ def description_pages(anime: AggregatedAnime, source: str, *, locale: str) -> li
         value += f"\n\n{text('card', 'extra_info', locale=locale)}\n{background}"
     if not description and not background:
         value += f"\n\n{text('common', 'no_data', locale=locale)}"
-    return long_text_parts(value, locale=locale)
+    return long_text_parts(value.strip(), locale=locale, heading=heading)
 
 
 def source_section_pages(

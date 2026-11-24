@@ -392,6 +392,7 @@ class TelegramSettings:
     max_search_sessions: int = 192
     pagination_page_size: int = 10
     long_text_chunk_size: int = 4000
+    long_text_include_ui: bool = False
     pagination_block_page_sizes: Mapping[str, int] = field(default_factory=dict)
     rich_media: RichMediaSettings = field(default_factory=RichMediaSettings)
     max_scope_sessions: int = 400
@@ -782,6 +783,7 @@ class AppSettings:
                 long_text_chunk_size=_strict_int(
                     values, "TELEGRAM_LONG_TEXT_CHUNK_SIZE", 4000, 200, 30000
                 ),
+                long_text_include_ui=_bool(values, "TELEGRAM_LONG_TEXT_INCLUDE_UI", False),
                 pagination_block_page_sizes={
                     block: _strict_int(
                         values,

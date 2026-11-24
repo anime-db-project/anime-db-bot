@@ -1,4 +1,37 @@
 {
+  "project": {
+    "repository": "Repositorio",
+    "title": "Acerca del proyecto",
+    "description": "Agregador abierto de anime con identificadores, episodios y marcas de tiempo.",
+    "stars": "Estrellas",
+    "license": "Licencia",
+    "details": "Detalles",
+    "inline": "Buscar en cualquier chat",
+    "welcome": "¡Bienvenido a Anime DB!\n\n/anime Naruto — buscar por título\n/anime mal:20 — buscar por ID\n/settings — ajustes\n/about — información del proyecto",
+    "wiki_title": "Wikipedia — formato",
+    "wiki_clean": "Limpio: sin navegación, referencias ni bloques de servicio.",
+    "wiki_raw": "RAW: texto completo disponible.",
+    "wiki_note": "Ambos modos conservan títulos, enlaces y formato seguro."
+  },
+  "commands": {
+    "start": "Inicio y ayuda",
+    "anime": "Buscar anime",
+    "settings": "Ajustes",
+    "about": "Información del proyecto",
+    "cancel": "Cancelar búsqueda",
+    "ping": "Comprobar disponibilidad",
+    "status": "Runtime status",
+    "source_health": "Source health",
+    "users": "User list",
+    "ban": "Ban user",
+    "unban": "Unban user",
+    "mapping_overrides": "Mapping overrides",
+    "mapping_history": "Mapping history",
+    "mapping_set": "Set mapping",
+    "mapping_delete": "Delete mapping",
+    "mapping_confirm": "Confirm mapping",
+    "mapping_cancel": "Cancel mapping"
+  },
   "meta": {
     "name": "Español"
   },
@@ -161,7 +194,19 @@
   "rate_limit": {
     "too_many_requests": "Error: Demasiadas solicitudes\nDemasiadas solicitudes. Inténtalo de nuevo en {seconds} segundos."
   },
+  "picker": {
+    "episodes": "Elige un episodio:",
+    "staff": "Elige una persona:",
+    "voices": "Elige un actor de voz:",
+    "characters": "Elige un personaje:",
+    "trailers": "Elige un tráiler:",
+    "related": "Elige un anime:",
+    "recommendations": "Elige un anime:",
+    "screenshots": "Elige capturas:",
+    "page": "Elige una página:"
+  },
   "card": {
+    "timecodes_label": "Marcas de tiempo",
     "section_main": "Descripción general",
     "section_titles": "Títulos",
     "section_description": "Descripciones",
@@ -225,13 +270,14 @@
     "databases": "Bases de datos: {value}",
     "all_ids_button": "Mostrar todos los ID",
     "ids_table_title": "ID de las fuentes",
-    "all_ids_title": "Todos los ID del título (Anime Mapping DB)",
+    "record_range": "Entradas {start}–{end}",
+    "all_ids_title": "Todos los ID del título",
     "all_ids_empty": "No se encontraron ID vinculados a este título.",
     "ids": "ID: {value}",
     "unavailable": "No disponible: {value}",
-    "description_choose": "Descripciones:\nElija una fuente a continuación.",
+    "description_choose": "Descripciones:",
     "description_empty": "Descripciones:\nNo hay descripciones disponibles.",
-    "links_choose": "Enlaces:\nElija una base de datos a continuación. Enlaces",
+    "links_choose": "Enlaces:",
     "links_empty": ":\nNo hay enlaces disponibles.",
     "description_title": "Descripción — {source}",
     "extra_info": "Información adicional:",
@@ -243,7 +289,7 @@
     "source_unavailable": "Esta fuente ya no está disponible.",
     "invalid_command": "Comando no válido.",
     "invalid_section": "Sección no válida.",
-    "popularity_choose": "Popularidad:\nElija una fuente a continuación.",
+    "popularity_choose": "Popularidad:",
     "popularity_empty": "Popularidad:\nNo hay estadísticas de audiencia disponibles.",
     "popularity_title": "Popularidad — {source}",
     "popularity_metrics": "Resumen",
@@ -292,7 +338,7 @@
     "section_trailers": "Remolques",
     "trailers_button": "Tráilers",
     "trailers_loading": "Cargando remolques…",
-    "trailers_choose": "Remolques:\nElija una fuente a continuación. Remolques",
+    "trailers_choose": "Tráilers:",
     "trailers_empty": ":\nNo hay remolques disponibles.",
     "trailers_load_failed": "No se pudieron cargar remolques de las fuentes disponibles.",
     "trailers_title": "Tráilers — {source}",
@@ -329,7 +375,7 @@
     "discovery_relation": "Relación: {value}",
     "discovery_all_sources": "Todas las fuentes",
     "discovery_more_details": "Más detalles",
-    "discovery_open_card": "Abrir ficha del anime"
+    "discovery_open_card": "Detalles"
   },
   "people": {
     "staff": "Personal y creadores",

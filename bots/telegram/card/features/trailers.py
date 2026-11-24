@@ -10,6 +10,7 @@ from aiogram.types import (
     Message,
 )
 
+from bots.telegram.card.text_expansion import records_rich_html
 from bots.telegram.callbacks import (
     KeyedPageCallback,
     PagePickerCallback,
@@ -105,7 +106,7 @@ def _trailer_rich(content: str, item: TrailerRecord | None = None) -> InputRichM
         if thumbnail.startswith(("https://", "http://"))
         else ""
     )
-    return InputRichMessage(html=image + plain_text_to_rich_html(content))
+    return InputRichMessage(html=image + records_rich_html(content))
 
 
 def _source_rows(

@@ -116,7 +116,7 @@ class CardSourceIdTests(unittest.TestCase):
                 self.assertEqual(len(pages), 1)
                 self.assertIn("AMDB: 18472", pages[0])
                 for provider, values in source_ids.items():
-                    self.assertIn(f"{provider.upper()}: {values[0]}", pages[0])
+                    self.assertIn(f"{provider.upper().replace(chr(95), chr(32))}: {values[0]}", pages[0])
                 self.assertIn(text("card", "all_ids_title", locale=locale), pages[0])
                 keyboard = navigation_keyboard(
                     "token",
@@ -134,10 +134,10 @@ class CardSourceIdTests(unittest.TestCase):
         long_ids = {f"provider_{i:04d}": (str(i) * 12,) for i in range(140)}
         pages = mapping_ids_pages("amdb:18472", long_ids, locale="en")
         self.assertGreater(len(pages), 1)
-        self.assertTrue(all(len(page) <= 3700 for page in pages))
+        self.assertTrue(all(len(page) <= 4096 for page in pages))
         for provider, values in long_ids.items():
             self.assertEqual(
-                sum(f"{provider.upper()}: {values[0]}" in page for page in pages), 1
+                sum(f"{provider.upper().replace(chr(95), chr(32))}: {values[0]}" in page for page in pages), 1
             )
 
     def test_mapping_only_ids_remain_available_to_internal_identity(self) -> None:

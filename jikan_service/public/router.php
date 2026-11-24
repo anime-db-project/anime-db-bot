@@ -170,12 +170,10 @@ function peopleToArray(object $result): array
             'favorites' => $characterItem->getFavorites(),
         ];
         foreach ($characterItem->getVoiceActors() as $voiceActor) {
-            if (strcasecmp($voiceActor->getLanguage(), 'Japanese') !== 0) {
-                continue;
-            }
             $voices[] = [
                 'person' => personMetaToArray($voiceActor->getPerson()),
                 'character' => $character->getName(),
+                'language' => $voiceActor->getLanguage(),
             ];
         }
     }

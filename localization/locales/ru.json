@@ -1,4 +1,37 @@
 {
+  "project": {
+    "repository": "Репозиторий",
+    "title": "О проекте",
+    "description": "Открытый агрегатор информации об аниме, сопоставляющий базы данных, метаданные серий и таймкоды.",
+    "stars": "Звёзды",
+    "license": "Лицензия",
+    "details": "Подробнее",
+    "inline": "Поиск в любом чате",
+    "welcome": "Добро пожаловать в Anime DB!\n\nИщи аниме по названию или ID, изучай серии, таймкоды, персонажей, авторов и Wikipedia.\n\n/anime Naruto — поиск по названию\n/anime mal:20 — поиск по ID\n/settings — язык и настройки\n/about — информация о проекте\n\nИспользуй inline-поиск, чтобы поделиться результатом в другом чате.",
+    "wiki_title": "Wikipedia — формат вывода",
+    "wiki_clean": "Очищенный: без служебных блоков, навигации, сносок и шума.",
+    "wiki_raw": "RAW: полный доступный текст статьи, включая служебные разделы.",
+    "wiki_note": "Оба режима сохраняют заголовки, полезные ссылки и безопасное форматирование Telegram."
+  },
+  "commands": {
+    "start": "Запуск и справка",
+    "anime": "Поиск аниме",
+    "settings": "Настройки",
+    "about": "О проекте",
+    "cancel": "Отменить поиск",
+    "ping": "Проверить доступность",
+    "status": "Статус бота",
+    "source_health": "Состояние источников",
+    "users": "Список пользователей",
+    "ban": "Заблокировать пользователя",
+    "unban": "Разблокировать пользователя",
+    "mapping_overrides": "Переопределения ID",
+    "mapping_history": "История сопоставлений",
+    "mapping_set": "Добавить сопоставление",
+    "mapping_delete": "Удалить сопоставление",
+    "mapping_confirm": "Подтвердить изменение",
+    "mapping_cancel": "Отменить изменение"
+  },
   "meta": {
     "name": "Русский"
   },
@@ -161,7 +194,19 @@
   "rate_limit": {
     "too_many_requests": "Ошибка: Too Many Requests\nСлишком много запросов. Повторите через {seconds} секунд."
   },
+  "picker": {
+    "episodes": "Выберите серию:",
+    "staff": "Выберите человека:",
+    "voices": "Выберите сэйю:",
+    "characters": "Выберите персонажа:",
+    "trailers": "Выберите трейлер:",
+    "related": "Выберите аниме:",
+    "recommendations": "Выберите аниме:",
+    "screenshots": "Выберите скриншоты:",
+    "page": "Выберите страницу:"
+  },
   "card": {
+    "timecodes_label": "Таймкоды",
     "section_main": "Основное",
     "section_titles": "Названия",
     "section_description": "Описания",
@@ -229,13 +274,14 @@
     "databases": "Базы данных: {value}",
     "all_ids_button": "Показать все ID",
     "ids_table_title": "ID источников",
-    "all_ids_title": "Все ID тайтла (Anime Mapping DB)",
+    "record_range": "Записи {start}–{end}",
+    "all_ids_title": "Все ID тайтла",
     "all_ids_empty": "Для этого тайтла не найдены связанные ID.",
     "ids": "ID: {value}",
     "unavailable": "Недоступны: {value}",
-    "description_choose": "Описания:\nВыбери источник кнопкой ниже.",
+    "description_choose": "Описания:",
     "description_empty": "Описания:\nНет доступных описаний.",
-    "links_choose": "Ссылки:\nВыбери базу кнопкой ниже.",
+    "links_choose": "Ссылки:",
     "links_empty": "Ссылки:\nНет доступных ссылок.",
     "description_title": "Описание — {source}",
     "extra_info": "Дополнительная информация:",
@@ -247,7 +293,7 @@
     "source_unavailable": "Источник больше недоступен.",
     "invalid_command": "Некорректная команда.",
     "invalid_section": "Некорректный раздел.",
-    "popularity_choose": "Популярность:\nВыбери источник кнопкой ниже.",
+    "popularity_choose": "Популярность:",
     "popularity_empty": "Популярность:\nНет доступной статистики.",
     "popularity_title": "Популярность — {source}",
     "popularity_metrics": "Общая статистика",
@@ -296,7 +342,7 @@
     "section_trailers": "Трейлеры",
     "trailers_button": "Трейлеры",
     "trailers_loading": "Загружаю трейлеры…",
-    "trailers_choose": "Трейлеры:\nВыбери источник кнопкой ниже.",
+    "trailers_choose": "Трейлеры:",
     "trailers_empty": "Трейлеры:\nНет доступных трейлеров.",
     "trailers_load_failed": "Не удалось загрузить трейлеры из доступных источников.",
     "trailers_title": "Трейлеры — {source}",
@@ -329,7 +375,7 @@
     "discovery_relation": "Связь: {value}",
     "discovery_all_sources": "Все источники",
     "discovery_more_details": "Подробнее",
-    "discovery_open_card": "Открыть карточку"
+    "discovery_open_card": "Подробнее"
   },
   "people": {
     "staff": "Авторы и команда",

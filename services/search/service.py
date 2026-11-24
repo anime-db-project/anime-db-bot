@@ -4,6 +4,7 @@ import asyncio
 import re
 import unicodedata
 from dataclasses import dataclass
+from collections.abc import Awaitable, Callable
 
 _SEARCH_PAGE_TIMEOUT_SECONDS = 12.0
 _SEARCH_PROVIDER_BUDGET_SECONDS = 16.0
@@ -122,6 +123,7 @@ class SearchService:
         self._collection_flight: SingleFlight[
             tuple[str, int, int, int, int], SearchResultSet
         ] = SingleFlight()
+        self._collection_subscribers: dict[tuple, set[asyncio.Queue]] = {}
 
     @property
     def provider_names(self) -> tuple[str, ...]:
@@ -209,6 +211,7 @@ class SearchService:
         *,
         page_size: int | None = None,
         max_pages: int | None = None,
+        on_partial: Callable[[SearchResultSet], Awaitable[None]] | None = None,
     ) -> SearchResultSet:
         """Collect a stable relevant result set for one textual query.
 
@@ -237,12 +240,49 @@ class SearchService:
             if shared is not None:
                 self._result_set_cache.set(cache_key, shared)
                 return shared
-        return await self._collection_flight.run(
-            cache_key,
-            lambda: self._collect_uncached(
-                query, page_size, max_pages, threshold, tail_pages, max_items, cache_key
-            ),
-        )
+        async def broadcast(result: SearchResultSet) -> None:
+            for queue in tuple(self._collection_subscribers.get(cache_key, ())):
+                if queue.full():
+                    queue.get_nowait()
+                queue.put_nowait(result)
+
+        async def collect_shared() -> SearchResultSet:
+            return await self._collection_flight.run(
+                cache_key,
+                lambda: self._collect_uncached(
+                    query, page_size, max_pages, threshold, tail_pages, max_items,
+                    cache_key, on_partial=broadcast,
+                ),
+            )
+
+        if on_partial is None:
+            return await collect_shared()
+        queue: asyncio.Queue[SearchResultSet] = asyncio.Queue(maxsize=1)
+        subscribers = self._collection_subscribers.setdefault(cache_key, set())
+        subscribers.add(queue)
+        task = asyncio.create_task(collect_shared())
+        get_task = None
+        try:
+            while not task.done():
+                get_task = asyncio.create_task(queue.get())
+                done, _ = await asyncio.wait((task, get_task), return_when=asyncio.FIRST_COMPLETED)
+                if get_task in done:
+                    await on_partial(get_task.result())
+                else:
+                    get_task.cancel()
+                    await asyncio.gather(get_task, return_exceptions=True)
+                get_task = None
+            return await task
+        finally:
+            subscribers.discard(queue)
+            if not subscribers and self._collection_subscribers.get(cache_key) is subscribers:
+                self._collection_subscribers.pop(cache_key, None)
+            if get_task is not None:
+                get_task.cancel()
+                await asyncio.gather(get_task, return_exceptions=True)
+            if not task.done():
+                task.cancel()
+            await asyncio.gather(task, return_exceptions=True)
 
     async def _collect_uncached(
         self,
@@ -253,6 +293,7 @@ class SearchService:
         tail_pages: int,
         max_items: int,
         cache_key: tuple[str, int, int, int, int],
+        *, on_partial: Callable[[SearchResultSet], Awaitable[None]] | None = None,
     ) -> SearchResultSet:
         async def collect_provider(
             provider_index: int,
@@ -312,37 +353,39 @@ class SearchService:
 
             return entries, None, complete
 
-        provider_results = await asyncio.gather(
-            *(
-                collect_provider(provider_index, provider)
-                for provider_index, provider in enumerate(self._providers)
-            )
-        )
-
         entries: list[tuple[int, str, int, SearchCandidate]] = []
         errors: dict[str, str] = {}
         complete = True
-        for provider, (provider_entries, error, provider_complete) in zip(
-            self._providers,
-            provider_results,
-            strict=True,
-        ):
-            entries.extend(provider_entries)
-            complete = complete and provider_complete
-            if error:
-                errors[provider.name] = error
 
-        items = _merge_entries(query, entries, allow_title_merge=True)
-        items.sort(key=lambda candidate: -_relevance_score(query, candidate))
-        if len(items) > max_items:
-            items = items[:max_items]
-            complete = False
+        def snapshot(*, final: bool) -> SearchResultSet:
+            items = _merge_entries(query, sorted(entries, key=lambda row: (row[0], row[2])), allow_title_merge=True)
+            items.sort(key=lambda candidate: -_relevance_score(query, candidate))
+            return SearchResultSet(
+                items=items[:max_items],
+                complete=final and complete and not errors and len(items) <= max_items,
+                errors=dict(errors),
+            )
 
-        result_set = SearchResultSet(
-            items=items,
-            complete=complete and not errors,
-            errors=errors,
-        )
+        async def tagged(index, provider):
+            return provider, await collect_provider(index, provider)
+
+        tasks = [asyncio.create_task(tagged(i, p)) for i, p in enumerate(self._providers)]
+        try:
+            for finished in asyncio.as_completed(tasks):
+                provider, (provider_entries, error, provider_complete) = await finished
+                entries.extend(provider_entries)
+                complete = complete and provider_complete
+                if error:
+                    errors[provider.name] = error
+                if on_partial is not None and entries:
+                    await on_partial(snapshot(final=False))
+        finally:
+            for task in tasks:
+                if not task.done():
+                    task.cancel()
+            await asyncio.gather(*tasks, return_exceptions=True)
+
+        result_set = snapshot(final=True)
 
         if not errors:
             self._result_set_cache.set(cache_key, result_set)

@@ -341,7 +341,18 @@ class JikanSource:
             if not isinstance(item, dict) or not isinstance(item.get("person"), dict):
                 continue
             character = _clean(item.get("character"))
-            person = _person(item["person"], [voice_role_token(character or None)])
+            # Legacy local Jikan bridge only emitted Japanese credits.
+            raw_language = _clean(item.get("language", "Japanese")).casefold()
+            language = {
+                "japanese": "ja", "english": "en", "russian": "ru",
+                "german": "de", "french": "fr", "spanish": "es",
+                "italian": "it", "portuguese": "pt", "korean": "ko",
+                "chinese": "zh", "mandarin": "zh", "polish": "pl",
+            }.get(raw_language, raw_language if len(raw_language) in (2, 3) and raw_language.isalpha() else "und")
+            role = voice_role_token(character or None)
+            if language != "ja":
+                role += f" [{language.upper()}]"
+            person = _person(item["person"], [role])
             if person is not None:
                 people.append(person)
         return _dedupe_people(people)

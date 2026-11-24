@@ -16,7 +16,7 @@ from core.models import AggregatedAnime
 
 class LongTextPaginationTests(unittest.TestCase):
     def test_twelve_thousand_characters_become_three_inline_pages(self) -> None:
-        settings = SimpleNamespace(telegram=SimpleNamespace(long_text_chunk_size=4000))
+        settings = SimpleNamespace(telegram=SimpleNamespace(long_text_chunk_size=4000, long_text_include_ui=False))
         with patch(
             "bots.telegram.card.text_expansion.get_settings",
             return_value=settings,
@@ -31,7 +31,8 @@ class LongTextPaginationTests(unittest.TestCase):
             )
             description = description_pages(anime, "AniList", locale="ru")
             self.assertGreater(len(description), 1)
-            self.assertTrue(all(len(part) <= 4000 for part in description))
+            self.assertEqual(len(description), 3)
+            self.assertTrue(all(len(part.partition('\n\n')[2]) == 4000 for part in description))
             keyboard = description_keyboard(
                 "token", "anilist", 0, len(description), locale="ru"
             )
@@ -46,7 +47,7 @@ class LongTextPaginationTests(unittest.TestCase):
             )
 
     def test_non_main_views_use_configured_limit(self) -> None:
-        settings = SimpleNamespace(telegram=SimpleNamespace(long_text_chunk_size=4000))
+        settings = SimpleNamespace(telegram=SimpleNamespace(long_text_chunk_size=4000, long_text_include_ui=False))
         anime = AggregatedAnime(
             title="Example",
             synonyms=["abc" * 2000],

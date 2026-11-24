@@ -7,7 +7,7 @@ from collections.abc import Awaitable, Callable
 from typing import Any
 
 from aiogram import BaseMiddleware
-from aiogram.types import CallbackQuery, Message, TelegramObject, Update
+from aiogram.types import CallbackQuery, InlineQuery, Message, TelegramObject, Update
 
 _ACCESS_DENIED = "Доступ к боту ограничен."
 
@@ -71,6 +71,13 @@ class TelegramAllowlistMiddleware(BaseMiddleware):
         user = getattr(inner, "from_user", None)
         if user is not None and int(user.id) in self._allowed:
             return await handler(event, data)
+
+        if isinstance(inner, Message) and inner.chat.type != "private" and not (inner.text or inner.caption or "").startswith("/"):
+            return None
+
+        if isinstance(inner, InlineQuery):
+            await inner.answer([], cache_time=0, is_personal=True)
+            return None
 
         # Anonymous/service updates do not have a Telegram user to notify.
         # They must not be forwarded to app handlers while restricted.

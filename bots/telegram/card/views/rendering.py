@@ -40,7 +40,7 @@ def plain_text_to_rich_html(text_value: str) -> str:
         escaped = html.escape(paragraph).replace("\n", "<br>")
         if escaped:
             paragraphs.append(f"<p>{escaped}</p>")
-    return "".join(paragraphs)
+    return "<p><br></p>".join(paragraphs)
 
 
 def dedupe_strings(values: list[str]) -> list[str]:

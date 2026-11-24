@@ -4,6 +4,7 @@ import html
 
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup, InputRichMessage
 
+from bots.telegram.card.text_expansion import record_pages, records_rich_html
 from bots.telegram.callbacks import SectionSourceCallback, ViewCallback
 from bots.telegram.pagination import card_picker_callback
 from bots.telegram.card.ui.constants import ALL_SOURCE_LABELS
@@ -36,7 +37,7 @@ def _localized_roles(person: PersonCredit, locale: str) -> str:
 
 
 def _person_line(person: PersonCredit, locale: str) -> str:
-    return f"• {display_person_name(person.name, person.aliases, locale=locale)} — {_localized_roles(person, locale)}"
+    return " ".join(f"• {display_person_name(person.name, person.aliases, locale=locale)} — {_localized_roles(person, locale)}".split())
 
 
 def _page_text(
@@ -48,27 +49,26 @@ def _page_text(
     locale: str,
     total_hint: int | None = None,
 ) -> tuple[str, list[str], int, int, int]:
-    without, with_portraits = _people_state(anime, section, source)
+    without, with_portraits = _people_state(anime, section, source, locale=locale)
     actual_total = len(without) + len(with_portraits)
-    total = max(actual_total, int(total_hint or 0))
-    max_page = len(with_portraits)
-    first_page = _first_people_page(without, with_portraits)
-    page = max(first_page, min(int(page), max_page))
+    total = actual_total if section == 'voices' else max(actual_total, int(total_hint or 0))
     title_value = text("people", section, locale=locale)
     if source:
         title_value += f" — {source}"
-    if page == 0:
-        lines = [
-            f"{title_value}:",
-            "",
-            text("people", "without_portrait", locale=locale),
-        ]
-        lines.extend(_person_line(person, locale) for person in without)
-        if not without:
-            lines.append(text("people", "none", locale=locale))
-        return "\n".join(lines), [], len(without), total, page
+    groups = record_pages([_person_line(person, locale) for person in without], heading=title_value + ":")
+    group_count = len(groups)
+    first_page = _first_people_page(without, with_portraits)
+    max_page = len(with_portraits) + max(0, group_count - 1)
+    page = max(first_page, min(int(page), max_page))
+    if not with_portraits and not groups:
+        return title_value + ":\n\n" + text("people", "none", locale=locale), [], 0, total, page
+    if page < group_count:
+        lines = [title_value + ":", "", *groups[page]]
+        shown = sum(len(group) for group in groups[:page+1])
+        return "\n".join(lines), [], shown, total, page
 
-    person = with_portraits[page - 1]
+    portrait_index = page - group_count if group_count else page - 1
+    person = with_portraits[portrait_index]
     portrait_sources = _portrait_source_names(person, anime.sources)
     urls = _portrait_urls(person, source=source, source_order=anime.sources)
     lines = [
@@ -86,7 +86,7 @@ def _page_text(
                 sources=", ".join(portrait_sources),
             )
         )
-    return "\n".join(lines), urls, len(without) + page, total, page
+    return "\n".join(lines), urls, len(without) + portrait_index + 1, total, page
 
 
 def _portrait_html(urls: list[str]) -> str:
@@ -99,7 +99,7 @@ def _portrait_html(urls: list[str]) -> str:
 
 def _rich(text_value: str, urls: list[str]) -> InputRichMessage:
     return InputRichMessage(
-        html=_portrait_html(urls) + plain_text_to_rich_html(text_value)
+        html=_portrait_html(urls) + records_rich_html(text_value)
     )
 
 
@@ -158,6 +158,7 @@ def _keyboard(
     source_names: list[str] | None = None,
     has_more: bool = False,
     first_page: int = 0,
+    group_pages: int | None = None,
 ) -> InlineKeyboardMarkup:
     nav: list[InlineKeyboardButton] = []
     if page > first_page:
@@ -168,14 +169,14 @@ def _keyboard(
             )
         )
     without_count = max(0, shown - page) if page > 0 else max(0, shown)
-    group = int(without_count > 0)
+    group = int(without_count > 0) if group_pages is None else group_pages
     picker_route = (
         f"gx~av~{section}~{group}"
         if source_key is None
         else f"gx~as~{section}~{source_key}~{group}"
     )
-    picker_total = max_page + group
-    picker_index = 0 if page == 0 else page if group else page - 1
+    picker_total = max_page + int(bool(group))
+    picker_index = page if group else max(0, page - 1)
     nav.append(
         InlineKeyboardButton(
             text=text(

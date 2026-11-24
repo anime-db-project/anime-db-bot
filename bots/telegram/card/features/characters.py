@@ -10,6 +10,7 @@ from aiogram.types import (
     Message,
 )
 
+from bots.telegram.card.text_expansion import record_pages, records_rich_html
 from bots.telegram.callbacks import KeyedPageCallback, resolve_key_or_legacy_index
 from bots.telegram.rich_media import deliver_rich_media
 from bots.telegram.pagination import card_picker_callback
@@ -197,7 +198,7 @@ def _role_label(role: str | None, locale: str) -> str:
 
 def _character_line(character: CharacterRecord, locale: str) -> str:
     name = display_person_name(character.name, character.aliases, locale=locale)
-    return f"• {name} — {_role_label(character.role, locale)}"
+    return " ".join(f"• {name} — {_role_label(character.role, locale)}".split())
 
 
 def _character_state(
@@ -236,22 +237,21 @@ def _page_text(
     values, without, with_portraits = _character_state(session, source)
 
     total = len(values)
-    max_page = len(with_portraits)
-    first_page = _first_character_page(without, with_portraits)
-    page = max(first_page, min(int(page), max_page))
     title = text("characters", "title", locale=locale)
     if source:
         title += f" — {source}"
 
-    if page == 0:
-        lines = [title + ":", "", text("characters", "without_portrait", locale=locale)]
-        if without:
-            lines.extend(_character_line(character, locale) for character in without)
-        else:
-            lines.append(text("characters", "none", locale=locale))
-        return "\n".join(lines), [], len(without), total, page
+    groups = record_pages([_character_line(character, locale) for character in without], heading=title + ":")
+    group_count = len(groups)
+    max_page = len(with_portraits) + max(0, group_count-1)
+    page = max(_first_character_page(without, with_portraits), min(int(page), max_page))
+    if not values:
+        return title + ":\n\n" + text("characters", "none", locale=locale), [], 0, 0, page
+    if page < group_count:
+        return "\n".join([title + ":", "", *groups[page]]), [], sum(len(group) for group in groups[:page+1]), total, page
 
-    character = with_portraits[page - 1]
+    portrait_index = page - group_count if group_count else page - 1
+    character = with_portraits[portrait_index]
     urls = _portrait_urls(character, source, source_order)
     portrait_sources = _portrait_sources(character, source_order)
     lines = [
@@ -274,14 +274,14 @@ def _page_text(
                 sources=", ".join(portrait_sources),
             )
         )
-    return "\n".join(lines), urls, len(without) + page, total, page
+    return "\n".join(lines), urls, len(without) + portrait_index + 1, total, page
 
 
 def _rich(text_value: str, urls: list[str]) -> InputRichMessage:
     urls = _dedupe(urls)[:20]
     images = "".join(f'<img src="{html.escape(url, quote=True)}"/>' for url in urls)
     media = images if len(urls) <= 1 else f"<tg-slideshow>{images}</tg-slideshow>"
-    return InputRichMessage(html=media + plain_text_to_rich_html(text_value))
+    return InputRichMessage(html=media + records_rich_html(text_value))
 
 
 def _callback(token: str, source_key: str | None, page: int) -> str:
@@ -301,6 +301,7 @@ def _keyboard(
     *,
     locale: str,
     first_page: int = 0,
+    group_pages: int | None = None,
 ) -> InlineKeyboardMarkup:
     rows: list[list[InlineKeyboardButton]] = []
     nav: list[InlineKeyboardButton] = []
@@ -311,14 +312,14 @@ def _keyboard(
             )
         )
     without_count = max(0, shown - page) if page > 0 else max(0, shown)
-    group = int(without_count > 0)
+    group = int(without_count > 0) if group_pages is None else group_pages
     picker_route = (
         f"gx~av~characters~{group}"
         if source_key is None
         else f"gx~ac~{source_key}~{group}"
     )
-    picker_total = max_page + group
-    picker_index = 0 if page == 0 else page if group else page - 1
+    picker_total = max_page + int(bool(group))
+    picker_index = page if group else max(0, page - 1)
     nav.append(
         InlineKeyboardButton(
             text=text("characters", "shown", locale=locale, shown=shown, total=total),
@@ -436,7 +437,9 @@ async def edit_characters_view(
         )
     else:
         _, without, with_portraits = _character_state(session, source)
-        max_page = len(with_portraits)
+        heading = text('characters', 'title', locale=locale) + (f' — {source}' if source else '') + ':'
+        groups = record_pages([_character_line(character, locale) for character in without], heading=heading)
+        max_page = len(with_portraits) + max(0, len(groups)-1)
         first_page = _first_character_page(without, with_portraits)
         content, urls, shown, total, page = _page_text(
             session, source, page, locale=locale
@@ -451,6 +454,7 @@ async def edit_characters_view(
             max_page,
             locale=locale,
             first_page=first_page,
+            group_pages=len(groups),
         )
         try:
             await deliver_rich_media(

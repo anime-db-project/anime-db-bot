@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import re
+from dataclasses import replace
+
 from core.models import AggregatedAnime, PersonCredit
 
 PEOPLE_SECTIONS = frozenset({"staff", "voices"})
@@ -92,10 +95,14 @@ def people_state(
     anime: AggregatedAnime,
     section: str,
     source: str | None,
+    *, locale: str | None = None,
 ) -> tuple[list[PersonCredit], list[PersonCredit]]:
     without: list[PersonCredit] = []
     with_portraits: list[PersonCredit] = []
-    for person in people_for_scope(anime, section, source):
+    values = people_for_scope(anime, section, source)
+    if section == 'voices' and locale is not None:
+        values = voice_credits_for_locale(values, locale)
+    for person in values:
         urls = portrait_urls(person, source=source, source_order=anime.sources)
         (with_portraits if urls else without).append(person)
     return without, with_portraits
@@ -106,3 +113,18 @@ def first_people_page(
     with_portraits: list[PersonCredit],
 ) -> int:
     return 0 if without or not with_portraits else 1
+
+def voice_credits_for_locale(people: list[PersonCredit], locale: str) -> list[PersonCredit]:
+    """Keep original Japanese and the requested dub; never guess untagged Jikan language."""
+    allowed = {"ja", locale.split("-")[0].casefold()}
+    result: list[PersonCredit] = []
+    for person in people:
+        roles = []
+        for role in person.roles:
+            suffix = re.search(r"\s+\[([A-Za-z]{2,3})\]$", role)
+            if suffix and suffix.group(1).casefold() not in allowed:
+                continue
+            roles.append(role)
+        if roles or not person.roles:
+            result.append(replace(person, roles=roles))
+    return result

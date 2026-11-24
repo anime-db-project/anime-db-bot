@@ -4,7 +4,7 @@ from collections.abc import Awaitable, Callable
 from typing import Any
 
 from aiogram import BaseMiddleware
-from aiogram.types import CallbackQuery, Message, TelegramObject
+from aiogram.types import CallbackQuery, InlineQuery, Message, TelegramObject
 
 from localization import text
 from services.users.access_control import is_telegram_admin
@@ -62,4 +62,6 @@ class TelegramRateLimitMiddleware(BaseMiddleware):
             await event.answer(notice, show_alert=True)
         elif isinstance(event, Message):
             await event.answer(notice)
+        elif isinstance(event, InlineQuery):
+            await event.answer([], cache_time=0, is_personal=True)
         return None

@@ -1,4 +1,37 @@
 {
+  "project": {
+    "repository": "Dépôt",
+    "title": "À propos du projet",
+    "description": "Agrégateur libre d’anime avec identifiants, épisodes et codes temporels.",
+    "stars": "Étoiles",
+    "license": "Licence",
+    "details": "Détails",
+    "inline": "Rechercher dans tout chat",
+    "welcome": "Bienvenue sur Anime DB !\n\n/anime Naruto — recherche par titre\n/anime mal:20 — recherche par ID\n/settings — paramètres\n/about — informations du projet",
+    "wiki_title": "Wikipedia — affichage",
+    "wiki_clean": "Nettoyé : sans navigation, références et blocs techniques.",
+    "wiki_raw": "RAW : texte intégral disponible.",
+    "wiki_note": "Les deux modes conservent les titres, liens et la mise en forme sûre."
+  },
+  "commands": {
+    "start": "Démarrage et aide",
+    "anime": "Rechercher un anime",
+    "settings": "Paramètres",
+    "about": "Informations du projet",
+    "cancel": "Annuler la recherche",
+    "ping": "Vérifier la disponibilité",
+    "status": "Runtime status",
+    "source_health": "Source health",
+    "users": "User list",
+    "ban": "Ban user",
+    "unban": "Unban user",
+    "mapping_overrides": "Mapping overrides",
+    "mapping_history": "Mapping history",
+    "mapping_set": "Set mapping",
+    "mapping_delete": "Delete mapping",
+    "mapping_confirm": "Confirm mapping",
+    "mapping_cancel": "Cancel mapping"
+  },
   "meta": {
     "name": "Français"
   },
@@ -161,7 +194,19 @@
   "rate_limit": {
     "too_many_requests": "Erreur : trop de demandes\nTrop de demandes. Réessayez dans {seconds} secondes."
   },
+  "picker": {
+    "episodes": "Choisissez un épisode :",
+    "staff": "Choisissez une personne :",
+    "voices": "Choisissez un comédien de doublage :",
+    "characters": "Choisissez un personnage :",
+    "trailers": "Choisissez une bande-annonce :",
+    "related": "Choisissez un anime :",
+    "recommendations": "Choisissez un anime :",
+    "screenshots": "Choisissez des captures :",
+    "page": "Choisissez une page :"
+  },
   "card": {
+    "timecodes_label": "Codes temporels",
     "section_main": "Présentation",
     "section_titles": "Titres",
     "section_description": "Descriptions",
@@ -225,13 +270,14 @@
     "databases": "Bases de données : {value}",
     "all_ids_button": "Afficher tous les ID",
     "ids_table_title": "ID des sources",
-    "all_ids_title": "Tous les ID du titre (Anime Mapping DB)",
+    "record_range": "Entrées {start}–{end}",
+    "all_ids_title": "Tous les ID du titre",
     "all_ids_empty": "Aucun ID associé à ce titre n'a été trouvé.",
     "ids": "ID : {value}",
     "unavailable": "Indisponible : {value}",
-    "description_choose": "Descriptions :\nChoisissez une source ci-dessous.",
+    "description_choose": "Descriptions :",
     "description_empty": "Descriptions :\nAucune description n'est disponible.",
-    "links_choose": "Liens :\nChoisissez une base de données ci-dessous. Liens",
+    "links_choose": "Liens :",
     "links_empty": ":\nAucun lien n'est disponible.",
     "description_title": "Description — {source}",
     "extra_info": "Informations supplémentaires :",
@@ -243,7 +289,7 @@
     "source_unavailable": "Cette source n'est plus disponible.",
     "invalid_command": "Commande invalide.",
     "invalid_section": "Section invalide.",
-    "popularity_choose": "Popularité :\nChoisissez une source ci-dessous.",
+    "popularity_choose": "Popularité :",
     "popularity_empty": "Popularité :\nAucune statistique d'audience n'est disponible. Popularité de",
     "popularity_title": "— {source}",
     "popularity_metrics": "Résumé",
@@ -292,7 +338,7 @@
     "section_trailers": "Remorques",
     "trailers_button": "Bandes-annonces",
     "trailers_loading": "Chargement des remorques… Remorques",
-    "trailers_choose": ":\nChoisissez une source ci-dessous. Remorques",
+    "trailers_choose": "Bandes-annonces :",
     "trailers_empty": ":\nAucune bande-annonce n'est disponible.",
     "trailers_load_failed": "Impossible de charger les remorques à partir des sources disponibles. Remorques",
     "trailers_title": "Bandes-annonces — {source}",
@@ -329,7 +375,7 @@
     "discovery_relation": "Relation : {value}",
     "discovery_all_sources": "Toutes les sources",
     "discovery_more_details": "Détails",
-    "discovery_open_card": "Ouvrir la fiche de l’anime"
+    "discovery_open_card": "Détails"
   },
   "people": {
     "staff": "Personnel et créateurs",

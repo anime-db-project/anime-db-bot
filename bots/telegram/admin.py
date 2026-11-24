@@ -11,7 +11,7 @@ from typing import Any
 
 from aiogram import BaseMiddleware, Dispatcher
 from aiogram.filters import Command
-from aiogram.types import CallbackQuery, Message, TelegramObject
+from aiogram.types import CallbackQuery, InlineQuery, Message, TelegramObject
 
 from bots.session_store import ExpiringSessionStore
 from core.runtime_metrics import RuntimeMetricsRegistry, RuntimeSourceDescriptor
@@ -300,6 +300,8 @@ class TelegramModerationMiddleware(BaseMiddleware):
             await event.answer(notice, show_alert=True)
         elif isinstance(event, Message):
             await event.answer(notice)
+        elif isinstance(event, InlineQuery):
+            await event.answer([], cache_time=0, is_personal=True)
         return None
 
 
@@ -516,7 +518,7 @@ def register_admin_handlers(
     async def require_admin(message: Message) -> tuple[int | None, str]:
         admin_id = int(message.from_user.id) if message.from_user else None
         locale = get_user_locale(admin_id)
-        if admin_id is None or not is_telegram_admin(admin_id):
+        if admin_id is None or not is_telegram_admin(admin_id) or message.chat.type != 'private':
             await message.answer(_t(locale, "forbidden"))
             return None, locale
         return admin_id, locale

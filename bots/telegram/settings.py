@@ -1,5 +1,9 @@
 from __future__ import annotations
 
+import html
+from aiogram.types import InputRichMessage
+from bots.telegram.project_info import show_about
+
 from aiogram import Dispatcher, F
 from aiogram.filters import Command
 from aiogram.types import (
@@ -40,6 +44,7 @@ def _settings_keyboard(
             callback_data="settings:wiki",
         )
     ])
+    rows.append([InlineKeyboardButton(text=text('project', 'title', locale=locale), callback_data='settings:about')])
     if private and is_telegram_admin(user_id):
         rows.append([
             InlineKeyboardButton(
@@ -112,26 +117,32 @@ def _wikipedia_mode_keyboard(locale: str, mode: str) -> InlineKeyboardMarkup:
 
 
 def _wikipedia_mode_text(locale: str, mode: str) -> str:
-    if locale == "ru":
-        return (
-            "Wikipedia — формат вывода\n\n"
-            f"Текущий режим: {'Очищенный' if mode == 'clean' else 'Полный RAW'}.\n\n"
-            "Очищенный: без служебных блоков, навигации, сносок и шума.\n"
-            "RAW: полный доступный текст статьи, включая служебные разделы.\n\n"
-            "Оба режима сохраняют заголовки, полезные ссылки и безопасное "
-            "форматирование Telegram. Настройка сохраняется для вашего аккаунта."
-        )
-    return (
-        "Wikipedia — display mode\n\n"
-        f"Current: {'Clean' if mode == 'clean' else 'Full RAW'}.\n\n"
-        "Clean removes editorial navigation, references and service noise.\n"
-        "RAW preserves all available visible article and service text.\n\n"
-        "Both safely format links and headings for Telegram. "
-        "The choice is saved for your account."
-    )
+    return "\n\n".join(text("project", key, locale=locale) for key in ("wiki_title", "wiki_clean", "wiki_raw", "wiki_note"))
+
+
+def _wiki_rich(locale: str) -> InputRichMessage:
+    title = html.escape(text("project", "wiki_title", locale=locale))
+    clean = html.escape(text("project", "wiki_clean", locale=locale))
+    raw = html.escape(text("project", "wiki_raw", locale=locale))
+    note = html.escape(text("project", "wiki_note", locale=locale))
+    return InputRichMessage(html=f"<h2>{title}</h2><p><br></p><table bordered striped compact><tr><td>{clean}</td></tr><tr><td>{raw}</td></tr></table><p><br></p><p><i>{note}</i></p>")
+
+
+async def _edit_wiki_mode(message, locale: str, mode: str):
+    keyboard = _wikipedia_mode_keyboard(locale, mode)
+    try:
+        await message.edit_text(rich_message=_wiki_rich(locale), reply_markup=keyboard)
+    except Exception:
+        await message.edit_text(_wikipedia_mode_text(locale, mode), reply_markup=keyboard)
 
 
 def register_settings_handlers(dp: Dispatcher) -> None:
+    @dp.callback_query(F.data == "settings:about")
+    async def settings_about(callback: CallbackQuery):
+        await callback.answer()
+        if callback.message:
+            await show_about(callback.message, get_user_locale(callback.from_user.id), edit=True)
+
     @dp.message(Command("settings"))
     async def settings_handler(message: Message) -> None:
         user_id = message.from_user.id if message.from_user else None
@@ -149,10 +160,7 @@ def register_settings_handlers(dp: Dispatcher) -> None:
             return
         mode = get_user_wikipedia_mode(callback.from_user.id)
         await callback.answer()
-        await callback.message.edit_text(
-            _wikipedia_mode_text(locale, mode),
-            reply_markup=_wikipedia_mode_keyboard(locale, mode),
-        )
+        await _edit_wiki_mode(callback.message, locale, mode)
 
     @dp.callback_query(F.data.in_({"settings:wiki:raw", "settings:wiki:clean"}))
     async def settings_wikipedia_mode_callback(callback: CallbackQuery) -> None:
@@ -163,10 +171,7 @@ def register_settings_handlers(dp: Dispatcher) -> None:
         mode = callback.data.rsplit(":", 1)[-1]
         selected = set_user_wikipedia_mode(callback.from_user.id, mode)
         await callback.answer()
-        await callback.message.edit_text(
-            _wikipedia_mode_text(locale, selected),
-            reply_markup=_wikipedia_mode_keyboard(locale, selected),
-        )
+        await _edit_wiki_mode(callback.message, locale, selected)
 
     @dp.callback_query(F.data == "settings:language")
     async def settings_language_callback(callback: CallbackQuery) -> None:

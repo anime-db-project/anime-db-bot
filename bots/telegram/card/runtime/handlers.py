@@ -2,6 +2,9 @@ from __future__ import annotations
 
 from aiogram import Dispatcher, F
 from aiogram.filters import Command, CommandStart
+from aiogram.filters.command import CommandObject
+from bots.telegram.inline_mode import parse_start_payload
+from bots.telegram.project_info import show_about
 from aiogram.types import (
     CallbackQuery,
     InlineKeyboardButton,
@@ -39,6 +42,7 @@ from bots.telegram.card.features.wikipedia import (
 from bots.telegram.card.runtime.picker_entries import (
     labels_for_route,
     picker_parent_callback,
+    picker_prompt,
     prepare_initial_picker,
     source_character_choices,
 )
@@ -76,33 +80,34 @@ def build_dispatcher(mode_name: str, state: TelegramCardState) -> Dispatcher:
     register_wikipedia_handlers(dp, state)
 
     @dp.message(CommandStart())
-    async def start_handler(message: Message) -> None:
+    async def start_handler(message: Message, command: CommandObject | None = None) -> None:
         user_id = message.from_user.id if message.from_user else None
         locale = get_user_locale(user_id)
         context = get_app_context()
-        source_names = ", ".join(source.name for source in context.sources) or text(
-            "start", "no_sources", locale=locale
+        payload = parse_start_payload(command.args if command else "")
+        if payload and user_id is not None:
+            from bots.telegram.card.runtime.service import aggregate_and_send
+            source, external_id = payload
+            try:
+                result = await context.direct_lookup.lookup(external_id, source_keys=(source,))
+                if result.items:
+                    await aggregate_and_send(message, result.items[0], user_id, state)
+                    return
+            except Exception:
+                await message.answer(text('search', 'get_result_failed', locale=locale))
+                return
+        await message.answer(
+            text("project", "welcome", locale=locale),
+            reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+                [InlineKeyboardButton(text=text("project", "inline", locale=locale), switch_inline_query_current_chat="")],
+                [InlineKeyboardButton(text=text("settings", "title", locale=locale), callback_data="settings:back"),
+                 InlineKeyboardButton(text=text("project", "title", locale=locale), callback_data="settings:about")],
+            ]),
         )
-        lines = [
-            text("start", "greeting", locale=locale),
-            "",
-            text("start", "telegram_mode", locale=locale, mode=mode_name),
-            text(
-                "start",
-                "default_search",
-                locale=locale,
-                providers=context.search_service.provider_name,
-            ),
-            text("start", "data_sources", locale=locale, sources=source_names),
-            "",
-            text("start", "merge_note", locale=locale),
-            "",
-            text("start", "commands", locale=locale),
-            text("start", "anime", locale=locale),
-            text("start", "settings", locale=locale),
-            text("start", "ping", locale=locale),
-        ]
-        await message.answer("\n".join(lines))
+
+    @dp.message(Command("about"))
+    async def about_handler(message: Message) -> None:
+        await show_about(message, get_user_locale(message.from_user.id if message.from_user else None))
 
     @dp.message(Command("ping"))
     async def ping_handler(message: Message) -> None:
@@ -308,7 +313,7 @@ def build_dispatcher(mode_name: str, state: TelegramCardState) -> Dispatcher:
             )
             return
         await callback.message.edit_text(
-            "Выберите элемент:" if locale == "ru" else "Choose an item:",
+            picker_prompt(data.route, locale),
             reply_markup=keyboard,
         )
 
@@ -343,7 +348,7 @@ def build_dispatcher(mode_name: str, state: TelegramCardState) -> Dispatcher:
             return
         await callback.answer()
         await callback.message.edit_text(
-            "Выберите элемент:" if locale == "ru" else "Choose an item:",
+            picker_prompt(data.route, locale),
             reply_markup=keyboard,
         )
 

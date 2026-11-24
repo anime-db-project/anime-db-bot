@@ -1,4 +1,37 @@
 {
+  "project": {
+    "repository": "リポジトリ",
+    "title": "プロジェクトについて",
+    "description": "データベースID、エピソード、タイムコードを統合するオープンソースのアニメ情報サービス。",
+    "stars": "スター",
+    "license": "ライセンス",
+    "details": "詳細",
+    "inline": "チャット内で検索",
+    "welcome": "Anime DBへようこそ！\n\n/anime Naruto — タイトル検索\n/anime mal:20 — ID検索\n/settings — 設定\n/about — プロジェクト情報",
+    "wiki_title": "Wikipedia — 表示形式",
+    "wiki_clean": "整理済み：ナビゲーション、脚注、管理用ブロックを除去。",
+    "wiki_raw": "RAW：取得可能な記事の全文。",
+    "wiki_note": "両モードとも見出し、リンク、安全な書式を保持します。"
+  },
+  "commands": {
+    "start": "開始とヘルプ",
+    "anime": "アニメ検索",
+    "settings": "設定",
+    "about": "プロジェクト情報",
+    "cancel": "検索をキャンセル",
+    "ping": "稼働状況の確認",
+    "status": "Runtime status",
+    "source_health": "Source health",
+    "users": "User list",
+    "ban": "Ban user",
+    "unban": "Unban user",
+    "mapping_overrides": "Mapping overrides",
+    "mapping_history": "Mapping history",
+    "mapping_set": "Set mapping",
+    "mapping_delete": "Delete mapping",
+    "mapping_confirm": "Confirm mapping",
+    "mapping_cancel": "Cancel mapping"
+  },
   "meta": {
     "name": "日本語"
   },
@@ -161,7 +194,19 @@
   "rate_limit": {
     "too_many_requests": "エラー: Too Many Requests\nリクエストが多すぎます。{seconds} 秒後にもう一度お試しください。"
   },
+  "picker": {
+    "episodes": "エピソードを選択：",
+    "staff": "スタッフを選択：",
+    "voices": "声優を選択：",
+    "characters": "キャラクターを選択：",
+    "trailers": "予告編を選択：",
+    "related": "アニメを選択：",
+    "recommendations": "アニメを選択：",
+    "screenshots": "スクリーンショットを選択：",
+    "page": "ページを選択："
+  },
   "card": {
+    "timecodes_label": "タイムコード",
     "section_main": "概要",
     "section_titles": "タイトル",
     "section_description": "あらすじ一覧",
@@ -229,13 +274,14 @@
     "databases": "データベース: {value}",
     "all_ids_button": "すべてのIDを表示",
     "ids_table_title": "データベースID",
-    "all_ids_title": "作品の全ID（Anime Mapping DB）",
+    "record_range": "項目 {start}–{end}",
+    "all_ids_title": "作品の全ID",
     "all_ids_empty": "この作品に紐づくIDは見つかりませんでした。",
     "ids": "ID: {value}",
     "unavailable": "利用不可: {value}",
-    "description_choose": "あらすじ一覧:\n下からソースを選択してください。",
+    "description_choose": "あらすじ一覧:",
     "description_empty": "あらすじ一覧:\n利用できるあらすじはありません。",
-    "links_choose": "リンク:\n下からデータベースを選択してください。",
+    "links_choose": "リンク:",
     "links_empty": "リンク:\n利用できるリンクはありません。",
     "description_title": "あらすじ — {source}",
     "extra_info": "補足情報:",
@@ -247,7 +293,7 @@
     "source_unavailable": "このソースは利用できなくなりました。",
     "invalid_command": "無効なコマンドです。",
     "invalid_section": "無効なセクションです。",
-    "popularity_choose": "人気:\n下からソースを選択してください。",
+    "popularity_choose": "人気:",
     "popularity_empty": "人気:\n利用できる視聴者統計はありません。",
     "popularity_title": "人気 — {source}",
     "popularity_metrics": "概要",
@@ -296,7 +342,7 @@
     "section_trailers": "予告編",
     "trailers_button": "予告編",
     "trailers_loading": "予告編を読み込み中…",
-    "trailers_choose": "予告編:\n下からソースを選択してください。",
+    "trailers_choose": "予告編:",
     "trailers_empty": "予告編:\n利用できる予告編はありません。",
     "trailers_load_failed": "利用可能なソースから予告編を読み込めませんでした。",
     "trailers_title": "予告編 — {source}",
@@ -329,7 +375,7 @@
     "discovery_relation": "関係: {value}",
     "discovery_all_sources": "すべてのソース",
     "discovery_more_details": "詳細",
-    "discovery_open_card": "アニメカードを開く"
+    "discovery_open_card": "詳細"
   },
   "people": {
     "staff": "スタッフ・制作陣",

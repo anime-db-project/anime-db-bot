@@ -282,13 +282,13 @@ class EpisodeBackendTests(unittest.TestCase):
         self.assertTrue(any(button.text == "4/12" for button in flattened))
         self.assertIn("cp:token:ap~anidb:3:12:0", callbacks)
         self.assertIn("ap:token:anidb:4", callbacks)
-        self.assertIn("ci:token:ap~jikan", callbacks)
-        self.assertIn("ci:token:ap~anidb", callbacks)
+        self.assertIn("ap:token:jikan:3", callbacks)
+        self.assertIn("ap:token:anidb:3", callbacks)
         self.assertIn("ap:token:segments-all:3", callbacks)
         self.assertIn("ap:token:segments-aniskip:3", callbacks)
         self.assertFalse(any(value.startswith("ae:") for value in callbacks))
         self.assertTrue(any(button.text == "✓ AniDB" for button in flattened))
-        self.assertTrue(any(button.text == "✓ ⏱ Все" for button in flattened))
+        self.assertTrue(any(button.text == "✓ Таймкоды — Все" for button in flattened))
 
         rows = keyboard.inline_keyboard
         episode_source_row = next(
@@ -299,7 +299,7 @@ class EpisodeBackendTests(unittest.TestCase):
         timestamp_row = next(
             index
             for index, row in enumerate(rows)
-            if any("⏱" in button.text for button in row)
+            if any("Таймкоды" in button.text for button in row)
         )
         self.assertGreater(timestamp_row, episode_source_row)
 
@@ -602,7 +602,7 @@ class EpisodeProjectionUiTests(unittest.IsolatedAsyncioTestCase):
         self.assertFalse(any("⏱" in button.text for button in special_buttons))
         self.assertTrue(
             any(
-                button.callback_data == "ci:token:ap~jikan" for button in special_buttons
+                button.callback_data == "ap:token:jikan:0" for button in special_buttons
             )
         )
 
@@ -699,8 +699,8 @@ class EpisodeProjectionUiTests(unittest.IsolatedAsyncioTestCase):
         html = message.calls[0]["rich_message"].html or ""
         self.assertIn("<table", html)
         self.assertIn("График выхода серий", html)
-        self.assertIn("⏱ Все", html)
-        self.assertLess(html.index("График выхода серий"), html.index("⏱ Все"))
+        self.assertIn("Таймкоды — Все", html)
+        self.assertLess(html.index("График выхода серий"), html.index("Таймкоды — Все"))
 
     async def test_animethemes_is_integrated_into_episode_and_timestamp_ui(
         self,
@@ -951,10 +951,10 @@ class EpisodeProjectionUiTests(unittest.IsolatedAsyncioTestCase):
         first_html = message.calls[0]["rich_message"].html or ""
         final_html = message.calls[-1]["rich_message"].html or ""
         self.assertIn("График выхода серий", first_html)
-        self.assertNotIn("⏱ Все", first_html)
-        self.assertIn("⏱ Все", final_html)
+        self.assertNotIn("Таймкоды — Все", first_html)
+        self.assertIn("Таймкоды — Все", final_html)
         self.assertLess(
-            final_html.index("График выхода серий"), final_html.index("⏱ Все")
+            final_html.index("График выхода серий"), final_html.index("Таймкоды — Все")
         )
 
     def test_projection_text_is_scoped_to_requested_episode(self) -> None:

@@ -1,4 +1,37 @@
 {
+  "project": {
+    "repository": "Repository",
+    "title": "About the project",
+    "description": "Open-source anime information aggregator with cross-database IDs, episode metadata and timecodes.",
+    "stars": "Stars",
+    "license": "License",
+    "details": "Details",
+    "inline": "Search in any chat",
+    "welcome": "Welcome to Anime DB!\n\nFind an anime by title or source ID, explore episodes, timecodes, characters, staff and Wikipedia.\n\n/anime Naruto — search by title\n/anime mal:20 — search by ID\n/settings — language and preferences\n/about — project information\n\nUse inline search to share a result in another chat.",
+    "wiki_title": "Wikipedia — display mode",
+    "wiki_clean": "Clean: removes editorial navigation, references and service noise.",
+    "wiki_raw": "RAW: preserves all available visible article and service text.",
+    "wiki_note": "Both modes preserve headings, useful links and safe Telegram formatting."
+  },
+  "commands": {
+    "start": "Start and help",
+    "anime": "Find anime",
+    "settings": "Preferences",
+    "about": "Project information",
+    "cancel": "Cancel current search",
+    "ping": "Check bot availability",
+    "status": "Runtime status",
+    "source_health": "Source health",
+    "users": "User list",
+    "ban": "Ban user",
+    "unban": "Unban user",
+    "mapping_overrides": "Mapping overrides",
+    "mapping_history": "Mapping history",
+    "mapping_set": "Set mapping",
+    "mapping_delete": "Delete mapping",
+    "mapping_confirm": "Confirm mapping",
+    "mapping_cancel": "Cancel mapping"
+  },
   "meta": {
     "name": "English"
   },
@@ -161,7 +194,19 @@
   "rate_limit": {
     "too_many_requests": "Error: Too Many Requests\nToo many requests. Try again in {seconds} seconds."
   },
+  "picker": {
+    "episodes": "Choose an episode:",
+    "staff": "Choose a person:",
+    "voices": "Choose a voice actor:",
+    "characters": "Choose a character:",
+    "trailers": "Choose a trailer:",
+    "related": "Choose an anime:",
+    "recommendations": "Choose an anime:",
+    "screenshots": "Choose screenshots:",
+    "page": "Choose a page:"
+  },
   "card": {
+    "timecodes_label": "Timecodes",
     "section_main": "Overview",
     "section_titles": "Titles",
     "section_description": "Descriptions",
@@ -229,13 +274,14 @@
     "databases": "Databases: {value}",
     "all_ids_button": "Show all IDs",
     "ids_table_title": "Source IDs",
-    "all_ids_title": "All title IDs (Anime Mapping DB)",
+    "record_range": "Entries {start}–{end}",
+    "all_ids_title": "All title IDs",
     "all_ids_empty": "No mapped IDs found for this title.",
     "ids": "ID: {value}",
     "unavailable": "Unavailable: {value}",
-    "description_choose": "Descriptions:\nChoose a source below.",
+    "description_choose": "Descriptions:",
     "description_empty": "Descriptions:\nNo descriptions are available.",
-    "links_choose": "Links:\nChoose a database below.",
+    "links_choose": "Links:",
     "links_empty": "Links:\nNo links are available.",
     "description_title": "Description — {source}",
     "extra_info": "Additional information:",
@@ -247,7 +293,7 @@
     "source_unavailable": "This source is no longer available.",
     "invalid_command": "Invalid command.",
     "invalid_section": "Invalid section.",
-    "popularity_choose": "Popularity:\nChoose a source below.",
+    "popularity_choose": "Popularity:",
     "popularity_empty": "Popularity:\nNo audience statistics are available.",
     "popularity_title": "Popularity — {source}",
     "popularity_metrics": "Summary",
@@ -296,7 +342,7 @@
     "section_trailers": "Trailers",
     "trailers_button": "Trailers",
     "trailers_loading": "Loading trailers…",
-    "trailers_choose": "Trailers:\nChoose a source below.",
+    "trailers_choose": "Trailers:",
     "trailers_empty": "Trailers:\nNo trailers are available.",
     "trailers_load_failed": "Could not load trailers from the available sources.",
     "trailers_title": "Trailers — {source}",
@@ -329,7 +375,7 @@
     "discovery_relation": "Relation: {value}",
     "discovery_all_sources": "All sources",
     "discovery_more_details": "Details",
-    "discovery_open_card": "Open anime card"
+    "discovery_open_card": "Details"
   },
   "people": {
     "staff": "Staff and creators",

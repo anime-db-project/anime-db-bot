@@ -10,6 +10,8 @@ from aiogram.types import (
 )
 
 from bots.telegram.rich_media import deliver_rich_media
+from bots.telegram.card.text_expansion import record_pages
+from bots.telegram.people.views import _person_line
 
 from bots.telegram.callbacks import (
     SectionSourceCallback,
@@ -75,8 +77,9 @@ async def _render_people_view(
         )
         source = dict(options)[source_key]
 
-    without, with_portraits = _people_state(anime, section, source)
-    max_page = len(with_portraits)
+    without, with_portraits = _people_state(anime, section, source, locale=locale)
+    groups = record_pages([_person_line(person, locale) for person in without], heading=text('people', section, locale=locale) + (f' — {source}' if source else '') + ':')
+    max_page = len(with_portraits) + max(0, len(groups)-1)
     first_page = _first_people_page(without, with_portraits)
     page = max(first_page, min(int(page), max_page))
     total_hint = _scope_total_hint(anime, section, progress, source)
@@ -101,6 +104,7 @@ async def _render_people_view(
         source_names=sources,
         has_more=_scope_has_more(progress, source),
         first_page=first_page,
+        group_pages=len(groups),
     )
 
     try:

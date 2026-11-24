@@ -10,9 +10,25 @@ from aiogram.types import Message
 
 from bots.telegram.card.runtime.state import AnimeCardSession, TelegramCardState
 from core.canonicalization import display_person_name
+from bots.telegram.card.text_expansion import record_pages
 from core.people import people_state
 from localization import text
 from services.runtime.app_context import get_app_context
+
+
+def picker_prompt(route: str, locale: str) -> str:
+    parts = route.split("~")
+    kind = parts[0]
+    section = (
+        "episodes" if kind in {"ap", "apg"}
+        else "characters" if kind == "ac" or (kind == "gx" and parts[1] == "ac")
+        else "trailers" if kind == "at"
+        else "description" if kind == "ad"
+        else parts[2] if kind in {"gx", "pv"} and len(parts) > 2
+        else parts[1] if len(parts) > 1 else kind
+    )
+    key = section if section in {"episodes", "staff", "voices", "characters", "trailers", "related", "recommendations", "screenshots"} else "page"
+    return text("picker", key, locale=locale)
 
 
 def picker_parent_callback(token: str, route: str) -> str:
@@ -74,9 +90,23 @@ def source_character_choices(
     if source_key is None or source_name is None:
         return None
     _, without, _ = _character_state(session, source_name)
-    route = f"gx~ac~{source_key}~{int(bool(without))}"
+    route = f"gx~ac~{source_key}~{_group_count(without, 'characters', locale, source_name)}"
     labels = labels_for_route(session, route, locale=locale)
     return (route, labels) if labels else None
+
+
+def _group_count(without, section: str, locale: str, source: str | None = None) -> int:
+    return len(_group_records(without, section, locale, source))
+
+
+def _group_records(without, section: str, locale: str, source: str | None = None):
+    from bots.telegram.people.views import _person_line
+    from bots.telegram.card.features.characters import _character_line
+    render = _character_line if section == 'characters' else _person_line
+    heading = text('characters', 'title', locale=locale) if section == 'characters' else text('people', section, locale=locale)
+    if source:
+        heading += f' — {source}'
+    return record_pages([render(item, locale) for item in without], heading=heading + ':')
 
 
 def _episode_labels(
@@ -207,16 +237,18 @@ def labels_for_route(
                 source = dict(source_section_options(
                     session.anime, parts[2]
                 )).get(parts[3])
-            without, portraits = people_state(session.anime, parts[2], source)
+            without, portraits = people_state(session.anime, parts[2], source, locale=locale)
         else:
             return []
-        group_name = (
-            f"Без портретов ({len(without)})"
-            if locale == "ru"
-            else f"Without portraits ({len(without)})"
-        )
+        section = 'characters' if parts[1] == 'ac' or parts[2] == 'characters' else parts[2]
+        groups = _group_records(without, section, locale, source)
+        labels = []
+        offset = 0
+        for group in groups:
+            labels.append(text('card', 'record_range', locale=locale, start=offset+1, end=offset+len(group)))
+            offset += len(group)
         return (
-            ([group_name] if without else [])
+            labels
             + [
                 display_person_name(item.name, item.aliases, locale=locale)
                 for item in portraits
@@ -256,7 +288,7 @@ def labels_for_route(
             source = dict(source_section_options(
                 session.anime, section
             )).get(parts[3])
-        without, portraits = people_state(session.anime, section, source)
+        without, portraits = people_state(session.anime, section, source, locale=locale)
         return [
             display_person_name(item.name, item.aliases, locale=locale)
             for item in [*without, *portraits]
@@ -331,8 +363,8 @@ async def prepare_initial_picker(
             source=source_name,
             requested_page=0,
         )
-        without, _ = people_state(session.anime, people_section, source_name)
-        route = f"gx~as~{people_section}~{source_key}~{int(bool(without))}"
+        without, _ = people_state(session.anime, people_section, source_name, locale=locale)
+        route = f"gx~as~{people_section}~{source_key}~{_group_count(without, people_section, locale, source_name)}"
         labels = labels_for_route(session, route, locale=locale)
         return (route, labels) if labels else None
 
@@ -388,7 +420,7 @@ async def prepare_initial_picker(
 
         await _ensure_loaded(message, session, locale=locale)
         _, without, portraits = _character_state(session, None)
-        route = f"gx~av~characters~{int(bool(without))}"
+        route = f"gx~av~characters~{_group_count(without, 'characters', locale)}"
         labels = labels_for_route(session, route, locale=locale)
         return (route, labels) if labels else None
 
@@ -399,8 +431,8 @@ async def prepare_initial_picker(
             state, token, session.anime, message, section,
             locale=locale, requested_page=0,
         )
-        without, portraits = people_state(session.anime, section, None)
-        route = f"gx~av~{section}~{int(bool(without))}"
+        without, portraits = people_state(session.anime, section, None, locale=locale)
+        route = f"gx~av~{section}~{_group_count(without, section, locale)}"
         labels = labels_for_route(session, route, locale=locale)
         return (route, labels) if labels else None
 

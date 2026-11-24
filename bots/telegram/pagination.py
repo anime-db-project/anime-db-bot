@@ -209,7 +209,7 @@ def card_route_callback(token: str, route: str, index: int) -> str:
             has_unpictured = int(parts[-1])
         except ValueError as exc:
             raise ValueError("Invalid grouped gallery selector") from exc
-        if has_unpictured not in {0, 1}:
+        if not 0 <= has_unpictured <= 5000:
             raise ValueError("Invalid grouped gallery selector")
         page = index if has_unpictured else index + 1
         if parts[1] == "av" and len(parts) == 4:
