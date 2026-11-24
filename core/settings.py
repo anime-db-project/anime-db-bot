@@ -417,6 +417,7 @@ class TelegramSettings:
     allowed_user_ids: tuple[int, ...] = ()
     inline_enabled: bool = True
     inline_media_cache_chat_id: int = 0
+    inline_media_ephemeral_enabled: bool = True
     watchlist_custom_defaults: Mapping[str, str] = field(default_factory=dict)
     watchlist_max_custom: int = 30
     watchlist_max_entries: int = 10000
@@ -794,6 +795,9 @@ class AppSettings:
                     setting="TELEGRAM_ALLOWED_USER_IDS",
                 ),
                 inline_enabled=_bool(values, "TELEGRAM_INLINE_ENABLED", True),
+                inline_media_ephemeral_enabled=_bool(
+                    values, "TELEGRAM_INLINE_MEDIA_EPHEMERAL_ENABLED", True
+                ),
                 inline_media_cache_chat_id=int(
                     _raw(values, "TELEGRAM_INLINE_MEDIA_CACHE_CHAT_ID", "0")
                 ),

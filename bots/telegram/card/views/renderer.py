@@ -116,7 +116,7 @@ async def send_standard_text(
     sent: Message | None = None
     if isinstance(getattr(message, "inline_message_id", None), str):
         await message.edit_text(text=chunks[0], reply_markup=reply_markup)
-        return None
+        return message
     for index, chunk in enumerate(chunks):
         sent = await message.answer(
             chunk,
@@ -163,12 +163,6 @@ async def send_anime_view(
         show_related=show_related,
     )
     text_value = pages[page]
-    if section == "main" and isinstance(
-        getattr(message, "inline_message_id", None), str
-    ):
-        keyboard = fallback_main_keyboard(
-            token, locale=locale, show_all_ids=bool(anime.amdb_id), show_related=True
-        )
     sent: Message | None = None
 
     async def send_rich(content: InputRichMessage) -> object:
@@ -176,6 +170,8 @@ async def send_anime_view(
         response = await message.answer_rich(content, reply_markup=keyboard)
         if isinstance(response, Message):
             sent = response
+        elif isinstance(getattr(message, "inline_message_id", None), str):
+            sent = message
         return response
 
     try:
@@ -234,12 +230,6 @@ async def edit_anime_view(
         show_related=show_related,
     )
     text_value = pages[page]
-    if section == "main" and isinstance(
-        getattr(message, "inline_message_id", None), str
-    ):
-        keyboard = fallback_main_keyboard(
-            token, locale=locale, show_all_ids=bool(anime.amdb_id), show_related=True
-        )
 
     try:
         await _deliver_rich_card(

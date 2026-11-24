@@ -13,6 +13,7 @@ from core.sqlite import managed_sqlite_connection
 from services.users.settings import get_user_settings_store
 
 STATUSES = ("watching", "completed", "dropped", "planned", "paused", "rewatching")
+BUILTIN_LISTS = (*STATUSES, "favorites")
 
 
 @dataclass(frozen=True, slots=True)
@@ -69,7 +70,26 @@ class WatchListStore:
         with self._lock, managed_sqlite_connection(self.repository._connect()) as db:
             # Persist operator-created lists on first use; removing an ENV key
             # cannot make a user's saved titles disappear.
+            # Older deployments may have an ENV list called favorites.
+            # Merge it into the permanent list without overwriting saved entries.
+            db.execute(
+                """INSERT INTO anime_watch_entries(owner,list_id,title_key,title,source_ids,year,progress,score)
+                SELECT owner,'favorites',title_key,title,source_ids,year,progress,score
+                FROM anime_watch_entries WHERE owner=? AND list_id='env_favorites'
+                ON CONFLICT(owner,list_id,title_key) DO NOTHING""",
+                (owner,),
+            )
+            db.execute(
+                "DELETE FROM anime_watch_entries WHERE owner=? AND list_id='env_favorites'",
+                (owner,),
+            )
+            db.execute(
+                "DELETE FROM anime_watch_lists WHERE owner=? AND list_id='env_favorites'",
+                (owner,),
+            )
             for key, label in defaults.items():
+                if key == "favorites":
+                    continue
                 db.execute(
                     "INSERT INTO anime_watch_lists(owner,list_id,name) VALUES (?,?,?) ON CONFLICT(owner,list_id) DO NOTHING",
                     (owner, "env_" + key, label),
@@ -83,7 +103,7 @@ class WatchListStore:
                 (owner,),
             ).fetchall()
         count = {row[0]: row[1] for row in counts}
-        return [(key, key, count.get(key, 0)) for key in STATUSES] + [
+        return [(key, key, count.get(key, 0)) for key in BUILTIN_LISTS] + [
             (r[0], r[1], count.get(r[0], 0)) for r in rows
         ]
 
@@ -108,7 +128,7 @@ class WatchListStore:
 
     def _check(self, db, owner, list_id):
         if (
-            list_id not in STATUSES
+            list_id not in BUILTIN_LISTS
             and db.execute(
                 "SELECT 1 FROM anime_watch_lists WHERE owner=? AND list_id=?",
                 (owner, list_id),

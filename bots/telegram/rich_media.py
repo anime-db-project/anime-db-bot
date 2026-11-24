@@ -12,6 +12,8 @@ import tempfile
 import time
 from collections.abc import Awaitable, Callable
 from functools import lru_cache
+from contextvars import ContextVar
+from contextlib import contextmanager
 from pathlib import Path
 from urllib.parse import urljoin, urlsplit
 
@@ -29,10 +31,10 @@ from core.cache import BoundedTTLCache
 from core.settings import ROOT_DIR, RichMediaSettings, get_settings
 
 _IMAGE_URL = re.compile(r'(<img\s+[^>]*?\bsrc=")(https?://[^"]+)(")', re.IGNORECASE)
-_IMAGE_TAG = re.compile(r'<img\s+[^>]*?\bsrc="(https?://[^"]+)"[^>]*?/?>', re.IGNORECASE)
-_EMPTY_SLIDESHOW = re.compile(
-    r"<tg-slideshow>\s*</tg-slideshow>", re.IGNORECASE
+_IMAGE_TAG = re.compile(
+    r'<img\s+[^>]*?\bsrc="(https?://[^"]+)"[^>]*?/?>', re.IGNORECASE
 )
+_EMPTY_SLIDESHOW = re.compile(r"<tg-slideshow>\s*</tg-slideshow>", re.IGNORECASE)
 _SINGLE_SLIDESHOW = re.compile(
     r"<tg-slideshow>\s*(<img[^>]+>)\s*</tg-slideshow>",
     re.IGNORECASE,
@@ -91,11 +93,9 @@ def bind_remote_photos(message: InputRichMessage) -> InputRichMessage:
             identifiers[url] = identifier
             used_ids.add(identifier)
             existing.append(
-                InputRichMessageMedia(
-                    id=identifier, media=InputMediaPhoto(media=url)
-                )
+                InputRichMessageMedia(id=identifier, media=InputMediaPhoto(media=url))
             )
-        return f'{match.group(1)}tg://photo?id={identifier}{match.group(3)}'
+        return f"{match.group(1)}tg://photo?id={identifier}{match.group(3)}"
 
     body = _IMAGE_URL.sub(replace, source)
     if not identifiers:
@@ -118,9 +118,7 @@ def _with_media(
         used_ids.add(identifier)
         references[url] = identifier
         photos.append(
-            InputRichMessageMedia(
-                id=identifier, media=InputMediaPhoto(media=uploaded)
-            )
+            InputRichMessageMedia(id=identifier, media=InputMediaPhoto(media=uploaded))
         )
     if not photos:
         return None
@@ -191,12 +189,12 @@ class RichMediaDelivery:
         self._bad_urls = BoundedTTLCache[str, bool](
             max_entries=settings.failure_cache_max_entries,
             ttl_seconds=settings.failure_url_ttl_seconds,
-            name="rich_media_bad_urls"
+            name="rich_media_bad_urls",
         )
         self._bad_strategies = BoundedTTLCache[tuple[str, tuple[str, ...]], bool](
             max_entries=settings.failure_cache_max_entries,
             ttl_seconds=settings.failure_method_ttl_seconds,
-            name="rich_media_failures"
+            name="rich_media_failures",
         )
         self._disk_last_prune = 0.0
 
@@ -240,17 +238,32 @@ class RichMediaDelivery:
                                 if not content_type.casefold().startswith("image/"):
                                     raise ValueError("non-image content")
                                 size_header = response.headers.get("content-length", "")
-                                if size_header.isdigit() and int(size_header) > self.settings.max_image_bytes:
-                                    raise ValueError("image is larger than configured limit")
+                                if (
+                                    size_header.isdigit()
+                                    and int(size_header) > self.settings.max_image_bytes
+                                ):
+                                    raise ValueError(
+                                        "image is larger than configured limit"
+                                    )
                                 data = bytearray()
                                 async for chunk in response.aiter_bytes():
-                                    if len(data) + len(chunk) > self.settings.max_image_bytes:
-                                        raise ValueError("image exceeds max image bytes")
+                                    if (
+                                        len(data) + len(chunk)
+                                        > self.settings.max_image_bytes
+                                    ):
+                                        raise ValueError(
+                                            "image exceeds max image bytes"
+                                        )
                                     data.extend(chunk)
                                 payload = bytes(data)
                                 if not _extension(payload):
-                                    raise ValueError("unsupported or invalid image bytes")
-                                if self.settings.ram_enabled and self.settings.ram_cache_bytes:
+                                    raise ValueError(
+                                        "unsupported or invalid image bytes"
+                                    )
+                                if (
+                                    self.settings.ram_enabled
+                                    and self.settings.ram_cache_bytes
+                                ):
                                     self._memory.set(url, payload)
                                 return payload
                         raise ValueError("too many image redirects")
@@ -349,6 +362,23 @@ class RichMediaDelivery:
         self._prune_disk(directory)
         return target if target.is_file() else None
 
+    async def prepare_photo_file(
+        self, url: str, mode: str, deadline: float
+    ) -> BufferedInputFile | FSInputFile | None:
+        """Use the same bounded downloader and disk/RAM caches for every transport."""
+        if mode == "disk":
+            stored = await asyncio.to_thread(self._read_disk, url)
+            if stored is not None:
+                return FSInputFile(stored)
+        payload = await self._fetch(url, deadline)
+        if payload is None:
+            return None
+        if mode == "disk":
+            stored = await asyncio.to_thread(self._write_disk, url, payload)
+            return FSInputFile(stored) if stored else None
+        ext = _extension(payload) or "jpg"
+        return BufferedInputFile(payload, filename=f"photo.{ext}")
+
     async def _prepare_local(
         self,
         message: InputRichMessage,
@@ -358,23 +388,14 @@ class RichMediaDelivery:
     ) -> InputRichMessage | None:
         selected = urls[: self.settings.max_images]
 
-        async def prepare(url: str) -> tuple[str, BufferedInputFile | FSInputFile | None]:
-            if mode == "disk":
-                stored = await asyncio.to_thread(self._read_disk, url)
-                if stored is not None:
-                    return url, FSInputFile(stored)
-            payload = await self._fetch(url, deadline)
-            if payload is None:
-                return url, None
-            if mode == "disk":
-                stored = await asyncio.to_thread(self._write_disk, url, payload)
-                if stored is not None:
-                    return url, FSInputFile(stored)
-                return url, None
-            ext = _extension(payload) or "jpg"
-            return url, BufferedInputFile(payload, filename=f"photo.{ext}")
+        async def prepare(
+            url: str,
+        ) -> tuple[str, BufferedInputFile | FSInputFile | None]:
+            return url, await self.prepare_photo_file(url, mode, deadline)
 
-        results = await asyncio.gather(*(prepare(url) for url in selected), return_exceptions=True)
+        results = await asyncio.gather(
+            *(prepare(url) for url in selected), return_exceptions=True
+        )
         files: dict[str, BufferedInputFile | FSInputFile] = {}
         for item in results:
             if not isinstance(item, BaseException):
@@ -393,7 +414,9 @@ class RichMediaDelivery:
             await send(message)
             return
 
-        deadline = asyncio.get_running_loop().time() + self.settings.total_timeout_seconds
+        deadline = (
+            asyncio.get_running_loop().time() + self.settings.total_timeout_seconds
+        )
         for mode in self.settings.order:
             if mode == "ram" and not self.settings.ram_enabled:
                 continue
@@ -415,7 +438,9 @@ class RichMediaDelivery:
                     async with self._local_deliveries:
                         if asyncio.get_running_loop().time() >= deadline:
                             break
-                        variant = await self._prepare_local(message, mode, urls, deadline)
+                        variant = await self._prepare_local(
+                            message, mode, urls, deadline
+                        )
                         if variant is None:
                             continue
                         await send(variant)
@@ -456,8 +481,24 @@ def get_rich_media_delivery() -> RichMediaDelivery:
     return RichMediaDelivery(get_settings().telegram.rich_media)
 
 
+_inline_delivery = ContextVar("inline_rich_delivery", default=False)
+
+
+@contextmanager
+def inline_delivery_context():
+    token = _inline_delivery.set(True)
+    try:
+        yield
+    finally:
+        _inline_delivery.reset(token)
+
+
 async def deliver_rich_media(
     send: Callable[[InputRichMessage], Awaitable[object]],
     message: InputRichMessage,
 ) -> None:
+    if _inline_delivery.get():
+        # The inline adapter stages files before editing; do not run a second cascade.
+        await send(message)
+        return
     await get_rich_media_delivery().deliver(send, message)

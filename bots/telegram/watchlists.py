@@ -22,7 +22,7 @@ from core.settings import get_settings
 from localization import text
 from services.runtime.app_context import get_app_context
 from services.users.settings import get_user_locale
-from services.users.watchlists import STATUSES, WatchEntry, entry_for, watchlists
+from services.users.watchlists import BUILTIN_LISTS, WatchEntry, entry_for, watchlists
 from services.users.watchlist_import import fetch_public, parse_mal_xml
 
 
@@ -41,7 +41,7 @@ def t(locale, key, **kwargs):
 
 
 def label(locale, key, name):
-    return t(locale, key) if key in STATUSES else name
+    return t(locale, key) if key in BUILTIN_LISTS else name
 
 
 def register_watchlist_handlers(dp, card_state):

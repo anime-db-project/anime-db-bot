@@ -106,28 +106,129 @@ class InlineTests(unittest.IsolatedAsyncioTestCase):
         finally:
             await bot.session.close()
 
-    async def test_inline_edits_use_no_new_media_upload(self):
-        bot = SimpleNamespace(id=123, edit_message_text=AsyncMock(return_value=True))
-        message = InlineMessage(bot, "inline")
-        await message.edit_text(
-            rich_message=InputRichMessage(
-                html='<img src="https://example.org/a.jpg"/><p>Body</p>'
-            )
+    async def test_inline_edits_keep_buttons_and_use_cached_or_local_files(self):
+        from aiogram.exceptions import TelegramBadRequest
+        from aiogram.methods import EditMessageText
+        from bots.telegram.inline_media import remember_photo
+
+        bot = SimpleNamespace(id=123, edit_message_text=AsyncMock())
+        error = TelegramBadRequest(
+            method=EditMessageText(inline_message_id="inline", text="test"),
+            message="RICH_MESSAGE_PHOTO_NO_MEDIA_FOUND",
         )
+        bot.edit_message_text.side_effect = [error, True]
+        message = InlineMessage(bot, "inline")
+        body = '<img src="https://example.org/a.jpg"/><p>Body</p><tg-button-row><tg-button type="callback_data" data="ci:token:staff">Staff</tg-button></tg-button-row>'
+        await message.edit_text(rich_message=InputRichMessage(html=body))
         args = bot.edit_message_text.await_args.kwargs
         self.assertEqual(args["inline_message_id"], "inline")
         self.assertNotIn("<img", args["rich_message"].html)
         self.assertIn("https://example.org/a.jpg", args["rich_message"].html)
-        from bots.telegram.inline_media import remember_photo
-
+        self.assertIn("<tg-button-row>", args["rich_message"].html)
         remember_photo(bot.id, "https://example.org/a.jpg", "telegram-file-id")
-        await message.edit_text(
-            rich_message=InputRichMessage(
-                html='<img src="https://example.org/a.jpg"/><p>Body</p>'
+        bot.edit_message_text.side_effect = None
+        bot.edit_message_text.return_value = True
+        await message.edit_text(rich_message=InputRichMessage(html=body))
+        rich = bot.edit_message_text.await_args.kwargs["rich_message"]
+        self.assertEqual(rich.media[0].media.media, "telegram-file-id")
+        self.assertIn("<tg-button-row>", rich.html)
+
+    async def test_staging_uses_shared_ram_disk_and_ephemeral_callback(self):
+        import asyncio
+        import time
+        from aiogram.exceptions import TelegramBadRequest
+        from aiogram.methods import SendPhoto
+        from aiogram.types import BufferedInputFile, FSInputFile
+        from bots.telegram.inline_media import (
+            InlineUploadContext,
+            SendTemporaryPhoto,
+            photo_id,
+        )
+
+        class FakeBot:
+            id = 991
+
+            def __init__(self):
+                self.calls = []
+                self.delete_ephemeral_message = AsyncMock()
+                self.send_photo = AsyncMock()
+
+            async def __call__(self, method, **kwargs):
+                self.calls.append(method)
+                if len(self.calls) < 3:
+                    raise TelegramBadRequest(method=method, message="photo rejected")
+                return SimpleNamespace(
+                    photo=[SimpleNamespace(width=100, height=100, file_id="cached")],
+                    ephemeral_message_id=19,
+                    chat=SimpleNamespace(id=-10042),
+                )
+
+        bot = FakeBot()
+        manager = SimpleNamespace(
+            settings=SimpleNamespace(
+                order=("direct", "url", "ram", "disk"),
+                ram_enabled=True,
+                disk_enabled=True,
+            ),
+            prepare_photo_file=AsyncMock(
+                side_effect=[
+                    BufferedInputFile(b"image", filename="ram.jpg"),
+                    FSInputFile("/tmp/test.jpg"),
+                ]
+            ),
+        )
+        settings = SimpleNamespace(
+            telegram=SimpleNamespace(
+                inline_media_cache_chat_id=0, inline_media_ephemeral_enabled=True
             )
         )
-        media = bot.edit_message_text.await_args.kwargs["rich_message"].media
-        self.assertEqual(media[0].media.media, "telegram-file-id")
+        context = InlineUploadContext("callback", 10, time.monotonic())
+        url = "https://example.org/disk-fallback.jpg"
+        deadline = asyncio.get_running_loop().time() + 5
+        with (
+            patch("bots.telegram.inline_media.get_settings", return_value=settings),
+            patch(
+                "bots.telegram.inline_media.get_rich_media_delivery",
+                return_value=manager,
+            ),
+        ):
+            result = await photo_id(bot, url, deadline, upload=True, context=context)
+            self.assertEqual(result, "cached")
+            self.assertEqual(
+                await photo_id(bot, url, deadline, upload=True, context=context),
+                "cached",
+            )
+        self.assertEqual(len(bot.calls), 3)
+        self.assertTrue(all(isinstance(call, SendTemporaryPhoto) for call in bot.calls))
+        self.assertEqual(bot.calls[0].photo, url)
+        self.assertIsInstance(bot.calls[1].photo, BufferedInputFile)
+        self.assertIsInstance(bot.calls[2].photo, FSInputFile)
+        self.assertEqual(
+            [call.args[1] for call in manager.prepare_photo_file.await_args_list],
+            ["ram", "disk"],
+        )
+        bot.send_photo.assert_not_awaited()
+        bot.delete_ephemeral_message.assert_awaited_once_with(
+            -10042, 10, 19, request_timeout=3
+        )
+
+    async def test_main_rich_inline_card_does_not_force_fallback_keyboard(self):
+        from bots.telegram.card.views.renderer import send_anime_view
+        from bots.telegram.rich_media import inline_delivery_context
+
+        bot = SimpleNamespace(id=999, edit_message_text=AsyncMock(return_value=True))
+        message = InlineMessage(bot, "inline")
+        anime = AggregatedAnime(title="Naruto", external_ids={"mal": "20"})
+        with inline_delivery_context():
+            sent, fallback = await send_anime_view(message, "token", anime, locale="ru")
+        self.assertFalse(fallback)
+        self.assertIs(sent, message)
+        args = bot.edit_message_text.await_args.kwargs
+        self.assertIn('data="ci:token:staff"', args["rich_message"].html)
+        buttons = [
+            b.callback_data for row in args["reply_markup"].inline_keyboard for b in row
+        ]
+        self.assertNotIn("ci:token:staff", buttons)
 
     async def test_about_uses_same_rich_content_for_send_and_edit(self):
         message = SimpleNamespace(

@@ -7,7 +7,7 @@ from pathlib import Path
 
 from core.models import SearchCandidate
 from services.users.settings import SQLiteUserSettingsStore
-from services.users.watchlists import WatchListStore, entry_for, STATUSES
+from services.users.watchlists import WatchListStore, entry_for, STATUSES, BUILTIN_LISTS
 from services.users.watchlist_import import parse_mal_xml, imported
 from bots.telegram.inline_mode import InlineChoice, preview
 from bots.telegram.search.handlers import SearchSession
@@ -21,13 +21,15 @@ class WatchListsTests(unittest.TestCase):
             default = {"favorites": "Favorites"}
             self.assertEqual(
                 [v[0] for v in store.lists(1, default)],
-                list(STATUSES) + ["env_favorites"],
+                list(BUILTIN_LISTS),
             )
             custom = store.create(1, "Weekend", 30)
             entry = entry_for(
                 SearchCandidate("Naruto", external_ids={"mal": "20"}), progress=7
             )
-            store.add_many(1, [("watching", entry), (custom, entry)], 10)
+            store.add_many(
+                1, [("watching", entry), (custom, entry), ("favorites", entry)], 10
+            )
             store.set_progress(1, "watching", entry.key, 12)
             updated = entry_for(
                 SearchCandidate("Naruto", external_ids={"mal": "20", "anilist": "20"})
@@ -36,6 +38,8 @@ class WatchListsTests(unittest.TestCase):
             self.assertEqual(store.entries(1, "watching")[1], 0)
             self.assertEqual(store.entries(1, "completed")[0][0].progress, 12)
             self.assertEqual(store.entries(1, custom)[1], 1)
+            self.assertEqual(store.entries(1, "favorites")[1], 1)
+            self.assertEqual(store.entries(2, "favorites")[1], 0)
             self.assertEqual(store.entries(2, "completed")[1], 0)
             with self.assertRaises(ValueError):
                 store.entries(2, custom)
@@ -50,6 +54,28 @@ class WatchListsTests(unittest.TestCase):
             second.delete(1, custom)
             with self.assertRaises(ValueError):
                 second.entries(1, custom)
+
+    def test_legacy_env_favorites_migrates_without_loss(self):
+        from core.sqlite import managed_sqlite_connection
+
+        with tempfile.TemporaryDirectory() as tmp:
+            repository = SQLiteUserSettingsStore(Path(tmp) / "users.db")
+            store = WatchListStore(repository)
+            with managed_sqlite_connection(repository._connect()) as db:
+                db.execute(
+                    "INSERT INTO anime_watch_lists(owner,list_id,name) VALUES (?,?,?)",
+                    (1, "env_favorites", "Old favorites"),
+                )
+            entry = entry_for(SearchCandidate("Naruto", external_ids={"mal": "20"}))
+            store.add_many(1, [("env_favorites", entry)], 10)
+            self.assertEqual(
+                [x[0] for x in store.lists(1, {"favorites": "Favorites"})],
+                list(BUILTIN_LISTS),
+            )
+            self.assertEqual(store.entries(1, "favorites")[0][0].key, entry.key)
+            self.assertEqual(store.entries(1, "favorites")[1], 1)
+            with self.assertRaises(ValueError):
+                store.entries(1, "env_favorites")
 
     def test_import_is_atomic_on_capacity_failure(self):
         with tempfile.TemporaryDirectory() as tmp:

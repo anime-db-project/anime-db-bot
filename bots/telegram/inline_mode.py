@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import secrets
 import logging
+import time
 from dataclasses import dataclass
 from typing import ClassVar
 from aiogram import BaseMiddleware
@@ -22,7 +23,15 @@ from aiogram.types import (
     InlineKeyboardMarkup,
     InlineKeyboardButton,
 )
-from bots.telegram.inline_media import prepare_inline_rich
+from bots.telegram.inline_media import (
+    prepare_inline_rich,
+    has_remote_photos,
+    InlineUploadContext,
+    direct_rejected,
+    remember_direct_failure,
+    forget_remote_ids,
+)
+from bots.telegram.rich_media import inline_delivery_context
 from bots.telegram.callbacks import PagePickerCallback
 from bots.telegram.pagination import search_picker_keyboard
 from localization import text
@@ -79,52 +88,69 @@ class InlineChoice:
 class InlineMessage:
     """Message-like adapter for the card renderer. No uploads to inline messages."""
 
-    def __init__(self, bot, inline_message_id: str):
+    def __init__(self, bot, inline_message_id: str, upload_context=None):
         self.bot = bot
         self.inline_message_id = inline_message_id
         self.retry_markup = None
+        self.upload_context = upload_context
 
     async def edit_text(
         self, text=None, *, rich_message=None, reply_markup=None, **kwargs
     ):
-        original = rich_message
-        if rich_message is not None:
-            body = rich_message.html or ""
-            if reply_markup and any(
-                (b.callback_data or "").startswith("ci:")
-                and (b.callback_data or "").endswith(":staff")
-                for row in reply_markup.inline_keyboard
-                for b in row
-            ):
-                body = re.sub(
-                    r"<tg-button-row[^>]*>.*?</tg-button-row>",
-                    "",
-                    body,
-                    flags=re.I | re.S,
-                )
-            original = rich_message.model_copy(update={"html": body})
-            rich_message = await prepare_inline_rich(self.bot, original, upload=True)
-        try:
-            return await self.bot.edit_message_text(
-                text=text,
-                rich_message=rich_message,
-                reply_markup=reply_markup,
-                inline_message_id=self.inline_message_id,
-                **kwargs,
-            )
-        except TelegramBadRequest as exc:
-            if "message is not modified" in str(exc).lower():
-                return True
-            if original is not None and rich_message.media:
-                # Invalid/stale file IDs must not destroy the rich message.
-                without = await prepare_inline_rich(self.bot, original, use_cache=False)
+        async def send(content):
+            try:
                 return await self.bot.edit_message_text(
                     text=text,
-                    rich_message=without,
+                    rich_message=content,
                     reply_markup=reply_markup,
                     inline_message_id=self.inline_message_id,
                     **kwargs,
                 )
+            except TelegramBadRequest as exc:
+                if "message is not modified" in str(exc).lower():
+                    return True
+                raise
+
+        if rich_message is None:
+            return await send(None)
+
+        # Preserve the complete native rich HTML, including embedded buttons.
+        settings = get_settings().telegram.rich_media
+        # HTML URLs are distinct from explicit URL uploads in media fields.
+        # Try native direct rendering where allowed by configured priority.
+        # Initial inline results still use only previously uploaded files.
+        if (
+            has_remote_photos(rich_message)
+            and settings.order
+            and settings.order[0] == "direct"
+            and not direct_rejected(self.bot, rich_message)
+        ):
+            direct = await prepare_inline_rich(self.bot, rich_message, remote=True)
+            # Only attempt the remote variant if it actually contains unresolved URLs.
+            if has_remote_photos(direct):
+                try:
+                    return await send(direct)
+                except TelegramBadRequest:
+                    remember_direct_failure(self.bot, rich_message)
+                    logging.debug(
+                        "Inline direct rich media rejected; trying cached/local files",
+                        exc_info=True,
+                    )
+
+        prepared = await prepare_inline_rich(
+            self.bot, rich_message, upload=True, context=self.upload_context
+        )
+        try:
+            return await send(prepared)
+        except TelegramBadRequest:
+            if prepared.media:
+                forget_remote_ids(self.bot, rich_message)
+                # A stale file_id or a photo-specific failure cannot destroy
+                # tables, rich text, or native embedded buttons.
+                without = await prepare_inline_rich(
+                    self.bot, rich_message, use_cache=False
+                )
+                return await send(without)
             raise
 
     async def edit_reply_markup(self, *, reply_markup=None):
@@ -139,6 +165,7 @@ class InlineMessage:
 
     async def answer_rich(self, content, **kwargs):
         await self.edit_text(rich_message=content, **kwargs)
+        return self
 
 
 # Only ordinary anime-card navigation is adapted; settings and admin actions
@@ -261,7 +288,11 @@ class InlineCardMiddleware(BaseMiddleware):
         message_id = event.inline_message_id
         async with self.lock_for(message_id):
             self.advanced[message_id] = True
-            message = InlineMessage(event.bot, message_id)
+            message = InlineMessage(
+                event.bot,
+                message_id,
+                InlineUploadContext(event.id, event.from_user.id, time.monotonic()),
+            )
             if parts[0] in {"isr", "isd", "isp"}:
                 choice = self.choices.get(parts[1])
                 if choice is None or choice.owner != event.from_user.id:
@@ -314,9 +345,10 @@ class InlineCardMiddleware(BaseMiddleware):
                     text("search", "loading", locale=locale, title=candidate.title),
                     reply_markup=keyboard,
                 )
-                await aggregate_and_send(
-                    message, candidate, choice.owner, self.card_state
-                )
+                with inline_delivery_context():
+                    await aggregate_and_send(
+                        message, candidate, choice.owner, self.card_state
+                    )
                 return None
             if parts[0] == "wlcard":
                 await event.answer(
@@ -344,7 +376,10 @@ class InlineCardMiddleware(BaseMiddleware):
                 return None
             # Use the same aiogram callback handlers, including all ownership
             # checks and page-selection logic, without fabricating a chat ID.
-            return await handler(event.model_copy(update={"message": message}), data)
+            with inline_delivery_context():
+                return await handler(
+                    event.model_copy(update={"message": message}), data
+                )
 
 
 def register_inline_handlers(dp, search_service, direct_lookup, card_state):
