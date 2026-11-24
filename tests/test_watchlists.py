@@ -14,7 +14,7 @@ from bots.telegram.search.handlers import SearchSession
 
 
 class WatchListsTests(unittest.TestCase):
-    def test_status_move_custom_lists_and_isolation(self):
+    def test_shared_data_independent_memberships_and_isolation(self):
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / "users.db"
             store = WatchListStore(SQLiteUserSettingsStore(path))
@@ -35,7 +35,7 @@ class WatchListsTests(unittest.TestCase):
                 SearchCandidate("Naruto", external_ids={"mal": "20", "anilist": "20"})
             )
             store.add_many(1, [("completed", updated)], 10)
-            self.assertEqual(store.entries(1, "watching")[1], 0)
+            self.assertEqual(store.entries(1, "watching")[1], 1)
             self.assertEqual(store.entries(1, "completed")[0][0].progress, 12)
             self.assertEqual(store.entries(1, custom)[1], 1)
             self.assertEqual(store.entries(1, "favorites")[1], 1)
@@ -43,7 +43,22 @@ class WatchListsTests(unittest.TestCase):
             self.assertEqual(store.entries(2, "completed")[1], 0)
             with self.assertRaises(ValueError):
                 store.entries(2, custom)
-            # Imported status does not overwrite the user's chosen status.
+            # Import adds missing memberships without overwriting shared data.
+            self.assertEqual(
+                store.add_many(1, [("dropped", updated)], 10, importing=True), 1
+            )
+            saved = store.entries(1, "completed")[0][0]
+            store.set_score(1, saved.key, 9.5)
+            store.adjust_progress(1, saved.key, 1)
+            for list_id in ("watching", "completed", "favorites", "dropped", custom):
+                current = store.entries(1, list_id)[0][0]
+                self.assertEqual((current.progress, current.score), (13, 9.5))
+                self.assertEqual(
+                    current.candidate.external_ids, {"mal": "20", "anilist": "20"}
+                )
+            store.remove(1, "watching", saved.key)
+            self.assertEqual(store.entries(1, "watching")[1], 0)
+            self.assertEqual(store.entries(1, "completed")[1], 1)
             self.assertEqual(
                 store.add_many(1, [("dropped", updated)], 10, importing=True), 0
             )
@@ -55,27 +70,85 @@ class WatchListsTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 second.entries(1, custom)
 
-    def test_legacy_env_favorites_migrates_without_loss(self):
-        from core.sqlite import managed_sqlite_connection
+    def test_legacy_migration_merges_progress_rating_and_memberships(self):
+        import sqlite3
 
         with tempfile.TemporaryDirectory() as tmp:
-            repository = SQLiteUserSettingsStore(Path(tmp) / "users.db")
-            store = WatchListStore(repository)
-            with managed_sqlite_connection(repository._connect()) as db:
+            path = Path(tmp) / "users.db"
+            with sqlite3.connect(path) as db:
                 db.execute(
-                    "INSERT INTO anime_watch_lists(owner,list_id,name) VALUES (?,?,?)",
-                    (1, "env_favorites", "Old favorites"),
+                    "CREATE TABLE anime_watch_lists(owner BIGINT,list_id TEXT,name TEXT,PRIMARY KEY(owner,list_id))"
                 )
-            entry = entry_for(SearchCandidate("Naruto", external_ids={"mal": "20"}))
-            store.add_many(1, [("env_favorites", entry)], 10)
+                db.execute(
+                    "CREATE TABLE anime_watch_entries(owner BIGINT,list_id TEXT,title_key TEXT,title TEXT,source_ids TEXT,year INTEGER,progress INTEGER,score DOUBLE PRECISION,PRIMARY KEY(owner,list_id,title_key))"
+                )
+                db.execute(
+                    "INSERT INTO anime_watch_lists VALUES (1,'env_favorites','Favorites')"
+                )
+                db.executemany(
+                    "INSERT INTO anime_watch_entries VALUES (?,?,?,?,?,?,?,?)",
+                    [
+                        (
+                            1,
+                            "env_favorites",
+                            "amdb:1",
+                            "Naruto",
+                            '{"mal":"20"}',
+                            2002,
+                            3,
+                            9,
+                        ),
+                        (
+                            1,
+                            "watching",
+                            "amdb:1",
+                            "Naruto",
+                            '{"anilist":"20","mal":"20"}',
+                            2002,
+                            15,
+                            None,
+                        ),
+                    ],
+                )
+            store = WatchListStore(SQLiteUserSettingsStore(path))
             self.assertEqual(
                 [x[0] for x in store.lists(1, {"favorites": "Favorites"})],
                 list(BUILTIN_LISTS),
             )
-            self.assertEqual(store.entries(1, "favorites")[0][0].key, entry.key)
-            self.assertEqual(store.entries(1, "favorites")[1], 1)
-            with self.assertRaises(ValueError):
-                store.entries(1, "env_favorites")
+            entry = store.entries(1, "favorites")[0][0]
+            self.assertEqual(
+                (entry.progress, entry.score, entry.candidate.external_ids),
+                (15, 9, {"mal": "20", "anilist": "20"}),
+            )
+            self.assertEqual(store.entries(1, "watching")[0][0], entry)
+            store.remove(1, "favorites", entry.key)
+            store = WatchListStore(SQLiteUserSettingsStore(path))
+            self.assertEqual(store.entries(1, "favorites")[1], 0)
+            self.assertEqual(store.entries(1, "watching")[1], 1)
+
+    def test_filter_sort_rename_and_retained_metadata(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            store = WatchListStore(SQLiteUserSettingsStore(Path(tmp) / "users.db"))
+            custom = store.create(1, "Weekend", 30)
+            one = entry_for(
+                SearchCandidate("Наруто", external_ids={"mal": "20"}),
+                progress=7,
+                score=8,
+            )
+            two = entry_for(
+                SearchCandidate("Блич", external_ids={"mal": "269"}),
+                progress=12,
+                score=9,
+            )
+            store.add_many(1, [(custom, one), (custom, two)], 10)
+            self.assertEqual(store.entries(1, custom, query="НАРУ")[1], 1)
+            self.assertEqual(store.entries(1, custom, sort="score")[0][0].key, two.key)
+            store.rename(1, custom, "New")
+            self.assertIn((custom, "New", 2), store.lists(1, {}))
+            store.remove(1, custom, one.key)
+            store.add_many(1, [("planned", one)], 10)
+            self.assertEqual(store.entries(1, "planned")[0][0].progress, 7)
+            self.assertEqual(store.entries(1, "planned")[0][0].score, 8)
 
     def test_import_is_atomic_on_capacity_failure(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -205,4 +278,75 @@ class PublicImportTests(unittest.IsolatedAsyncioTestCase):
                         score,
                     ),
                     ("watching", "Naruto", "20", 12, 8.0),
+                )
+
+
+class WatchlistUiTests(unittest.IsolatedAsyncioTestCase):
+    async def test_multi_select_and_shared_progress_through_handlers(self):
+        from types import SimpleNamespace
+        from unittest.mock import AsyncMock, patch
+        from aiogram import Dispatcher
+        from bots.telegram.watchlists import register_watchlist_handlers
+
+        with tempfile.TemporaryDirectory() as tmp:
+            store = WatchListStore(SQLiteUserSettingsStore(Path(tmp) / "ui.db"))
+            anime = SearchCandidate("Naruto", external_ids={"mal": "20"}, year=2002)
+            state = SimpleNamespace(
+                anime_sessions={"card": SimpleNamespace(owner_user_id=7, anime=anime)}
+            )
+            dp = Dispatcher()
+            register_watchlist_handlers(dp, state)
+            handlers = {
+                h.callback.__name__: h.callback for h in dp.callback_query.handlers
+            }
+            message = SimpleNamespace(
+                chat=SimpleNamespace(type="private"),
+                answer=AsyncMock(),
+                answer_rich=AsyncMock(),
+                edit_text=AsyncMock(),
+            )
+            actor = SimpleNamespace(id=7)
+
+            def callback(data):
+                return SimpleNamespace(
+                    from_user=actor, message=message, data=data, answer=AsyncMock()
+                )
+
+            def markup():
+                calls = message.edit_text.await_args or message.answer_rich.await_args
+                return calls.kwargs["reply_markup"]
+
+            def find(label):
+                return next(
+                    b.callback_data
+                    for row in markup().inline_keyboard
+                    for b in row
+                    if label in b.text
+                )
+
+            with (
+                patch("bots.telegram.watchlists.watchlists", return_value=store),
+                patch("bots.telegram.watchlists.get_user_locale", return_value="ru"),
+                patch(
+                    "bots.telegram.watchlists.get_app_context",
+                    return_value=SimpleNamespace(
+                        identity_resolver=SimpleNamespace(anchor_for=lambda _: None)
+                    ),
+                ),
+            ):
+                await handlers["card_add"](callback("wlcard:card"))
+                await handlers["list_action"](callback(find("Смотрю")))
+                await handlers["list_action"](callback(find("Избранное")))
+                self.assertTrue(find("✓ Смотрю"))
+                self.assertTrue(find("✓ Избранное"))
+                await handlers["list_action"](callback(find("Готово")))
+                await handlers["list_action"](callback(find("+1")))
+                self.assertEqual(store.entries(7, "watching")[0][0].progress, 1)
+                self.assertEqual(store.entries(7, "favorites")[0][0].progress, 1)
+                await handlers["list_action"](callback(find("Управление списками")))
+                await handlers["list_action"](callback(find("✓ Смотрю")))
+                self.assertEqual(store.entries(7, "watching")[1], 0)
+                self.assertEqual(store.entries(7, "favorites")[1], 1)
+                self.assertIn(
+                    "<table", message.edit_text.await_args.kwargs["rich_message"].html
                 )

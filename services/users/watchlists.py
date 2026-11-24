@@ -50,6 +50,8 @@ def entry_for(candidate, resolver=None, *, progress=0, score=None):
 
 
 class WatchListStore:
+    """A user's anime record is independent of its list memberships."""
+
     def __init__(self, repository):
         self.repository = repository
         self._lock = threading.RLock()
@@ -62,50 +64,86 @@ class WatchListStore:
                 title TEXT NOT NULL, source_ids TEXT NOT NULL, year INTEGER,
                 progress INTEGER NOT NULL DEFAULT 0, score DOUBLE PRECISION,
                 PRIMARY KEY(owner,list_id,title_key))""")
+            db.execute("""CREATE TABLE IF NOT EXISTS anime_watch_titles (
+                owner BIGINT NOT NULL, title_key TEXT NOT NULL, title TEXT NOT NULL,
+                source_ids TEXT NOT NULL, year INTEGER, progress INTEGER NOT NULL DEFAULT 0,
+                score DOUBLE PRECISION, PRIMARY KEY(owner,title_key))""")
+            db.execute("""CREATE TABLE IF NOT EXISTS anime_watch_memberships (
+                owner BIGINT NOT NULL, list_id TEXT NOT NULL, title_key TEXT NOT NULL,
+                PRIMARY KEY(owner,list_id,title_key))""")
+            db.execute("""CREATE INDEX IF NOT EXISTS anime_watch_memberships_title
+                ON anime_watch_memberships(owner,title_key)""")
             db.execute(
-                "CREATE INDEX IF NOT EXISTS anime_watch_entries_owner_key ON anime_watch_entries(owner,title_key)"
+                "CREATE TABLE IF NOT EXISTS anime_watch_schema (version INTEGER PRIMARY KEY)"
             )
+            # Keep the original table untouched as a recovery snapshot.
+            if (
+                db.execute(
+                    "SELECT 1 FROM anime_watch_schema WHERE version=2"
+                ).fetchone()
+                is None
+            ):
+                # Conflicting legacy progress: retain the maximum. Prefer an
+                # explicit score from the most progressed legacy record.
+                rows = db.execute("""SELECT owner,list_id,title_key,title,source_ids,year,progress,score
+                    FROM anime_watch_entries ORDER BY owner,title_key,progress DESC,list_id""").fetchall()
+                for owner, group, key, title, ids, year, progress, score in rows:
+                    existing = db.execute(
+                        "SELECT source_ids,year,score FROM anime_watch_titles WHERE owner=? AND title_key=?",
+                        (owner, key),
+                    ).fetchone()
+                    if existing is None:
+                        db.execute(
+                            "INSERT INTO anime_watch_titles VALUES (?,?,?,?,?,?,?)",
+                            (owner, key, title, ids, year, progress, score),
+                        )
+                    else:
+                        identity = AnimeIdentity(json.loads(existing[0]))
+                        identity.merge_missing(json.loads(ids))
+                        db.execute(
+                            "UPDATE anime_watch_titles SET source_ids=?,year=?,score=? WHERE owner=? AND title_key=?",
+                            (
+                                json.dumps(identity.external_ids),
+                                existing[1] if existing[1] is not None else year,
+                                existing[2] if existing[2] is not None else score,
+                                owner,
+                                key,
+                            ),
+                        )
+                    db.execute(
+                        "INSERT INTO anime_watch_memberships VALUES (?,?,?) ON CONFLICT DO NOTHING",
+                        (
+                            owner,
+                            "favorites" if group == "env_favorites" else group,
+                            key,
+                        ),
+                    )
+                db.execute(
+                    "DELETE FROM anime_watch_lists WHERE list_id='env_favorites'"
+                )
+                db.execute("INSERT INTO anime_watch_schema VALUES (2)")
 
     def lists(self, owner, defaults):
         with self._lock, managed_sqlite_connection(self.repository._connect()) as db:
-            # Persist operator-created lists on first use; removing an ENV key
-            # cannot make a user's saved titles disappear.
-            # Older deployments may have an ENV list called favorites.
-            # Merge it into the permanent list without overwriting saved entries.
-            db.execute(
-                """INSERT INTO anime_watch_entries(owner,list_id,title_key,title,source_ids,year,progress,score)
-                SELECT owner,'favorites',title_key,title,source_ids,year,progress,score
-                FROM anime_watch_entries WHERE owner=? AND list_id='env_favorites'
-                ON CONFLICT(owner,list_id,title_key) DO NOTHING""",
-                (owner,),
-            )
-            db.execute(
-                "DELETE FROM anime_watch_entries WHERE owner=? AND list_id='env_favorites'",
-                (owner,),
-            )
-            db.execute(
-                "DELETE FROM anime_watch_lists WHERE owner=? AND list_id='env_favorites'",
-                (owner,),
-            )
             for key, label in defaults.items():
-                if key == "favorites":
-                    continue
-                db.execute(
-                    "INSERT INTO anime_watch_lists(owner,list_id,name) VALUES (?,?,?) ON CONFLICT(owner,list_id) DO NOTHING",
-                    (owner, "env_" + key, label),
-                )
+                if key != "favorites":
+                    db.execute(
+                        "INSERT INTO anime_watch_lists VALUES (?,?,?) ON CONFLICT DO NOTHING",
+                        (owner, "env_" + key, label),
+                    )
             rows = db.execute(
                 "SELECT list_id,name FROM anime_watch_lists WHERE owner=? ORDER BY name,list_id",
                 (owner,),
             ).fetchall()
-            counts = db.execute(
-                "SELECT list_id,COUNT(*) FROM anime_watch_entries WHERE owner=? GROUP BY list_id",
-                (owner,),
-            ).fetchall()
-        count = {row[0]: row[1] for row in counts}
-        return [(key, key, count.get(key, 0)) for key in BUILTIN_LISTS] + [
-            (r[0], r[1], count.get(r[0], 0)) for r in rows
-        ]
+            counts = dict(
+                db.execute(
+                    "SELECT list_id,COUNT(*) FROM anime_watch_memberships WHERE owner=? GROUP BY list_id",
+                    (owner,),
+                ).fetchall()
+            )
+            return [(key, key, counts.get(key, 0)) for key in BUILTIN_LISTS] + [
+                (key, name, counts.get(key, 0)) for key, name in rows
+            ]
 
     def create(self, owner, name, limit):
         name = " ".join(name.split())
@@ -121,8 +159,7 @@ class WatchListStore:
                 raise ValueError("Custom list limit reached")
             key = "u_" + secrets.token_hex(6)
             db.execute(
-                "INSERT INTO anime_watch_lists(owner,list_id,name) VALUES (?,?,?)",
-                (owner, key, name),
+                "INSERT INTO anime_watch_lists VALUES (?,?,?)", (owner, key, name)
             )
             return key
 
@@ -137,131 +174,214 @@ class WatchListStore:
         ):
             raise ValueError("Unknown list")
 
-    def entries(self, owner, list_id, page=0, size=10):
+    @staticmethod
+    def _entry(row):
+        return WatchEntry(
+            row[0],
+            SearchCandidate(title=row[1], external_ids=json.loads(row[2]), year=row[3]),
+            row[4],
+            row[5],
+        )
+
+    def entries(self, owner, list_id, page=0, size=10, *, query="", sort="title"):
+        ordering = {
+            "title": "LOWER(t.title),t.title_key",
+            "progress": "t.progress DESC,LOWER(t.title),t.title_key",
+            "score": "CASE WHEN t.score IS NULL THEN 1 ELSE 0 END,t.score DESC,LOWER(t.title),t.title_key",
+        }[sort]
         with self._lock, managed_sqlite_connection(self.repository._connect()) as db:
             self._check(db, owner, list_id)
-            count = db.execute(
-                "SELECT COUNT(*) FROM anime_watch_entries WHERE owner=? AND list_id=?",
-                (owner, list_id),
-            ).fetchone()[0]
-            rows = db.execute(
-                "SELECT title_key,title,source_ids,year,progress,score FROM anime_watch_entries WHERE owner=? AND list_id=? ORDER BY LOWER(title),title_key LIMIT ? OFFSET ?",
-                (owner, list_id, size, page * size),
-            ).fetchall()
-        return [
-            WatchEntry(
-                r[0],
-                SearchCandidate(title=r[1], external_ids=json.loads(r[2]), year=r[3]),
-                r[4],
-                r[5],
+            where = "m.owner=? AND m.list_id=?"
+            params = [owner, list_id]
+            base = (
+                " FROM anime_watch_memberships m JOIN anime_watch_titles t ON t.owner=m.owner AND t.title_key=m.title_key WHERE "
+                + where
             )
-            for r in rows
-        ], count
+            if query:
+                # SQLite LOWER is ASCII-only; Unicode casefold works on both backends.
+                matched = [
+                    row
+                    for row in db.execute(
+                        "SELECT t.title_key,t.title,t.source_ids,t.year,t.progress,t.score"
+                        + base
+                        + " ORDER BY "
+                        + ordering,
+                        tuple(params),
+                    ).fetchall()
+                    if query.casefold() in row[1].casefold()
+                ]
+                return [
+                    self._entry(row) for row in matched[page * size : (page + 1) * size]
+                ], len(matched)
+            count = db.execute("SELECT COUNT(*)" + base, tuple(params)).fetchone()[0]
+            rows = db.execute(
+                "SELECT t.title_key,t.title,t.source_ids,t.year,t.progress,t.score"
+                + base
+                + " ORDER BY "
+                + ordering
+                + " LIMIT ? OFFSET ?",
+                (*params, size, page * size),
+            ).fetchall()
+        return [self._entry(row) for row in rows], count
+
+    def _resolve(self, db, owner, entry):
+        row = db.execute(
+            "SELECT title_key,title,source_ids,year,progress,score FROM anime_watch_titles WHERE owner=? AND title_key=?",
+            (owner, entry.key),
+        ).fetchone()
+        if row:
+            return self._entry(row)
+        candidates = []
+        for row in db.execute(
+            "SELECT title_key,title,source_ids,year,progress,score FROM anime_watch_titles WHERE owner=?",
+            (owner,),
+        ).fetchall():
+            saved = self._entry(row)
+            if saved.candidate.identity.matches(entry.candidate.identity):
+                candidates.append(saved)
+        return candidates[0] if len(candidates) == 1 else None
+
+    def memberships(self, owner, entry):
+        with self._lock, managed_sqlite_connection(self.repository._connect()) as db:
+            saved = self._resolve(db, owner, entry)
+            if saved is None:
+                return entry, set()
+            rows = db.execute(
+                "SELECT list_id FROM anime_watch_memberships WHERE owner=? AND title_key=?",
+                (owner, saved.key),
+            ).fetchall()
+            return saved, {r[0] for r in rows}
 
     def add_many(self, owner, values, limit, *, importing=False):
-        # All changes are atomic. Status lists are exclusive; custom lists are independent.
-        # A local per-repository lock serializes the count/cap and writes.
+        # Existing personal progress and scores are authoritative, including zero.
+        # Import only adds missing memberships and initializes new shared records.
         changed = 0
         with self._lock, managed_sqlite_connection(self.repository._connect()) as db:
             stored = db.execute(
-                "SELECT title_key,source_ids FROM anime_watch_entries WHERE owner=?",
+                "SELECT title_key,title,source_ids,year,progress,score FROM anime_watch_titles WHERE owner=?",
                 (owner,),
             ).fetchall()
-            count = len(stored)
-            identities = {}
+            records = {row[0]: self._entry(row) for row in stored}
             index = {}
 
-            def remember(key, ids):
-                current = identities.setdefault(key, AnimeIdentity({}))
-                current.merge_missing(ids)
-                for pair in current.external_ids.items():
-                    index.setdefault(pair, set()).add(key)
+            def remember(entry):
+                records[entry.key] = entry
+                for pair in entry.candidate.identity.fingerprint():
+                    index.setdefault(pair, set()).add(entry.key)
 
-            for row in stored:
-                remember(row[0], json.loads(row[1]))
+            for entry in tuple(records.values()):
+                remember(entry)
+            count = db.execute(
+                "SELECT COUNT(*) FROM anime_watch_memberships WHERE owner=?", (owner,)
+            ).fetchone()[0]
             for list_id, entry in values:
+                self._check(db, owner, list_id)
                 identity = entry.candidate.identity
-                matches = set().union(
-                    *(index.get(pair, set()) for pair in identity.external_ids.items())
-                )
-                compatible = [
-                    key for key in matches if identities[key].matches(identity)
-                ]
-                if entry.key not in identities and len(compatible) == 1:
-                    key = compatible[0]
-                    merged = identities[key].copy()
+                saved = records.get(entry.key)
+                if saved is None:
+                    matches = set().union(
+                        *(index.get(pair, set()) for pair in identity.fingerprint())
+                    )
+                    matches = [
+                        key
+                        for key in matches
+                        if records[key].candidate.identity.matches(identity)
+                    ]
+                    if len(matches) == 1:
+                        saved = records[matches[0]]
+                if saved:
+                    merged = saved.candidate.identity
                     merged.merge_missing(identity)
                     entry = replace(
-                        entry,
-                        key=key,
+                        saved,
                         candidate=replace(
-                            entry.candidate, external_ids=merged.external_ids
+                            saved.candidate,
+                            external_ids=merged.external_ids,
+                            year=saved.candidate.year
+                            if saved.candidate.year is not None
+                            else entry.candidate.year,
                         ),
                     )
-                remember(entry.key, entry.candidate.external_ids)
-                self._check(db, owner, list_id)
-                # Preserve the user's own status when importing a title already tracked.
-                current = db.execute(
-                    "SELECT list_id,progress,score FROM anime_watch_entries WHERE owner=? AND title_key=?",
-                    (owner, entry.key),
-                ).fetchall()
-                existing = next((r for r in current if r[0] == list_id), None)
-                old_status = [r for r in current if r[0] in STATUSES]
-                if importing and list_id in STATUSES and old_status:
-                    continue
-                if importing and existing:
-                    continue
-                removed = 0
-                if list_id in STATUSES:
-                    for row in old_status:
-                        if row[0] != list_id:
-                            db.execute(
-                                "DELETE FROM anime_watch_entries WHERE owner=? AND list_id=? AND title_key=?",
-                                (owner, row[0], entry.key),
-                            )
-                            removed += 1
-                count -= removed
-                if existing is None and count >= limit:
+                exists = db.execute(
+                    "SELECT 1 FROM anime_watch_memberships WHERE owner=? AND list_id=? AND title_key=?",
+                    (owner, list_id, entry.key),
+                ).fetchone()
+                if saved is None and len(records) >= limit:
+                    raise ValueError("Saved title capacity exceeded")
+                if exists is None and count >= limit:
                     raise ValueError("Watchlist capacity exceeded")
-                previous = existing or (
-                    old_status[0] if list_id in STATUSES and old_status else None
-                )
-                progress = (
-                    entry.progress if importing or previous is None else previous[1]
-                )
-                score = entry.score if importing or previous is None else previous[2]
                 db.execute(
-                    """INSERT INTO anime_watch_entries(owner,list_id,title_key,title,source_ids,year,progress,score)
-                    VALUES(?,?,?,?,?,?,?,?) ON CONFLICT(owner,list_id,title_key) DO UPDATE SET
-                    title=excluded.title,source_ids=excluded.source_ids,year=excluded.year,
-                    progress=excluded.progress,score=excluded.score""",
+                    """INSERT INTO anime_watch_titles VALUES (?,?,?,?,?,?,?) ON CONFLICT(owner,title_key)
+                    DO UPDATE SET source_ids=excluded.source_ids,year=excluded.year""",
                     (
                         owner,
-                        list_id,
                         entry.key,
                         entry.candidate.title,
                         json.dumps(entry.candidate.external_ids),
                         entry.candidate.year,
-                        progress,
-                        score,
+                        entry.progress,
+                        entry.score,
                     ),
                 )
-                count += int(existing is None)
-                changed += 1
+                remember(entry)
+                if exists is None:
+                    db.execute(
+                        "INSERT INTO anime_watch_memberships VALUES (?,?,?)",
+                        (owner, list_id, entry.key),
+                    )
+                    count += 1
+                    changed += 1
         return changed
 
     def set_progress(self, owner, list_id, key, progress):
+        if not 0 <= progress <= 100000:
+            raise ValueError("Invalid progress")
         with self._lock, managed_sqlite_connection(self.repository._connect()) as db:
             db.execute(
-                "UPDATE anime_watch_entries SET progress=? WHERE owner=? AND list_id=? AND title_key=?",
-                (progress, owner, list_id, key),
+                "UPDATE anime_watch_titles SET progress=? WHERE owner=? AND title_key=?",
+                (progress, owner, key),
+            )
+
+    def adjust_progress(self, owner, key, delta):
+        if delta not in {-1, 1}:
+            raise ValueError("Invalid delta")
+        with self._lock, managed_sqlite_connection(self.repository._connect()) as db:
+            db.execute(
+                "UPDATE anime_watch_titles SET progress=CASE WHEN progress+?<0 THEN 0 WHEN progress+?>100000 THEN 100000 ELSE progress+? END WHERE owner=? AND title_key=?",
+                (delta, delta, delta, owner, key),
+            )
+
+    def set_score(self, owner, key, score):
+        if score is not None and not 0 <= score <= 10:
+            raise ValueError("Invalid score")
+        with self._lock, managed_sqlite_connection(self.repository._connect()) as db:
+            db.execute(
+                "UPDATE anime_watch_titles SET score=? WHERE owner=? AND title_key=?",
+                (score, owner, key),
             )
 
     def remove(self, owner, list_id, key):
         with self._lock, managed_sqlite_connection(self.repository._connect()) as db:
             db.execute(
-                "DELETE FROM anime_watch_entries WHERE owner=? AND list_id=? AND title_key=?",
+                "DELETE FROM anime_watch_memberships WHERE owner=? AND list_id=? AND title_key=?",
                 (owner, list_id, key),
+            )
+            # Keep shared personal data even when the last membership is removed.
+
+    def rename(self, owner, list_id, name):
+        name = " ".join(name.split())
+        if not list_id.startswith("u_") or not name or len(name) > 64:
+            raise ValueError("Invalid list name")
+        with self._lock, managed_sqlite_connection(self.repository._connect()) as db:
+            self._check(db, owner, list_id)
+            rows = db.execute(
+                "SELECT list_id,name FROM anime_watch_lists WHERE owner=?", (owner,)
+            ).fetchall()
+            if any(k != list_id and n.casefold() == name.casefold() for k, n in rows):
+                raise ValueError("List already exists")
+            db.execute(
+                "UPDATE anime_watch_lists SET name=? WHERE owner=? AND list_id=?",
+                (name, owner, list_id),
             )
 
     def delete(self, owner, list_id):
@@ -270,7 +390,7 @@ class WatchListStore:
         with self._lock, managed_sqlite_connection(self.repository._connect()) as db:
             self._check(db, owner, list_id)
             db.execute(
-                "DELETE FROM anime_watch_entries WHERE owner=? AND list_id=?",
+                "DELETE FROM anime_watch_memberships WHERE owner=? AND list_id=?",
                 (owner, list_id),
             )
             db.execute(
