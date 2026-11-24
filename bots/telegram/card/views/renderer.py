@@ -98,7 +98,7 @@ async def edit_standard_text(
     """Edit callback text without discarding overflow chunks."""
     chunks = split_text(text_value, limit, locale=locale)
     await message.edit_text(text=chunks[0], reply_markup=reply_markup)
-    if isinstance(getattr(message, 'inline_message_id', None), str):
+    if isinstance(getattr(message, "inline_message_id", None), str):
         return
     for chunk in chunks[1:]:
         await message.answer(chunk)
@@ -114,7 +114,7 @@ async def send_standard_text(
 ) -> Message | None:
     chunks = split_text(text_value, limit, locale=locale)
     sent: Message | None = None
-    if isinstance(getattr(message, 'inline_message_id', None), str):
+    if isinstance(getattr(message, "inline_message_id", None), str):
         await message.edit_text(text=chunks[0], reply_markup=reply_markup)
         return None
     for index, chunk in enumerate(chunks):
@@ -163,8 +163,12 @@ async def send_anime_view(
         show_related=show_related,
     )
     text_value = pages[page]
-    if section == "main" and isinstance(getattr(message, "inline_message_id", None), str):
-        keyboard = fallback_main_keyboard(token, locale=locale, show_all_ids=bool(anime.amdb_id), show_related=True)
+    if section == "main" and isinstance(
+        getattr(message, "inline_message_id", None), str
+    ):
+        keyboard = fallback_main_keyboard(
+            token, locale=locale, show_all_ids=bool(anime.amdb_id), show_related=True
+        )
     sent: Message | None = None
 
     async def send_rich(content: InputRichMessage) -> object:
@@ -230,8 +234,12 @@ async def edit_anime_view(
         show_related=show_related,
     )
     text_value = pages[page]
-    if section == 'main' and isinstance(getattr(message, 'inline_message_id', None), str):
-        keyboard = fallback_main_keyboard(token, locale=locale, show_all_ids=bool(anime.amdb_id), show_related=True)
+    if section == "main" and isinstance(
+        getattr(message, "inline_message_id", None), str
+    ):
+        keyboard = fallback_main_keyboard(
+            token, locale=locale, show_all_ids=bool(anime.amdb_id), show_related=True
+        )
 
     try:
         await _deliver_rich_card(

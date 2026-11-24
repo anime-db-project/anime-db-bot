@@ -10,7 +10,10 @@ from aiogram.types import CallbackQuery, Message
 from bots.telegram.admin import TelegramModerationMiddleware, register_admin_handlers
 from bots.telegram.allowlist import TelegramAllowlistMiddleware
 from bots.telegram.command_menu import CommandMenuMiddleware, configure_command_menu
-from bots.telegram.inline_mode import register_inline_handlers, synchronize_inline_setting
+from bots.telegram.inline_mode import (
+    register_inline_handlers,
+    synchronize_inline_setting,
+)
 from bots.telegram.card.runtime.handlers import build_dispatcher
 from bots.telegram.card.runtime.service import aggregate_and_send
 from bots.telegram.card.runtime.state import TelegramCardState
@@ -310,10 +313,15 @@ async def run_bot(
             dp.inline_query.outer_middleware(observability)
             dp.inline_query.outer_middleware(moderation)
             dp.inline_query.outer_middleware(rate_limit)
+            dp.chosen_inline_result.outer_middleware(observability)
+            dp.chosen_inline_result.outer_middleware(moderation)
+            dp.chosen_inline_result.outer_middleware(rate_limit)
             dp.callback_query.outer_middleware(observability)
             dp.callback_query.outer_middleware(moderation)
             dp.callback_query.outer_middleware(rate_limit)
-            inline_cards = register_inline_handlers(dp, context.search_service, context.direct_lookup, card_state)
+            inline_cards = register_inline_handlers(
+                dp, context.search_service, context.direct_lookup, card_state
+            )
             dp.callback_query.outer_middleware(inline_cards)
             dp.callback_query.outer_middleware(_CallbackRoutingMiddleware(card_state))
 
@@ -338,6 +346,9 @@ async def run_bot(
                     card_state,
                 )
 
+            from bots.telegram.watchlists import register_watchlist_handlers
+
+            register_watchlist_handlers(dp, card_state)
             register_search_handlers(
                 dp,
                 aggregate_callback=aggregate_search_result,

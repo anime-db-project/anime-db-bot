@@ -3,6 +3,7 @@ from __future__ import annotations
 from core.mapping_links import mapping_link_templates, DEFAULT_MAPPING_LINKS
 
 import math
+import json
 import os
 import re
 import sys
@@ -210,6 +211,23 @@ def _user_ids(value: str, *, setting: str) -> tuple[int, ...]:
     return tuple(result)
 
 
+def _watchlist_defaults(value: str) -> dict[str, str]:
+    result = json.loads(value or "{}")
+    if not isinstance(result, dict) or len(result) > 30:
+        raise ValueError(
+            "TELEGRAM_WATCHLIST_DEFAULTS_JSON must be an object of at most 30 lists"
+        )
+    for key, label in result.items():
+        if (
+            not re.fullmatch(r"[a-z][a-z0-9_-]{0,23}", key)
+            or not isinstance(label, str)
+            or not label.strip()
+            or len(label) > 64
+        ):
+            raise ValueError("Invalid watchlist key or label")
+    return {key: label.strip() for key, label in result.items()}
+
+
 def _group_ids(value: str) -> tuple[int, ...]:
     ids = []
     for token in _ADMIN_SPLIT_RE.split((value or "").strip()):
@@ -398,8 +416,15 @@ class TelegramSettings:
     bot_api_local_file_root: Path | None = None
     allowed_user_ids: tuple[int, ...] = ()
     inline_enabled: bool = True
+    inline_media_cache_chat_id: int = 0
+    watchlist_custom_defaults: Mapping[str, str] = field(default_factory=dict)
+    watchlist_max_custom: int = 30
+    watchlist_max_entries: int = 10000
+    watchlist_import_limit: int = 5000
     allowed_group_ids: tuple[int, ...] = ()
-    mapping_id_urls: Mapping[str, str] = field(default_factory=lambda: dict(DEFAULT_MAPPING_LINKS))
+    mapping_id_urls: Mapping[str, str] = field(
+        default_factory=lambda: dict(DEFAULT_MAPPING_LINKS)
+    )
     denied_reply_cooldown_seconds: float = 60.0
     denied_global_replies_per_minute: int = 20
     denied_max_tracked_users: int = 4096
@@ -769,7 +794,24 @@ class AppSettings:
                     setting="TELEGRAM_ALLOWED_USER_IDS",
                 ),
                 inline_enabled=_bool(values, "TELEGRAM_INLINE_ENABLED", True),
-                allowed_group_ids=_group_ids(_raw(values, "TELEGRAM_ALLOWED_GROUP_IDS")),
+                inline_media_cache_chat_id=int(
+                    _raw(values, "TELEGRAM_INLINE_MEDIA_CACHE_CHAT_ID", "0")
+                ),
+                watchlist_custom_defaults=_watchlist_defaults(
+                    _raw(values, "TELEGRAM_WATCHLIST_DEFAULTS_JSON", "{}")
+                ),
+                watchlist_max_custom=_strict_int(
+                    values, "TELEGRAM_WATCHLIST_MAX_CUSTOM", 30, 0, 60
+                ),
+                watchlist_max_entries=_strict_int(
+                    values, "TELEGRAM_WATCHLIST_MAX_ENTRIES", 10000, 1, 50000
+                ),
+                watchlist_import_limit=_strict_int(
+                    values, "TELEGRAM_WATCHLIST_IMPORT_LIMIT", 5000, 1, 10000
+                ),
+                allowed_group_ids=_group_ids(
+                    _raw(values, "TELEGRAM_ALLOWED_GROUP_IDS")
+                ),
                 mapping_id_urls=mapping_link_templates(values),
                 denied_reply_cooldown_seconds=_float(
                     values, "TELEGRAM_DENIED_REPLY_COOLDOWN_SECONDS", 60.0
@@ -803,7 +845,9 @@ class AppSettings:
                 long_text_chunk_size=_strict_int(
                     values, "TELEGRAM_LONG_TEXT_CHUNK_SIZE", 4000, 200, 30000
                 ),
-                long_text_include_ui=_bool(values, "TELEGRAM_LONG_TEXT_INCLUDE_UI", False),
+                long_text_include_ui=_bool(
+                    values, "TELEGRAM_LONG_TEXT_INCLUDE_UI", False
+                ),
                 pagination_block_page_sizes={
                     block: _strict_int(
                         values,

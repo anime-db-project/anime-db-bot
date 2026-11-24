@@ -28,29 +28,36 @@ class AppSettingsTests(unittest.TestCase):
         }
         settings = AppSettings.from_env(variables).telegram
         self.assertEqual(settings.pagination_page_size, 8)
-        self.assertEqual(settings.pagination_block_page_sizes, {
-            "episodes": 3,
-            "settings": 20,
-        })
+        self.assertEqual(
+            settings.pagination_block_page_sizes,
+            {
+                "episodes": 3,
+                "settings": 20,
+            },
+        )
         self.assertIn("search", TELEGRAM_PAGINATION_BLOCKS)
         for invalid in ("0", "31", "wrong"):
             with self.subTest(invalid=invalid):
-                with self.assertRaisesRegex(ValueError, "TELEGRAM_PAGINATION_EPISODES_PAGE_SIZE"):
-                    AppSettings.from_env({
-                        **variables, "TELEGRAM_PAGINATION_EPISODES_PAGE_SIZE": invalid
-                    })
+                with self.assertRaisesRegex(
+                    ValueError, "TELEGRAM_PAGINATION_EPISODES_PAGE_SIZE"
+                ):
+                    AppSettings.from_env(
+                        {**variables, "TELEGRAM_PAGINATION_EPISODES_PAGE_SIZE": invalid}
+                    )
 
     def test_long_text_chunk_size_is_bounded_and_configurable(self) -> None:
         self.assertEqual(AppSettings.from_env({}).telegram.long_text_chunk_size, 4000)
         self.assertEqual(
-            AppSettings.from_env({
-                "TELEGRAM_LONG_TEXT_CHUNK_SIZE": "1200"
-            }).telegram.long_text_chunk_size,
+            AppSettings.from_env(
+                {"TELEGRAM_LONG_TEXT_CHUNK_SIZE": "1200"}
+            ).telegram.long_text_chunk_size,
             1200,
         )
         for invalid in ("199", "30001", "invalid"):
             with self.subTest(invalid=invalid):
-                with self.assertRaisesRegex(ValueError, "TELEGRAM_LONG_TEXT_CHUNK_SIZE"):
+                with self.assertRaisesRegex(
+                    ValueError, "TELEGRAM_LONG_TEXT_CHUNK_SIZE"
+                ):
                     AppSettings.from_env({"TELEGRAM_LONG_TEXT_CHUNK_SIZE": invalid})
 
     def test_telegram_selection_page_size_has_bounded_configuration(self) -> None:
@@ -66,7 +73,9 @@ class AppSettingsTests(unittest.TestCase):
                 self.assertEqual(result.telegram.pagination_page_size, size)
         for invalid in ("0", "31", "-1", "not-an-integer"):
             with self.subTest(invalid=invalid):
-                with self.assertRaisesRegex(ValueError, "TELEGRAM_PAGINATION_PAGE_SIZE"):
+                with self.assertRaisesRegex(
+                    ValueError, "TELEGRAM_PAGINATION_PAGE_SIZE"
+                ):
                     AppSettings.from_env(
                         {"BOT_TOKEN": "token", "TELEGRAM_PAGINATION_PAGE_SIZE": invalid}
                     )
@@ -308,8 +317,16 @@ class AppSettingsTests(unittest.TestCase):
                 )
             values = project_env_values(root)
         from core.mapping_links import DEFAULT_MAPPING_LINKS
-        self.assertEqual({key.removeprefix("TELEGRAM_ID_URL_").lower() for key in values if key.startswith("TELEGRAM_ID_URL_")}, set(DEFAULT_MAPPING_LINKS))
-        self.assertEqual(len(values), 252 + len(DEFAULT_MAPPING_LINKS))
+
+        self.assertEqual(
+            {
+                key.removeprefix("TELEGRAM_ID_URL_").lower()
+                for key in values
+                if key.startswith("TELEGRAM_ID_URL_")
+            },
+            set(DEFAULT_MAPPING_LINKS),
+        )
+        self.assertEqual(len(values), 257 + len(DEFAULT_MAPPING_LINKS))
         for key in (
             "BOT_ON_FAILURE",
             "BOT_ON_CLEAN_EXIT",
@@ -389,18 +406,21 @@ class AppSettingsTests(unittest.TestCase):
 
     def test_user_default_locale_config(self) -> None:
         self.assertEqual(
-            AppSettings.from_env({"USER_DEFAULT_LOCALE": "ru"})
-            .storage.default_user_locale,
+            AppSettings.from_env(
+                {"USER_DEFAULT_LOCALE": "ru"}
+            ).storage.default_user_locale,
             "ru",
         )
         with self.assertRaisesRegex(ValueError, "USER_DEFAULT_LOCALE"):
             AppSettings.from_env({"USER_DEFAULT_LOCALE": "invalid"})
 
     def test_search_default_providers_from_env(self) -> None:
-        values = AppSettings.from_env({
-            "SEARCH_DEFAULT_PROVIDERS": "mal,anilist",
-            "SEARCH_EXPANSION_ENABLED": "false",
-        }).search
+        values = AppSettings.from_env(
+            {
+                "SEARCH_DEFAULT_PROVIDERS": "mal,anilist",
+                "SEARCH_EXPANSION_ENABLED": "false",
+            }
+        ).search
         self.assertEqual(values.default_provider_keys, ("mal", "anilist"))
         self.assertFalse(values.expansion_enabled)
         for invalid in ("", "mal,mal", "kitsu,unknown"):
@@ -443,12 +463,11 @@ class AppSettingsTests(unittest.TestCase):
             AppSettings.from_env({"ADMIN_TELEGRAM_USER_IDS": "1,nope"})
 
     def test_user_allowlist_is_optional_and_validated(self) -> None:
+        self.assertEqual(AppSettings.from_env({}).telegram.allowed_user_ids, ())
         self.assertEqual(
-            AppSettings.from_env({}).telegram.allowed_user_ids, ()
-        )
-        self.assertEqual(
-            AppSettings.from_env({"TELEGRAM_ALLOWED_USER_IDS": ""})
-            .telegram.allowed_user_ids,
+            AppSettings.from_env(
+                {"TELEGRAM_ALLOWED_USER_IDS": ""}
+            ).telegram.allowed_user_ids,
             (),
         )
         with self.assertRaisesRegex(ValueError, "TELEGRAM_ALLOWED_USER_IDS"):

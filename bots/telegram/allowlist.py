@@ -7,7 +7,14 @@ from collections.abc import Awaitable, Callable
 from typing import Any
 
 from aiogram import BaseMiddleware
-from aiogram.types import CallbackQuery, InlineQuery, Message, TelegramObject, Update
+from aiogram.types import (
+    CallbackQuery,
+    ChosenInlineResult,
+    InlineQuery,
+    Message,
+    TelegramObject,
+    Update,
+)
 
 _ACCESS_DENIED = "Доступ к боту ограничен."
 
@@ -70,7 +77,7 @@ class TelegramAllowlistMiddleware(BaseMiddleware):
     ) -> Any:
         inner = event.event if isinstance(event, Update) else event
         user = getattr(inner, "from_user", None)
-        inline = isinstance(inner, InlineQuery) or (
+        inline = isinstance(inner, (InlineQuery, ChosenInlineResult)) or (
             isinstance(inner, CallbackQuery) and bool(inner.inline_message_id)
         )
         # Telegram does not expose the destination chat ID of inline messages.
@@ -78,7 +85,7 @@ class TelegramAllowlistMiddleware(BaseMiddleware):
         if inline and (not self._inline_enabled or self._groups):
             if isinstance(inner, InlineQuery):
                 await inner.answer([], cache_time=0, is_personal=True)
-            else:
+            elif isinstance(inner, CallbackQuery):
                 await inner.answer(self._denial_message, show_alert=True)
             return None
         message = inner.message if isinstance(inner, CallbackQuery) else inner
@@ -88,15 +95,25 @@ class TelegramAllowlistMiddleware(BaseMiddleware):
                 if user is not None and self._may_notify(int(user.id)):
                     if isinstance(inner, CallbackQuery):
                         await inner.answer(self._denial_message, show_alert=True)
-                    elif isinstance(inner, Message) and (inner.text or inner.caption or "").startswith("/"):
+                    elif isinstance(inner, Message) and (
+                        inner.text or inner.caption or ""
+                    ).startswith("/"):
                         await inner.answer(self._denial_message)
                 return None
-            if user is None or getattr(user, "is_bot", False) or getattr(message, "sender_chat", None) is not None:
+            if (
+                user is None
+                or getattr(user, "is_bot", False)
+                or getattr(message, "sender_chat", None) is not None
+            ):
                 return None
         if not self._allowed or (user is not None and int(user.id) in self._allowed):
             return await handler(event, data)
 
-        if isinstance(inner, Message) and inner.chat.type != "private" and not (inner.text or inner.caption or "").startswith("/"):
+        if (
+            isinstance(inner, Message)
+            and inner.chat.type != "private"
+            and not (inner.text or inner.caption or "").startswith("/")
+        ):
             return None
 
         if isinstance(inner, InlineQuery):

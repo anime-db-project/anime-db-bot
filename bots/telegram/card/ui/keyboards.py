@@ -81,10 +81,9 @@ def source_section_selection_rows(
                 or (
                     section in {"titles", "popularity"}
                     and len(
-                        source_section_pages(
-                            anime, section, source_name, locale=locale
-                        )
-                    ) > 1
+                        source_section_pages(anime, section, source_name, locale=locale)
+                    )
+                    > 1
                 )
                 else SectionSourceCallback(token, section, source_key, 0).encode()
             ),
@@ -120,12 +119,22 @@ def navigation_keyboard(
     rows: list[list[InlineKeyboardButton]] = []
 
     if current_section == "main":
-        rows.append([
-            InlineKeyboardButton(
-                text="Wikipedia",
-                callback_data=f"av:{token}:wikipedia:0",
-            )
-        ])
+        rows.append(
+            [
+                InlineKeyboardButton(
+                    text=text("watchlists", "add_to_list", locale=locale),
+                    callback_data=f"wlcard:{token}",
+                )
+            ]
+        )
+        rows.append(
+            [
+                InlineKeyboardButton(
+                    text="Wikipedia",
+                    callback_data=f"av:{token}:wikipedia:0",
+                )
+            ]
+        )
         discovery_buttons: list[InlineKeyboardButton] = []
         if show_related:
             discovery_buttons.append(
@@ -389,12 +398,14 @@ def fallback_main_keyboard(
             ),
         ],
     ]
-    rows.append([
-        InlineKeyboardButton(
-            text="Wikipedia",
-            callback_data=f"av:{token}:wikipedia:0",
-        )
-    ])
+    rows.append(
+        [
+            InlineKeyboardButton(
+                text="Wikipedia",
+                callback_data=f"av:{token}:wikipedia:0",
+            )
+        ]
+    )
     discovery_buttons: list[InlineKeyboardButton] = []
     if show_related:
         discovery_buttons.append(
@@ -410,6 +421,14 @@ def fallback_main_keyboard(
         )
     )
     rows.append(discovery_buttons)
+    rows.append(
+        [
+            InlineKeyboardButton(
+                text=text("watchlists", "add_to_list", locale=locale),
+                callback_data=f"wlcard:{token}",
+            )
+        ]
+    )
     if show_all_ids:
         rows.append(
             [

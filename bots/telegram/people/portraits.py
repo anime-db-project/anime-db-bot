@@ -78,8 +78,13 @@ async def _render_people_view(
         source = dict(options)[source_key]
 
     without, with_portraits = _people_state(anime, section, source, locale=locale)
-    groups = record_pages([_person_line(person, locale) for person in without], heading=text('people', section, locale=locale) + (f' — {source}' if source else '') + ':')
-    max_page = len(with_portraits) + max(0, len(groups)-1)
+    groups = record_pages(
+        [_person_line(person, locale) for person in without],
+        heading=text("people", section, locale=locale)
+        + (f" — {source}" if source else "")
+        + ":",
+    )
+    max_page = len(with_portraits) + max(0, len(groups) - 1)
     first_page = _first_people_page(without, with_portraits)
     page = max(first_page, min(int(page), max_page))
     total_hint = _scope_total_hint(anime, section, progress, source)

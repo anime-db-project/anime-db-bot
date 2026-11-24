@@ -83,25 +83,60 @@ def build_dispatcher(mode_name: str, state: TelegramCardState) -> Dispatcher:
     register_settings_handlers(dp)
     register_wikipedia_handlers(dp, state)
 
-    pending_start = ExpiringSessionStore(max_entries=500, ttl_seconds=600, name="welcome_payload")
+    pending_start = ExpiringSessionStore(
+        max_entries=500, ttl_seconds=600, name="welcome_payload"
+    )
 
     async def welcome(message, locale, *, edit=False):
         rows = []
-        if get_settings().telegram.inline_enabled and not get_settings().telegram.allowed_group_ids:
-            rows.append([InlineKeyboardButton(text=text("project", "inline", locale=locale), switch_inline_query_current_chat="")])
-        rows.append([InlineKeyboardButton(text=text("settings", "title", locale=locale), callback_data="settings:back"),
-                     InlineKeyboardButton(text=text("project", "title", locale=locale), callback_data="settings:about")])
+        if (
+            get_settings().telegram.inline_enabled
+            and not get_settings().telegram.allowed_group_ids
+        ):
+            rows.append(
+                [
+                    InlineKeyboardButton(
+                        text=text("project", "inline", locale=locale),
+                        switch_inline_query_current_chat="",
+                    )
+                ]
+            )
+        rows.append(
+            [
+                InlineKeyboardButton(
+                    text=text("watchlists", "title", locale=locale), callback_data="wlh"
+                )
+            ]
+        )
+        rows.append(
+            [
+                InlineKeyboardButton(
+                    text=text("settings", "title", locale=locale),
+                    callback_data="settings:back",
+                ),
+                InlineKeyboardButton(
+                    text=text("project", "title", locale=locale),
+                    callback_data="settings:about",
+                ),
+            ]
+        )
         send = message.edit_text if edit else message.answer
-        await send(text("project", "welcome", locale=locale), reply_markup=InlineKeyboardMarkup(inline_keyboard=rows))
+        await send(
+            text("project", "welcome", locale=locale),
+            reply_markup=InlineKeyboardMarkup(inline_keyboard=rows),
+        )
 
     async def open_payload(message, user_id, payload):
         if not payload:
             return
         from bots.telegram.card.runtime.service import aggregate_and_send
+
         source, external_id = payload
         locale = get_user_locale(user_id)
         try:
-            result = await get_app_context().direct_lookup.lookup(external_id, source_keys=(source,))
+            result = await get_app_context().direct_lookup.lookup(
+                external_id, source_keys=(source,)
+            )
             if result.items:
                 await aggregate_and_send(message, result.items[0], user_id, state)
             else:
@@ -110,7 +145,9 @@ def build_dispatcher(mode_name: str, state: TelegramCardState) -> Dispatcher:
             await message.answer(text("search", "get_result_failed", locale=locale))
 
     @dp.message(CommandStart())
-    async def start_handler(message: Message, command: CommandObject | None = None) -> None:
+    async def start_handler(
+        message: Message, command: CommandObject | None = None
+    ) -> None:
         user_id = message.from_user.id if message.from_user else None
         if user_id is None:
             return
@@ -119,7 +156,10 @@ def build_dispatcher(mode_name: str, state: TelegramCardState) -> Dispatcher:
         if not prefs.language_selected:
             if payload:
                 pending_start[str(user_id)] = payload
-            await message.answer("Choose your language:", reply_markup=_language_keyboard("", owner=user_id))
+            await message.answer(
+                "Choose your language:",
+                reply_markup=_language_keyboard("", owner=user_id),
+            )
             return
         if payload:
             await open_payload(message, user_id, payload)
@@ -129,14 +169,32 @@ def build_dispatcher(mode_name: str, state: TelegramCardState) -> Dispatcher:
     @dp.callback_query(F.data.startswith("welcome:"))
     async def welcome_language(callback: CallbackQuery):
         parts = (callback.data or "").split(":")
-        if len(parts) != 3 or parts[1] != str(callback.from_user.id) or parts[2] not in available_locales() or callback.message is None:
-            await callback.answer(text("card", "not_owner", locale=get_user_locale(callback.from_user.id)), show_alert=True)
+        if (
+            len(parts) != 3
+            or parts[1] != str(callback.from_user.id)
+            or parts[2] not in available_locales()
+            or callback.message is None
+        ):
+            await callback.answer(
+                text(
+                    "card", "not_owner", locale=get_user_locale(callback.from_user.id)
+                ),
+                show_alert=True,
+            )
             return
         if get_user_settings_store().get(callback.from_user.id).language_selected:
             await callback.answer()
             return
         locale = set_user_locale(callback.from_user.id, parts[2])
-        await callback.answer(text("settings", "language_saved", locale=locale, language=locale_name(locale, display_locale=locale)), show_alert=True)
+        await callback.answer(
+            text(
+                "settings",
+                "language_saved",
+                locale=locale,
+                language=locale_name(locale, display_locale=locale),
+            ),
+            show_alert=True,
+        )
         await welcome(callback.message, locale, edit=True)
         payload = pending_start.get(str(callback.from_user.id))
         if payload:
@@ -145,7 +203,10 @@ def build_dispatcher(mode_name: str, state: TelegramCardState) -> Dispatcher:
 
     @dp.message(Command("about"))
     async def about_handler(message: Message) -> None:
-        await show_about(message, get_user_locale(message.from_user.id if message.from_user else None))
+        await show_about(
+            message,
+            get_user_locale(message.from_user.id if message.from_user else None),
+        )
 
     @dp.message(Command("ping"))
     async def ping_handler(message: Message) -> None:

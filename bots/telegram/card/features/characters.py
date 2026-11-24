@@ -241,14 +241,29 @@ def _page_text(
     if source:
         title += f" — {source}"
 
-    groups = record_pages([_character_line(character, locale) for character in without], heading=title + ":")
+    groups = record_pages(
+        [_character_line(character, locale) for character in without],
+        heading=title + ":",
+    )
     group_count = len(groups)
-    max_page = len(with_portraits) + max(0, group_count-1)
+    max_page = len(with_portraits) + max(0, group_count - 1)
     page = max(_first_character_page(without, with_portraits), min(int(page), max_page))
     if not values:
-        return title + ":\n\n" + text("characters", "none", locale=locale), [], 0, 0, page
+        return (
+            title + ":\n\n" + text("characters", "none", locale=locale),
+            [],
+            0,
+            0,
+            page,
+        )
     if page < group_count:
-        return "\n".join([title + ":", "", *groups[page]]), [], sum(len(group) for group in groups[:page+1]), total, page
+        return (
+            "\n".join([title + ":", "", *groups[page]]),
+            [],
+            sum(len(group) for group in groups[: page + 1]),
+            total,
+            page,
+        )
 
     portrait_index = page - group_count if group_count else page - 1
     character = with_portraits[portrait_index]
@@ -437,9 +452,16 @@ async def edit_characters_view(
         )
     else:
         _, without, with_portraits = _character_state(session, source)
-        heading = text('characters', 'title', locale=locale) + (f' — {source}' if source else '') + ':'
-        groups = record_pages([_character_line(character, locale) for character in without], heading=heading)
-        max_page = len(with_portraits) + max(0, len(groups)-1)
+        heading = (
+            text("characters", "title", locale=locale)
+            + (f" — {source}" if source else "")
+            + ":"
+        )
+        groups = record_pages(
+            [_character_line(character, locale) for character in without],
+            heading=heading,
+        )
+        max_page = len(with_portraits) + max(0, len(groups) - 1)
         first_page = _first_character_page(without, with_portraits)
         content, urls, shown, total, page = _page_text(
             session, source, page, locale=locale

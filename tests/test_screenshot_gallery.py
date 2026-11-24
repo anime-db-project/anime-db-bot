@@ -113,7 +113,7 @@ class ScreenshotGalleryTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(
             [button.text for button in keyboard.inline_keyboard[0]], ["1/3", "▶️"]
         )
-        self.assertIn("Все скриншоты", keyboard.inline_keyboard[1][0].text)
+        self.assertIn("Все источники", keyboard.inline_keyboard[1][0].text)
 
     async def test_source_screenshots_put_pagination_above_sources(self) -> None:
         session = self._session(17)
@@ -133,7 +133,7 @@ class ScreenshotGalleryTests(unittest.IsolatedAsyncioTestCase):
             [button.text for button in keyboard.inline_keyboard[0]],
             ["◀️", "2/3", "▶️"],
         )
-        self.assertIn("Все скриншоты", keyboard.inline_keyboard[1][0].text)
+        self.assertIn("Все источники", keyboard.inline_keyboard[1][0].text)
 
 
 if __name__ == "__main__":

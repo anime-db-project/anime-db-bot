@@ -470,7 +470,12 @@ def _episode_keyboard(
         InlineKeyboardButton(
             text=("✓ " if candidate == backend else "")
             + service.display_name(candidate),
-            callback_data=KeyedPageCallback("ap", token, candidate, source_switch_page if source_switch_page is not None else view_page).encode(),
+            callback_data=KeyedPageCallback(
+                "ap",
+                token,
+                candidate,
+                source_switch_page if source_switch_page is not None else view_page,
+            ).encode(),
         )
         for candidate in backends
     ]
@@ -701,7 +706,9 @@ async def edit_episodes_view(
         backend = session.episode_backend
     backend = resolve_backend_selector(backend, backends)
     source_name = service.display_name(backend)
-    switching_source = session.episode_backend is not None and session.episode_backend != backend
+    switching_source = (
+        session.episode_backend is not None and session.episode_backend != backend
+    )
     session.episode_backend = backend
 
     segment_backends = segment_service.available_backends(session.anime.identity)
@@ -767,7 +774,11 @@ async def edit_episodes_view(
     else:
         initial_empty = False
     requested_episode_number = view_page + 1
-    projection = None if source_is_empty else _episode_release_projection(session.anime, requested_episode_number)
+    projection = (
+        None
+        if source_is_empty
+        else _episode_release_projection(session.anime, requested_episode_number)
+    )
     items = page.items[offset : offset + EPISODES_PER_VIEW]
 
     catalog = session.episode_catalogs.get(backend)
@@ -918,7 +929,17 @@ async def edit_episodes_view(
             if projection is None:
                 if initial_empty:
                     return _episodes_text([], locale=locale, source_name=source_name)
-                return text('card', 'episode_detail_title', locale=locale, number=str(requested_episode_number), source=source_name) + '\n\n' + text('common', 'no_data', locale=locale)
+                return (
+                    text(
+                        "card",
+                        "episode_detail_title",
+                        locale=locale,
+                        number=str(requested_episode_number),
+                        source=source_name,
+                    )
+                    + "\n\n"
+                    + text("common", "no_data", locale=locale)
+                )
             return "\n".join(
                 [
                     text(
@@ -954,7 +975,11 @@ async def edit_episodes_view(
             view_page=view_page,
             total_episodes=total_episodes,
             has_prev=has_prev,
-            current_episode=0 if initial_empty else requested_episode_number if not items else None,
+            current_episode=0
+            if initial_empty
+            else requested_episode_number
+            if not items
+            else None,
             displayed_episode=nav_displayed_episode,
             display_total=nav_display_total,
             picker_route=nav_picker_route,

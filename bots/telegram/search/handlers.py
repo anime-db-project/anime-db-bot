@@ -756,7 +756,9 @@ def _preview_rich(
         for line in group.splitlines():
             label, sep, value = line.partition(": ")
             if sep:
-                rows.append(f"<tr><th>{html.escape(label)}</th><td>{html.escape(value)}</td></tr>")
+                rows.append(
+                    f"<tr><th>{html.escape(label)}</th><td>{html.escape(value)}</td></tr>"
+                )
             else:
                 rows.append(f'<tr><td colspan="2">{html.escape(line)}</td></tr>')
         if rows:
@@ -804,6 +806,11 @@ def _remember_preview_file_id(
         file_id = str(getattr(best, "file_id", "") or "").strip()
         if file_id:
             session.poster_file_ids[poster_url] = file_id
+            from bots.telegram.inline_media import remember_photo
+
+            bot = getattr(result, "bot", None)
+            if bot is not None:
+                remember_photo(bot.id, poster_url, file_id)
             return True
     return False
 
@@ -970,7 +977,7 @@ async def _send_preview(
     try:
         result = await edit_rich(cached_file_id)
         _remember_preview_file_id(session, candidate, result)
-        return
+        return None
     except Exception:
         if cached_file_id and poster_url:
             session.poster_file_ids.pop(poster_url, None)
@@ -981,7 +988,7 @@ async def _send_preview(
             try:
                 result = await edit_rich(poster_url)
                 _remember_preview_file_id(session, candidate, result)
-                return
+                return None
             except Exception:
                 logging.debug(
                     "Rich search preview retry failed; using plain text",
@@ -991,6 +998,7 @@ async def _send_preview(
             logging.debug("Rich search preview failed; using plain text", exc_info=True)
 
     await message.edit_text(text_value, reply_markup=keyboard)
+    return None
 
 
 async def _execute_query(
@@ -1029,10 +1037,19 @@ async def _execute_query(
                 return
             # Keep published index -> identity stable, including stale buttons.
             for item in result.items:
-                index = next((i for i, old in enumerate(session.items)
-                              if old.identity.matches(item.identity)), None)
+                index = next(
+                    (
+                        i
+                        for i, old in enumerate(session.items)
+                        if old.identity.matches(item.identity)
+                    ),
+                    None,
+                )
                 if index is None:
-                    if len(session.items) < default_service.settings.collection_max_items:
+                    if (
+                        len(session.items)
+                        < default_service.settings.collection_max_items
+                    ):
                         session.items.append(item)
                 else:
                     session.items[index] = item
@@ -1040,9 +1057,13 @@ async def _execute_query(
             session.errors = dict(result.errors)
             if not session.picker_open:
                 try:
-                    await _send_preview(preview, token, session, session.preview_index, edit=True)
+                    await _send_preview(
+                        preview, token, session, session.preview_index, edit=True
+                    )
                 except Exception:
-                    logging.debug("Progressive search preview refresh failed", exc_info=True)
+                    logging.debug(
+                        "Progressive search preview refresh failed", exc_info=True
+                    )
 
     try:
         if parsed_direct is not None:
@@ -1074,7 +1095,13 @@ async def _execute_query(
             result_set = await service.collect(query, on_partial=publish)
             if len(provider_keys) > 1 and default_service.settings.expansion_enabled:
                 if token is None and result_set.items:
-                    await publish(SearchResultSet(items=result_set.items, complete=False, errors=result_set.errors))
+                    await publish(
+                        SearchResultSet(
+                            items=result_set.items,
+                            complete=False,
+                            errors=result_set.errors,
+                        )
+                    )
                 try:
                     result_set = await asyncio.wait_for(
                         expand_text_search(

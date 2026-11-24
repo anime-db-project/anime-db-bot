@@ -518,7 +518,11 @@ def register_admin_handlers(
     async def require_admin(message: Message) -> tuple[int | None, str]:
         admin_id = int(message.from_user.id) if message.from_user else None
         locale = get_user_locale(admin_id)
-        if admin_id is None or not is_telegram_admin(admin_id) or message.chat.type != 'private':
+        if (
+            admin_id is None
+            or not is_telegram_admin(admin_id)
+            or message.chat.type != "private"
+        ):
             await message.answer(_t(locale, "forbidden"))
             return None, locale
         return admin_id, locale

@@ -139,8 +139,12 @@ class SQLiteUserSettingsStore:
                         "TEXT NOT NULL DEFAULT 'clean'"
                     )
 
-                if "language_selected" not in self._table_columns(connection, "user_settings"):
-                    connection.execute("ALTER TABLE user_settings ADD COLUMN language_selected INTEGER NOT NULL DEFAULT 1")
+                if "language_selected" not in self._table_columns(
+                    connection, "user_settings"
+                ):
+                    connection.execute(
+                        "ALTER TABLE user_settings ADD COLUMN language_selected INTEGER NOT NULL DEFAULT 1"
+                    )
                 connection.execute(
                     """
                     CREATE TABLE IF NOT EXISTS known_users (

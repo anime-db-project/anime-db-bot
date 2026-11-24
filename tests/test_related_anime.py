@@ -405,7 +405,12 @@ class RelatedAnimeUiTests(unittest.TestCase):
         ]
         self.assertEqual(
             callbacks,
-            ["av:token:wikipedia:0", "ci:token:related", "ci:token:recommendations"],
+            [
+                "wlcard:token",
+                "av:token:wikipedia:0",
+                "ci:token:related",
+                "ci:token:recommendations",
+            ],
         )
 
     def test_fallback_main_keyboard_has_both_discovery_buttons(self) -> None:
@@ -519,9 +524,7 @@ class RelatedAnimeAvailabilityTests(unittest.IsolatedAsyncioTestCase):
         message.edit_reply_markup.assert_awaited_once()
         markup = message.edit_reply_markup.await_args.kwargs["reply_markup"]
         actions = [
-            button.callback_data
-            for row in markup.inline_keyboard
-            for button in row
+            button.callback_data for row in markup.inline_keyboard for button in row
         ]
         self.assertIn(f"ci:{token}:related", actions)
         self.assertIn(f"ci:{token}:recommendations", actions)
@@ -541,8 +544,12 @@ class RelatedAnimeAvailabilityTests(unittest.IsolatedAsyncioTestCase):
                 return_value=SimpleNamespace(related_anime_service=service),
             ):
                 await _check_related_and_update_button(
-                    message, token, session, state,
-                    locale="en", plain_fallback=False,
+                    message,
+                    token,
+                    session,
+                    state,
+                    locale="en",
+                    plain_fallback=False,
                 )
             self.assertTrue(session.related_loaded)
             message.edit_reply_markup.assert_not_awaited()

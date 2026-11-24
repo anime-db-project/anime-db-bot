@@ -344,11 +344,24 @@ class JikanSource:
             # Legacy local Jikan bridge only emitted Japanese credits.
             raw_language = _clean(item.get("language", "Japanese")).casefold()
             language = {
-                "japanese": "ja", "english": "en", "russian": "ru",
-                "german": "de", "french": "fr", "spanish": "es",
-                "italian": "it", "portuguese": "pt", "korean": "ko",
-                "chinese": "zh", "mandarin": "zh", "polish": "pl",
-            }.get(raw_language, raw_language if len(raw_language) in (2, 3) and raw_language.isalpha() else "und")
+                "japanese": "ja",
+                "english": "en",
+                "russian": "ru",
+                "german": "de",
+                "french": "fr",
+                "spanish": "es",
+                "italian": "it",
+                "portuguese": "pt",
+                "korean": "ko",
+                "chinese": "zh",
+                "mandarin": "zh",
+                "polish": "pl",
+            }.get(
+                raw_language,
+                raw_language
+                if len(raw_language) in (2, 3) and raw_language.isalpha()
+                else "und",
+            )
             role = voice_role_token(character or None)
             if language != "ja":
                 role += f" [{language.upper()}]"

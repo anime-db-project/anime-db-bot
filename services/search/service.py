@@ -240,6 +240,7 @@ class SearchService:
             if shared is not None:
                 self._result_set_cache.set(cache_key, shared)
                 return shared
+
         async def broadcast(result: SearchResultSet) -> None:
             for queue in tuple(self._collection_subscribers.get(cache_key, ())):
                 if queue.full():
@@ -250,8 +251,14 @@ class SearchService:
             return await self._collection_flight.run(
                 cache_key,
                 lambda: self._collect_uncached(
-                    query, page_size, max_pages, threshold, tail_pages, max_items,
-                    cache_key, on_partial=broadcast,
+                    query,
+                    page_size,
+                    max_pages,
+                    threshold,
+                    tail_pages,
+                    max_items,
+                    cache_key,
+                    on_partial=broadcast,
                 ),
             )
 
@@ -265,7 +272,9 @@ class SearchService:
         try:
             while not task.done():
                 get_task = asyncio.create_task(queue.get())
-                done, _ = await asyncio.wait((task, get_task), return_when=asyncio.FIRST_COMPLETED)
+                done, _ = await asyncio.wait(
+                    (task, get_task), return_when=asyncio.FIRST_COMPLETED
+                )
                 if get_task in done:
                     await on_partial(get_task.result())
                 else:
@@ -275,7 +284,10 @@ class SearchService:
             return await task
         finally:
             subscribers.discard(queue)
-            if not subscribers and self._collection_subscribers.get(cache_key) is subscribers:
+            if (
+                not subscribers
+                and self._collection_subscribers.get(cache_key) is subscribers
+            ):
                 self._collection_subscribers.pop(cache_key, None)
             if get_task is not None:
                 get_task.cancel()
@@ -293,7 +305,8 @@ class SearchService:
         tail_pages: int,
         max_items: int,
         cache_key: tuple[str, int, int, int, int],
-        *, on_partial: Callable[[SearchResultSet], Awaitable[None]] | None = None,
+        *,
+        on_partial: Callable[[SearchResultSet], Awaitable[None]] | None = None,
     ) -> SearchResultSet:
         async def collect_provider(
             provider_index: int,
@@ -358,7 +371,11 @@ class SearchService:
         complete = True
 
         def snapshot(*, final: bool) -> SearchResultSet:
-            items = _merge_entries(query, sorted(entries, key=lambda row: (row[0], row[2])), allow_title_merge=True)
+            items = _merge_entries(
+                query,
+                sorted(entries, key=lambda row: (row[0], row[2])),
+                allow_title_merge=True,
+            )
             items.sort(key=lambda candidate: -_relevance_score(query, candidate))
             return SearchResultSet(
                 items=items[:max_items],
@@ -369,7 +386,9 @@ class SearchService:
         async def tagged(index, provider):
             return provider, await collect_provider(index, provider)
 
-        tasks = [asyncio.create_task(tagged(i, p)) for i, p in enumerate(self._providers)]
+        tasks = [
+            asyncio.create_task(tagged(i, p)) for i, p in enumerate(self._providers)
+        ]
         try:
             for finished in asyncio.as_completed(tasks):
                 provider, (provider_entries, error, provider_complete) = await finished
