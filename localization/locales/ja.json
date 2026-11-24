@@ -274,7 +274,7 @@
     "databases": "データベース: {value}",
     "all_ids_button": "すべてのIDを表示",
     "ids_table_title": "データベースID",
-    "record_range": "項目 {start}–{end}",
+    "record_range": "画像なし {start}–{end}",
     "all_ids_title": "作品の全ID",
     "all_ids_empty": "この作品に紐づくIDは見つかりませんでした。",
     "ids": "ID: {value}",

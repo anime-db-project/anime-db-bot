@@ -479,7 +479,7 @@ def _episode_keyboard(
     )
 
     if segment_backends:
-        all_label = f"{text('card', 'timecodes_label', locale=locale)} — {text('search_ui', 'all', locale=locale)}"
+        all_label = f"⏱ {text('search_ui', 'all', locale=locale)}"
         segment_buttons = [
             InlineKeyboardButton(
                 text=("✓ " if segment_backend == "all" else "") + all_label,
@@ -491,7 +491,7 @@ def _episode_keyboard(
         segment_buttons.extend(
             InlineKeyboardButton(
                 text=("✓ " if segment_backend == candidate else "")
-                + f"{text('card', 'timecodes_label', locale=locale)} — {segment_service.display_name(candidate)}",
+                + f"⏱ {segment_service.display_name(candidate)}",
                 callback_data=KeyedPageCallback(
                     "ap",
                     token,
@@ -588,7 +588,7 @@ async def _load_episode_timecodes(
             episode_length_seconds=episode_length_seconds,
         )
         return _EpisodeTimecodes(
-            f"{text('card', 'timecodes_label', locale=locale)} — {text('search_ui', 'all', locale=locale)}",
+            f"⏱ {text('card', 'timecodes_label', locale=locale)} — {text('search_ui', 'all', locale=locale)}",
             values,
             [],
             available,
@@ -609,7 +609,7 @@ async def _load_episode_timecodes(
         )
         source_values = []
     return _EpisodeTimecodes(
-        f"{text('card', 'timecodes_label', locale=locale)} — {service.display_name(selected)}",
+        f"⏱ {text('card', 'timecodes_label', locale=locale)} — {service.display_name(selected)}",
         [],
         source_values,
         available,

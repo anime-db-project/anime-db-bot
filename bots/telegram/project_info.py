@@ -61,21 +61,21 @@ async def about_content(locale: str) -> tuple[str, InputRichMessage]:
     repository_label = text("project", "repository", locale=locale)
     rows = []
     lines = [title, "", description, "", BASE, ""]
-    for repo in repos:
+    total = sum(r["stars"] for r in repos if isinstance(r.get("stars"), int))
+    for repo in sorted(repos, key=lambda item: (REPOSITORIES.index(item["name"]) if item["name"] in REPOSITORIES else len(REPOSITORIES), item["name"])):
         name = str(repo["name"])
         url = BASE + "/" + quote(name, safe="")
         stars = str(repo["stars"]) if isinstance(repo.get("stars"), int) else unknown
         license_id = str(repo.get("license") or unknown)
         lines.append(f"{name}: {stars_label} {stars}; {license_label}: {license_id}\n{url}")
-        rows.append(f'<tr><td><a href="{html.escape(url, quote=True)}">{html.escape(name)}</a></td><td>{html.escape(stars)}</td><td>{html.escape(license_id)}</td></tr>')
-    body = f"<h2>{html.escape(title)}</h2><p>{html.escape(description)}</p><p><a href=\"{BASE}\">GitHub · {ORG}</a></p><p><br></p><table bordered striped compact><tr><th>{html.escape(repository_label)}</th><th>{html.escape(stars_label)}</th><th>{html.escape(license_label)}</th></tr>" + "".join(rows) + "</table>"
+        rows.append(f'<tr><td align="left"><a href="{html.escape(url, quote=True)}">{html.escape(name)}</a></td><td align="center"><a href="{html.escape(url + "/stargazers", quote=True)}">{html.escape("⭐ " + stars)}</a></td><td align="left">{html.escape(license_id)}</td></tr>')
+    total_label = str(total) if all(isinstance(r.get("stars"), int) for r in repos) else unknown
+    body = f"<h2>{html.escape(title)}</h2><p>{html.escape(description)}</p><p><a href=\"{BASE}\">GitHub · {ORG}</a></p><p>{html.escape(stars_label)}: {html.escape(total_label)}</p><p><br></p><table bordered striped compact><tr><th>{html.escape(repository_label)}</th><th>{html.escape(stars_label)}</th><th>{html.escape(license_label)}</th></tr>" + "".join(rows) + "</table>"
     return "\n".join(lines), InputRichMessage(html=body)
 
 
 def about_keyboard(locale: str, *, back: bool = False) -> InlineKeyboardMarkup:
-    rows = [[InlineKeyboardButton(text="GitHub", url=BASE)]]
-    if back:
-        rows.append([InlineKeyboardButton(text=text("settings", "back", locale=locale), callback_data="settings:back")])
+    rows = [[InlineKeyboardButton(text="GitHub", url=BASE)], [InlineKeyboardButton(text=text("settings", "back", locale=locale), callback_data="settings:back")]]
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
@@ -84,6 +84,9 @@ async def show_about(message, locale: str, *, edit: bool = False) -> None:
     send = message.edit_text if edit else message.answer
     keyboard = about_keyboard(locale, back=edit)
     try:
-        await send(rich_message=rich, reply_markup=keyboard)
+        if edit:
+            await message.edit_text(rich_message=rich, reply_markup=keyboard)
+        else:
+            await message.answer_rich(rich, reply_markup=keyboard)
     except Exception:
         await send(text=plain, reply_markup=keyboard)

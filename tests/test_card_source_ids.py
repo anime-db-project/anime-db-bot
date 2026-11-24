@@ -3,7 +3,7 @@ from __future__ import annotations
 import unittest
 
 from bots.telegram.card.views.renderer import anime_sections, main_rich
-from bots.telegram.card.features.mapping_ids import mapping_ids_pages
+from bots.telegram.card.features.mapping_ids import mapping_ids_pages, mapping_ids_rich
 from bots.telegram.card.ui.keyboards import fallback_main_keyboard, navigation_keyboard
 from localization import available_locales, text
 from core.models import AggregatedAnime
@@ -114,6 +114,10 @@ class CardSourceIdTests(unittest.TestCase):
             with self.subTest(locale=locale):
                 pages = mapping_ids_pages("amdb:18472", source_ids, locale=locale)
                 self.assertEqual(len(pages), 1)
+                rich_ids = mapping_ids_rich(pages[0], source_ids).html
+                self.assertIn("https://anidb.net/anime/300", rich_ids)
+                self.assertIn("<table", rich_ids)
+                self.assertNotIn("Anime Mapping DB", rich_ids)
                 self.assertIn("AMDB: 18472", pages[0])
                 for provider, values in source_ids.items():
                     self.assertIn(f"{provider.upper().replace(chr(95), chr(32))}: {values[0]}", pages[0])

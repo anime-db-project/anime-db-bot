@@ -41,27 +41,12 @@ def mapping_ids_pages(
 
 
 def _id_url(provider: str, value: str) -> str | None:
-    templates = {
-        "MAL": "https://myanimelist.net/anime/{}",
-        "MYANIMELIST": "https://myanimelist.net/anime/{}",
-        "ANILIST": "https://anilist.co/anime/{}",
-        "ANIDB": "https://anidb.net/anime/{}",
-        "ANISEARCH": "https://www.anisearch.com/anime/{}",
-        "SHIKIMORI": "https://shikimori.one/animes/{}",
-        "KITSU": "https://kitsu.app/anime/{}",
-        "BANGUMI": "https://bgm.tv/subject/{}",
-        "IMDB": "https://www.imdb.com/title/{}",
-        "TMDB": "https://www.themoviedb.org/tv/{}",
-        "TMDB TV": "https://www.themoviedb.org/tv/{}",
-        "TMDB MOVIE": "https://www.themoviedb.org/movie/{}",
-        "TVDB": "https://thetvdb.com/?id={}&tab=series",
-        "WIKIDATA": "https://www.wikidata.org/wiki/{}",
-    }
-    template = templates.get(provider)
-    return template.format(quote(value, safe="")) if template and value else None
+    from core.mapping_links import mapping_id_url
+    from core.settings import get_settings
+    return mapping_id_url(provider, value, get_settings().telegram.mapping_id_urls)
 
 
-def mapping_ids_rich(page: str) -> InputRichMessage:
+def mapping_ids_rich(page: str, source_ids=None) -> InputRichMessage:
     heading, _, body = page.partition("\n\n")
     rows = []
     for line in body.splitlines():
@@ -69,7 +54,19 @@ def mapping_ids_rich(page: str) -> InputRichMessage:
         if not sep:
             rows.append(f'<tr><td colspan="2">{html.escape(line)}</td></tr>')
             continue
-        url = _id_url(key, value)
+        original = value
+        if source_ids is not None:
+            candidates = [v for v in source_ids.get(key.lower().replace(" ", "_"), ()) if v.replace("_", " ") == value]
+            if len(candidates) == 1:
+                original = candidates[0]
+        url = _id_url(key, original)
+        if url is None and source_ids is not None:
+            # Internal numeric IDs have no public page: use the unique sibling
+            # slug when the entity has exactly one unambiguous alternative.
+            alias = {"KAIZE ID": "kaize", "NAUTILJON ID": "nautiljon", "LETTERBOXD UID": "letterboxd_slug"}.get(key)
+            siblings = source_ids.get(alias, ()) if alias else ()
+            if len(siblings) == 1:
+                url = _id_url(alias, siblings[0])
         escaped = html.escape(value)
         rendered = f'<a href="{html.escape(url, quote=True)}">{escaped}</a>' if url else escaped
         rows.append(f"<tr><th>{html.escape(key)}</th><td>{rendered}</td></tr>")
@@ -94,7 +91,7 @@ async def edit_mapping_ids_view(
     )
     try:
         await message.edit_text(
-            rich_message=mapping_ids_rich(pages[page]),
+            rich_message=mapping_ids_rich(pages[page], source_ids),
             reply_markup=keyboard,
         )
     except Exception:

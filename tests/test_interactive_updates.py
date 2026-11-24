@@ -9,10 +9,6 @@ from aiogram.types import InlineQuery, Update, User
 
 from bots.telegram.allowlist import TelegramAllowlistMiddleware
 from bots.telegram.card.text_expansion import record_pages, records_rich_html, long_text_parts
-from bots.telegram.card.features.mapping_ids import mapping_ids_pages, mapping_ids_rich
-from bots.telegram.command_menu import commands_for
-from bots.telegram.inline_mode import deep_link_payload, parse_start_payload
-from bots.telegram.card.runtime.picker_entries import picker_prompt
 from core.models import PersonCredit, SearchCandidate, SearchPage
 from core.people import voice_credits_for_locale
 from services.search.service import SearchService
@@ -87,19 +83,3 @@ class NewLayoutTests(unittest.TestCase):
         self.assertEqual([p.name for p in result], ["JP", "RU", "Mixed"])
         self.assertEqual(result[-1].roles, ["voice_of::Hero"])
         self.assertEqual(len(people[-1].roles), 2)
-
-    def test_mapping_link_and_table(self):
-        page = mapping_ids_pages("amdb:1", {"anidb": ("239",), "tmdb_movie": ("2",)}, locale="ru")[0]
-        value = mapping_ids_rich(page).html
-        self.assertIn("https://anidb.net/anime/239", value)
-        self.assertIn("TMDB MOVIE", value)
-        self.assertNotIn("Anime Mapping DB", value)
-        self.assertIn("<table", value)
-
-    def test_inline_payload_and_scoped_commands(self):
-        candidate = SearchCandidate(title="Naruto", external_ids={"mal": "20"})
-        self.assertEqual(parse_start_payload(deep_link_payload(candidate)), ("mal", "20"))
-        self.assertIsNone(parse_start_payload("anime_mal_20_invalid"))
-        self.assertNotIn("ban", [c.command for c in commands_for("ru")])
-        self.assertIn("ban", [c.command for c in commands_for("ru", administrator=True)])
-        self.assertEqual(picker_prompt("ap~jikan", "ru"), "Выберите серию:")

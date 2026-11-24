@@ -101,7 +101,7 @@ class SourceScopedInitialPickerTests(unittest.IsolatedAsyncioTestCase):
         assert choice is not None
         route, labels = choice
         self.assertEqual(route, "gx~ac~shikimori~1")
-        self.assertEqual(labels, ["Записи 1–2", "Portrait character"])
+        self.assertEqual(labels, ["Без портретов 1–2", "Portrait character"])
         self.assertEqual(card_route_callback("token", route, 0), "ac:token:shikimori:0")
         self.assertEqual(card_route_callback("token", route, 1), "ac:token:shikimori:1")
         self.assertIsNone(source_character_choices(session, "unknown", locale="ru"))
@@ -114,7 +114,7 @@ class SourceScopedInitialPickerTests(unittest.IsolatedAsyncioTestCase):
         )
         session = AnimeCardSession(anime=anime, owner_user_id=1)
         labels = labels_for_route(session, "gx~av~staff~1", locale="ru")
-        self.assertEqual(labels, ["Записи 1–5"])
+        self.assertEqual(labels, ["Без портретов 1–5"])
         self.assertEqual(
             card_route_callback("token", "gx~av~staff~1", 0),
             "av:token:staff:0",

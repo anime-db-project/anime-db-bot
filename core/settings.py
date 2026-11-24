@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from core.mapping_links import mapping_link_templates, DEFAULT_MAPPING_LINKS
+
 import math
 import os
 import re
@@ -208,6 +210,18 @@ def _user_ids(value: str, *, setting: str) -> tuple[int, ...]:
     return tuple(result)
 
 
+def _group_ids(value: str) -> tuple[int, ...]:
+    ids = []
+    for token in _ADMIN_SPLIT_RE.split((value or "").strip()):
+        if not token:
+            continue
+        if not re.fullmatch(r"-[0-9]+", token) or int(token) >= 0:
+            raise ValueError("TELEGRAM_ALLOWED_GROUP_IDS requires negative chat IDs")
+        if int(token) not in ids:
+            ids.append(int(token))
+    return tuple(ids)
+
+
 def _admin_ids(value: str) -> tuple[int, ...]:
     return _user_ids(value, setting="ADMIN_TELEGRAM_USER_IDS")
 
@@ -383,6 +397,9 @@ class TelegramSettings:
     admin_user_ids: tuple[int, ...]
     bot_api_local_file_root: Path | None = None
     allowed_user_ids: tuple[int, ...] = ()
+    inline_enabled: bool = True
+    allowed_group_ids: tuple[int, ...] = ()
+    mapping_id_urls: Mapping[str, str] = field(default_factory=lambda: dict(DEFAULT_MAPPING_LINKS))
     denied_reply_cooldown_seconds: float = 60.0
     denied_global_replies_per_minute: int = 20
     denied_max_tracked_users: int = 4096
@@ -751,6 +768,9 @@ class AppSettings:
                     _raw(values, "TELEGRAM_ALLOWED_USER_IDS"),
                     setting="TELEGRAM_ALLOWED_USER_IDS",
                 ),
+                inline_enabled=_bool(values, "TELEGRAM_INLINE_ENABLED", True),
+                allowed_group_ids=_group_ids(_raw(values, "TELEGRAM_ALLOWED_GROUP_IDS")),
+                mapping_id_urls=mapping_link_templates(values),
                 denied_reply_cooldown_seconds=_float(
                     values, "TELEGRAM_DENIED_REPLY_COOLDOWN_SECONDS", 60.0
                 ),

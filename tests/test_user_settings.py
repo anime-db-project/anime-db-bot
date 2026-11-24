@@ -14,6 +14,10 @@ class UserSettingsStoreTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             store = SQLiteUserSettingsStore(Path(directory) / "settings.sqlite3")
             self.assertEqual(store.get(123).locale, "en")
+            self.assertFalse(store.get(123).language_selected)
+            store.touch_user("telegram", 123)
+            self.assertFalse(store.get(123).language_selected)
+            self.assertTrue(store.set_locale(123, "ru").language_selected)
 
     def test_locale_survives_new_repository_instance(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -23,7 +27,9 @@ class UserSettingsStoreTests(unittest.TestCase):
 
             second = SQLiteUserSettingsStore(path)
             self.assertEqual(second.get(123).locale, "en")
+            self.assertTrue(second.get(123).language_selected)
             self.assertEqual(second.get(999).locale, "en")
+            self.assertFalse(second.get(999).language_selected)
 
     def test_supported_locales_are_persisted(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

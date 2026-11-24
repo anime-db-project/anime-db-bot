@@ -24,6 +24,8 @@ class TelegramAllowlistMiddleware(BaseMiddleware):
         self,
         allowed_user_ids: tuple[int, ...],
         *,
+        allowed_group_ids: tuple[int, ...] = (),
+        inline_enabled: bool = True,
         reply_cooldown_seconds: float = 60.0,
         global_replies_per_minute: int = 20,
         max_tracked_users: int = 4096,
@@ -31,6 +33,8 @@ class TelegramAllowlistMiddleware(BaseMiddleware):
         clock: Callable[[], float] = time.monotonic,
     ) -> None:
         self._allowed = frozenset(allowed_user_ids)
+        self._groups = frozenset(allowed_group_ids)
+        self._inline_enabled = inline_enabled
         self._denial_message = denial_message or _ACCESS_DENIED
         self._cooldown = max(0.0, reply_cooldown_seconds)
         self._global_limit = max(0, global_replies_per_minute)
@@ -64,12 +68,32 @@ class TelegramAllowlistMiddleware(BaseMiddleware):
         event: TelegramObject,
         data: dict[str, Any],
     ) -> Any:
-        if not self._allowed:
-            return await handler(event, data)
-
         inner = event.event if isinstance(event, Update) else event
         user = getattr(inner, "from_user", None)
-        if user is not None and int(user.id) in self._allowed:
+        inline = isinstance(inner, InlineQuery) or (
+            isinstance(inner, CallbackQuery) and bool(inner.inline_message_id)
+        )
+        # Telegram does not expose the destination chat ID of inline messages.
+        # Fail closed when group restrictions are configured.
+        if inline and (not self._inline_enabled or self._groups):
+            if isinstance(inner, InlineQuery):
+                await inner.answer([], cache_time=0, is_personal=True)
+            else:
+                await inner.answer(self._denial_message, show_alert=True)
+            return None
+        message = inner.message if isinstance(inner, CallbackQuery) else inner
+        chat = getattr(message, "chat", None)
+        if chat is not None and chat.type != "private":
+            if self._groups and chat.id not in self._groups:
+                if user is not None and self._may_notify(int(user.id)):
+                    if isinstance(inner, CallbackQuery):
+                        await inner.answer(self._denial_message, show_alert=True)
+                    elif isinstance(inner, Message) and (inner.text or inner.caption or "").startswith("/"):
+                        await inner.answer(self._denial_message)
+                return None
+            if user is None or getattr(user, "is_bot", False) or getattr(message, "sender_chat", None) is not None:
+                return None
+        if not self._allowed or (user is not None and int(user.id) in self._allowed):
             return await handler(event, data)
 
         if isinstance(inner, Message) and inner.chat.type != "private" and not (inner.text or inner.caption or "").startswith("/"):

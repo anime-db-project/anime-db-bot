@@ -307,7 +307,9 @@ class AppSettingsTests(unittest.TestCase):
                     encoding="utf-8",
                 )
             values = project_env_values(root)
-        self.assertEqual(len(values), 250)
+        from core.mapping_links import DEFAULT_MAPPING_LINKS
+        self.assertEqual({key.removeprefix("TELEGRAM_ID_URL_").lower() for key in values if key.startswith("TELEGRAM_ID_URL_")}, set(DEFAULT_MAPPING_LINKS))
+        self.assertEqual(len(values), 252 + len(DEFAULT_MAPPING_LINKS))
         for key in (
             "BOT_ON_FAILURE",
             "BOT_ON_CLEAN_EXIT",

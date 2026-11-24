@@ -37,6 +37,7 @@ def validate_wikipedia_mode(value: str) -> str:
 class UserSettings:
     locale: str = DEFAULT_LOCALE
     wikipedia_mode: str = "clean"
+    language_selected: bool = False
 
 
 class SQLiteUserSettingsStore:
@@ -95,6 +96,7 @@ class SQLiteUserSettingsStore:
                 user_id INTEGER NOT NULL,
                 locale TEXT NOT NULL DEFAULT 'en',
                 wikipedia_mode TEXT NOT NULL DEFAULT 'clean',
+                language_selected INTEGER NOT NULL DEFAULT 0,
                 updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
                 PRIMARY KEY (platform, user_id)
             )
@@ -121,8 +123,8 @@ class SQLiteUserSettingsStore:
                     self._create_user_settings_table(connection)
                     connection.execute(
                         """
-                        INSERT INTO user_settings (platform, user_id, locale, updated_at)
-                        SELECT ?, user_id, locale, updated_at
+                        INSERT INTO user_settings (platform, user_id, locale, updated_at, language_selected)
+                        SELECT ?, user_id, locale, updated_at, 1
                         FROM user_settings_legacy
                         """,
                         (_DEFAULT_PLATFORM,),
@@ -137,6 +139,8 @@ class SQLiteUserSettingsStore:
                         "TEXT NOT NULL DEFAULT 'clean'"
                     )
 
+                if "language_selected" not in self._table_columns(connection, "user_settings"):
+                    connection.execute("ALTER TABLE user_settings ADD COLUMN language_selected INTEGER NOT NULL DEFAULT 1")
                 connection.execute(
                     """
                     CREATE TABLE IF NOT EXISTS known_users (
@@ -180,7 +184,7 @@ class SQLiteUserSettingsStore:
         with managed_sqlite_connection(self._connect()) as connection:
             row = connection.execute(
                 """
-                SELECT locale, wikipedia_mode FROM user_settings
+                SELECT locale, wikipedia_mode, language_selected FROM user_settings
                 WHERE platform = ? AND user_id = ?
                 """,
                 (platform_key, int(user_id)),
@@ -189,6 +193,7 @@ class SQLiteUserSettingsStore:
             UserSettings(
                 locale=normalize_locale(str(row[0])),
                 wikipedia_mode=normalize_wikipedia_mode(row[1]),
+                language_selected=bool(row[2]),
             )
             if row is not None
             else UserSettings(locale=self._default_locale)
@@ -216,10 +221,11 @@ class SQLiteUserSettingsStore:
         with managed_sqlite_connection(self._connect()) as connection:
             connection.execute(
                 """
-                INSERT INTO user_settings (platform, user_id, locale, updated_at)
-                VALUES (?, ?, ?, CURRENT_TIMESTAMP)
+                INSERT INTO user_settings (platform, user_id, locale, updated_at, language_selected)
+                VALUES (?, ?, ?, CURRENT_TIMESTAMP, 1)
                 ON CONFLICT(platform, user_id) DO UPDATE SET
                     locale = excluded.locale,
+                    language_selected = 1,
                     updated_at = CURRENT_TIMESTAMP
                 """,
                 (platform_key, int(user_id), normalized),

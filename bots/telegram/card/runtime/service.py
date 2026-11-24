@@ -117,6 +117,7 @@ async def aggregate_and_send(
         )
 
     token = state.remember_anime(anime, owner_user_id)
+    state.anime_sessions[token].inline_message_id = getattr(message, 'inline_message_id', None) if isinstance(getattr(message, 'inline_message_id', None), str) else None
     sent_message, plain_fallback = await send_anime_view(
         message,
         token,

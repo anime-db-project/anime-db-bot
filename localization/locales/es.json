@@ -270,7 +270,7 @@
     "databases": "Bases de datos: {value}",
     "all_ids_button": "Mostrar todos los ID",
     "ids_table_title": "ID de las fuentes",
-    "record_range": "Entradas {start}–{end}",
+    "record_range": "Sin retratos {start}–{end}",
     "all_ids_title": "Todos los ID del título",
     "all_ids_empty": "No se encontraron ID vinculados a este título.",
     "ids": "ID: {value}",

@@ -274,7 +274,7 @@
     "databases": "Базы данных: {value}",
     "all_ids_button": "Показать все ID",
     "ids_table_title": "ID источников",
-    "record_range": "Записи {start}–{end}",
+    "record_range": "Без портретов {start}–{end}",
     "all_ids_title": "Все ID тайтла",
     "all_ids_empty": "Для этого тайтла не найдены связанные ID.",
     "ids": "ID: {value}",

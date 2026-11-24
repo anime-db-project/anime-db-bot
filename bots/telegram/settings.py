@@ -44,7 +44,6 @@ def _settings_keyboard(
             callback_data="settings:wiki",
         )
     ])
-    rows.append([InlineKeyboardButton(text=text('project', 'title', locale=locale), callback_data='settings:about')])
     if private and is_telegram_admin(user_id):
         rows.append([
             InlineKeyboardButton(
@@ -52,10 +51,11 @@ def _settings_keyboard(
                 callback_data="cfg:h:0",
             )
         ])
+    rows.append([InlineKeyboardButton(text=text('project', 'title', locale=locale), callback_data='settings:about')])
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
-def _language_keyboard(locale: str) -> InlineKeyboardMarkup:
+def _language_keyboard(locale: str, *, owner: int | None = None) -> InlineKeyboardMarkup:
     rows: list[list[InlineKeyboardButton]] = []
     for value, flag in (
         ("en", "🇬🇧"),
@@ -75,10 +75,12 @@ def _language_keyboard(locale: str) -> InlineKeyboardMarkup:
             [
                 InlineKeyboardButton(
                     text=label,
-                    callback_data=SettingsCallback("locale", value).encode(),
+                    callback_data=f"welcome:{owner}:{value}" if owner is not None else SettingsCallback("locale", value).encode(),
                 )
             ]
         )
+    if owner is not None:
+        return InlineKeyboardMarkup(inline_keyboard=rows)
     rows.append(
         [
             InlineKeyboardButton(

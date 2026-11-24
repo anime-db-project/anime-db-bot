@@ -10,7 +10,7 @@ from aiogram.types import CallbackQuery, Message
 from bots.telegram.admin import TelegramModerationMiddleware, register_admin_handlers
 from bots.telegram.allowlist import TelegramAllowlistMiddleware
 from bots.telegram.command_menu import CommandMenuMiddleware, configure_command_menu
-from bots.telegram.inline_mode import register_inline_handlers
+from bots.telegram.inline_mode import register_inline_handlers, synchronize_inline_setting
 from bots.telegram.card.runtime.handlers import build_dispatcher
 from bots.telegram.card.runtime.service import aggregate_and_send
 from bots.telegram.card.runtime.state import TelegramCardState
@@ -288,6 +288,8 @@ async def run_bot(
             dp.update.outer_middleware(
                 TelegramAllowlistMiddleware(
                     settings.telegram.allowed_user_ids,
+                    allowed_group_ids=settings.telegram.allowed_group_ids,
+                    inline_enabled=settings.telegram.inline_enabled,
                     reply_cooldown_seconds=(
                         settings.telegram.denied_reply_cooldown_seconds
                     ),
@@ -311,6 +313,8 @@ async def run_bot(
             dp.callback_query.outer_middleware(observability)
             dp.callback_query.outer_middleware(moderation)
             dp.callback_query.outer_middleware(rate_limit)
+            inline_cards = register_inline_handlers(dp, context.search_service, context.direct_lookup, card_state)
+            dp.callback_query.outer_middleware(inline_cards)
             dp.callback_query.outer_middleware(_CallbackRoutingMiddleware(card_state))
 
             register_admin_handlers(
@@ -361,7 +365,7 @@ async def run_bot(
                 telegram_local_file_root=context.settings.telegram.bot_api_local_file_root,
             )
 
-            register_inline_handlers(dp, context.search_service, context.direct_lookup)
+            await synchronize_inline_setting(bot, settings.telegram)
             await configure_command_menu(bot, settings.telegram)
             await dp.start_polling(
                 bot,

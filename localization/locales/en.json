@@ -274,7 +274,7 @@
     "databases": "Databases: {value}",
     "all_ids_button": "Show all IDs",
     "ids_table_title": "Source IDs",
-    "record_range": "Entries {start}–{end}",
+    "record_range": "Without portraits {start}–{end}",
     "all_ids_title": "All title IDs",
     "all_ids_empty": "No mapped IDs found for this title.",
     "ids": "ID: {value}",

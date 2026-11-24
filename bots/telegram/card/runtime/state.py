@@ -17,6 +17,7 @@ MAX_PEOPLE_LOADS = 256
 class AnimeCardSession:
     anime: AggregatedAnime
     owner_user_id: int
+    inline_message_id: str | None = None
     episode_pages: dict[tuple[str, int], EpisodePage] = field(default_factory=dict)
     episode_catalogs: dict[str, list[EpisodeRecord]] = field(default_factory=dict)
     episode_details: dict[tuple[str, int], EpisodeRecord] = field(default_factory=dict)

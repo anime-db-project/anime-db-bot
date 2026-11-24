@@ -274,7 +274,7 @@
     "databases": "Database: {value}",
     "all_ids_button": "Mostra tutti gli ID",
     "ids_table_title": "ID delle fonti",
-    "record_range": "Voci {start}–{end}",
+    "record_range": "Senza ritratti {start}–{end}",
     "all_ids_title": "Tutti gli ID del titolo",
     "all_ids_empty": "Nessun ID associato trovato per questo titolo.",
     "ids": "ID: {value}",

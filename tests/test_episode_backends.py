@@ -288,7 +288,7 @@ class EpisodeBackendTests(unittest.TestCase):
         self.assertIn("ap:token:segments-aniskip:3", callbacks)
         self.assertFalse(any(value.startswith("ae:") for value in callbacks))
         self.assertTrue(any(button.text == "✓ AniDB" for button in flattened))
-        self.assertTrue(any(button.text == "✓ Таймкоды — Все" for button in flattened))
+        self.assertTrue(any(button.text == "✓ ⏱ Все" for button in flattened))
 
         rows = keyboard.inline_keyboard
         episode_source_row = next(
@@ -299,7 +299,7 @@ class EpisodeBackendTests(unittest.TestCase):
         timestamp_row = next(
             index
             for index, row in enumerate(rows)
-            if any("Таймкоды" in button.text for button in row)
+            if any("⏱" in button.text for button in row)
         )
         self.assertGreater(timestamp_row, episode_source_row)
 

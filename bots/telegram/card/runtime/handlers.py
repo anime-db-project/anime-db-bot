@@ -58,7 +58,11 @@ from bots.telegram.card.views.renderer import (
     edit_source_section_view,
 )
 from bots.telegram.pagination import MAX_CARD_PICKER_CHOICES, card_picker_keyboard
-from bots.telegram.settings import register_settings_handlers
+from bots.telegram.settings import register_settings_handlers, _language_keyboard
+from bots.session_store import ExpiringSessionStore
+from core.settings import get_settings
+from services.users.settings import get_user_settings_store, set_user_locale
+from localization import available_locales, locale_name
 from localization import text
 from services.runtime.app_context import get_app_context
 from services.users.settings import get_user_locale
@@ -79,31 +83,65 @@ def build_dispatcher(mode_name: str, state: TelegramCardState) -> Dispatcher:
     register_settings_handlers(dp)
     register_wikipedia_handlers(dp, state)
 
+    pending_start = ExpiringSessionStore(max_entries=500, ttl_seconds=600, name="welcome_payload")
+
+    async def welcome(message, locale, *, edit=False):
+        rows = []
+        if get_settings().telegram.inline_enabled and not get_settings().telegram.allowed_group_ids:
+            rows.append([InlineKeyboardButton(text=text("project", "inline", locale=locale), switch_inline_query_current_chat="")])
+        rows.append([InlineKeyboardButton(text=text("settings", "title", locale=locale), callback_data="settings:back"),
+                     InlineKeyboardButton(text=text("project", "title", locale=locale), callback_data="settings:about")])
+        send = message.edit_text if edit else message.answer
+        await send(text("project", "welcome", locale=locale), reply_markup=InlineKeyboardMarkup(inline_keyboard=rows))
+
+    async def open_payload(message, user_id, payload):
+        if not payload:
+            return
+        from bots.telegram.card.runtime.service import aggregate_and_send
+        source, external_id = payload
+        locale = get_user_locale(user_id)
+        try:
+            result = await get_app_context().direct_lookup.lookup(external_id, source_keys=(source,))
+            if result.items:
+                await aggregate_and_send(message, result.items[0], user_id, state)
+            else:
+                await message.answer(text("search", "get_result_failed", locale=locale))
+        except Exception:
+            await message.answer(text("search", "get_result_failed", locale=locale))
+
     @dp.message(CommandStart())
     async def start_handler(message: Message, command: CommandObject | None = None) -> None:
         user_id = message.from_user.id if message.from_user else None
-        locale = get_user_locale(user_id)
-        context = get_app_context()
+        if user_id is None:
+            return
         payload = parse_start_payload(command.args if command else "")
-        if payload and user_id is not None:
-            from bots.telegram.card.runtime.service import aggregate_and_send
-            source, external_id = payload
-            try:
-                result = await context.direct_lookup.lookup(external_id, source_keys=(source,))
-                if result.items:
-                    await aggregate_and_send(message, result.items[0], user_id, state)
-                    return
-            except Exception:
-                await message.answer(text('search', 'get_result_failed', locale=locale))
-                return
-        await message.answer(
-            text("project", "welcome", locale=locale),
-            reply_markup=InlineKeyboardMarkup(inline_keyboard=[
-                [InlineKeyboardButton(text=text("project", "inline", locale=locale), switch_inline_query_current_chat="")],
-                [InlineKeyboardButton(text=text("settings", "title", locale=locale), callback_data="settings:back"),
-                 InlineKeyboardButton(text=text("project", "title", locale=locale), callback_data="settings:about")],
-            ]),
-        )
+        prefs = get_user_settings_store().get(user_id)
+        if not prefs.language_selected:
+            if payload:
+                pending_start[str(user_id)] = payload
+            await message.answer("Choose your language:", reply_markup=_language_keyboard("", owner=user_id))
+            return
+        if payload:
+            await open_payload(message, user_id, payload)
+            return
+        await welcome(message, prefs.locale)
+
+    @dp.callback_query(F.data.startswith("welcome:"))
+    async def welcome_language(callback: CallbackQuery):
+        parts = (callback.data or "").split(":")
+        if len(parts) != 3 or parts[1] != str(callback.from_user.id) or parts[2] not in available_locales() or callback.message is None:
+            await callback.answer(text("card", "not_owner", locale=get_user_locale(callback.from_user.id)), show_alert=True)
+            return
+        if get_user_settings_store().get(callback.from_user.id).language_selected:
+            await callback.answer()
+            return
+        locale = set_user_locale(callback.from_user.id, parts[2])
+        await callback.answer(text("settings", "language_saved", locale=locale, language=locale_name(locale, display_locale=locale)), show_alert=True)
+        await welcome(callback.message, locale, edit=True)
+        payload = pending_start.get(str(callback.from_user.id))
+        if payload:
+            pending_start.pop(str(callback.from_user.id), None)
+            await open_payload(callback.message, callback.from_user.id, payload)
 
     @dp.message(Command("about"))
     async def about_handler(message: Message) -> None:
