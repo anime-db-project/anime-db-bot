@@ -348,10 +348,22 @@ async def run_bot(
 
             from bots.telegram.watchlists import register_watchlist_handlers
 
-            register_watchlist_handlers(dp, card_state)
-            register_search_handlers(
+            from bots.telegram.search.handlers import open_search_scope, WatchlistTarget
+
+            async def start_list_search(
+                message: Message, owner: int, target: WatchlistTarget
+            ) -> None:
+                await open_search_scope(
+                    message, search_state, owner, watchlist_target=target
+                )
+
+            add_search_candidate = register_watchlist_handlers(
+                dp, card_state, start_search=start_list_search
+            )
+            search_state = register_search_handlers(
                 dp,
                 aggregate_callback=aggregate_search_result,
+                watchlist_callback=add_search_candidate,
                 default_service=context.search_service,
                 direct_lookup=context.direct_lookup,
                 provider_map={

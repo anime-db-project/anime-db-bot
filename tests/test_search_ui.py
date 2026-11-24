@@ -314,7 +314,7 @@ class UnifiedSearchUiTests(unittest.TestCase):
         )
         self.assertEqual(
             len(dispatcher.callback_query.handlers) - initial_callback_handlers,
-            10,
+            11,
         )
 
     def test_search_ui_keeps_card_runtime_outside_search_module(self) -> None:

@@ -84,6 +84,12 @@ _SOURCE_LABELS = {
 _DIRECT_ID_RE = re.compile(r"^(?:(?P<source>[a-zA-Z0-9_-]+):)?(?P<id>[0-9]+)$")
 
 
+@dataclass(frozen=True, slots=True)
+class WatchlistTarget:
+    list_id: str
+    label: str
+
+
 @dataclass(slots=True)
 class SearchSession:
     query: str
@@ -99,12 +105,14 @@ class SearchSession:
     preview_index: int = 0
     picker_open: bool = False
     preview_lock: asyncio.Lock = field(default_factory=asyncio.Lock)
+    watchlist_target: WatchlistTarget | None = None
 
 
 @dataclass(slots=True)
 class ScopeSelectionSession:
     owner_user_id: int
     chat_id: int
+    watchlist_target: WatchlistTarget | None = None
 
 
 @dataclass(slots=True)
@@ -116,6 +124,7 @@ class ImageInputSession:
     filename: str = "image.jpg"
     content_type: str = "image/jpeg"
     file_size: int | None = None
+    watchlist_target: WatchlistTarget | None = None
 
 
 @dataclass(slots=True)
@@ -125,6 +134,8 @@ class PendingAnimeInput:
     provider_keys: tuple[str, ...]
     direct_source_keys: tuple[str, ...] | None
     scope_label: str
+    watchlist_target: WatchlistTarget | None = None
+    scope_token: str | None = None
 
 
 @dataclass(slots=True)
@@ -645,6 +656,7 @@ def _preview_keyboard(
     complete: bool,
     locale: str,
     image_search: bool = False,
+    allow_watchlists: bool = True,
 ) -> InlineKeyboardMarkup:
     nav: list[InlineKeyboardButton] = []
     if index > 0:
@@ -681,6 +693,15 @@ def _preview_keyboard(
             )
         ],
     ]
+    if allow_watchlists:
+        rows.append(
+            [
+                InlineKeyboardButton(
+                    text=text("watchlists", "add_to_list", locale=locale),
+                    callback_data=TokenIndexCallback("sw", token, index).encode(),
+                )
+            ]
+        )
     if image_search:
         rows.append(
             [
@@ -709,6 +730,12 @@ def _preview_text(
     ]
     if candidate.year:
         lines.append(_ui(locale, "year", year=candidate.year))
+    if session.watchlist_target is not None:
+        lines.append(
+            text("watchlists", "list_name", locale=locale)
+            + ": "
+            + session.watchlist_target.label
+        )
     if matches:
         lines.extend(["", _ui(locale, "image_matches")])
         lines.extend(_image_match_text(match, locale) for match in matches)
@@ -820,6 +847,7 @@ def _remember_results(
     query: str,
     owner_user_id: int,
     result_set: SearchResultSet,
+    watchlist_target: WatchlistTarget | None = None,
 ) -> str:
     token = secrets.token_urlsafe(6)
     state.sessions[token] = SearchSession(
@@ -828,6 +856,7 @@ def _remember_results(
         items=list(result_set.items),
         complete=result_set.complete,
         errors=dict(result_set.errors),
+        watchlist_target=watchlist_target,
     )
     return token
 
@@ -847,17 +876,52 @@ def _remember_image_results(
         errors=dict(result_set.errors),
         image_matches=[list(item.matches) for item in result_set.items],
         image_input_token=input_token,
+        watchlist_target=(
+            stored.watchlist_target
+            if (stored := state.image_inputs.get(input_token))
+            else None
+        ),
     )
     return token
 
 
-def _remember_scope(state: SearchUiState, owner_user_id: int, chat_id: int) -> str:
+def _remember_scope(
+    state: SearchUiState,
+    owner_user_id: int,
+    chat_id: int,
+    watchlist_target: WatchlistTarget | None = None,
+) -> str:
     token = secrets.token_urlsafe(6)
     state.scope_sessions[token] = ScopeSelectionSession(
         owner_user_id=int(owner_user_id),
         chat_id=int(chat_id),
+        watchlist_target=watchlist_target,
     )
     return token
+
+
+async def open_search_scope(
+    message: Message,
+    state: SearchUiState,
+    owner_user_id: int,
+    *,
+    watchlist_target: WatchlistTarget | None = None,
+    edit: bool = False,
+) -> None:
+    _clear_pending(state, owner_user_id)
+    token = _remember_scope(state, owner_user_id, message.chat.id, watchlist_target)
+    locale = get_user_locale(owner_user_id)
+    heading = _ui(locale, "choose_source")
+    if watchlist_target is not None:
+        heading = (
+            text("watchlists", "list_name", locale=locale)
+            + ": "
+            + watchlist_target.label
+            + "\n\n"
+            + heading
+        )
+    send = message.edit_text if edit else message.answer
+    await send(heading, reply_markup=_scope_keyboard(token, locale), parse_mode=None)
 
 
 def _pending_key(user_id: int) -> str:
@@ -936,6 +1000,8 @@ async def _send_preview(
         complete=session.complete,
         locale=locale,
         image_search=bool(session.image_input_token),
+        allow_watchlists=bool(candidate.external_ids)
+        and getattr(getattr(message, "chat", None), "type", "private") == "private",
     )
     poster_url = _preview_poster_url(candidate)
 
@@ -944,7 +1010,9 @@ async def _send_preview(
     # so page 1 is bootstrapped as a normal message and immediately upgraded in
     # place. Pagination itself remains a single edit per click.
     if not edit:
-        sent_message = await message.answer(text_value, reply_markup=keyboard)
+        sent_message = await message.answer(
+            text_value, reply_markup=keyboard, parse_mode=None
+        )
         try:
             result = await sent_message.edit_text(
                 rich_message=_preview_rich(
@@ -997,7 +1065,7 @@ async def _send_preview(
         else:
             logging.debug("Rich search preview failed; using plain text", exc_info=True)
 
-    await message.edit_text(text_value, reply_markup=keyboard)
+    await message.edit_text(text_value, reply_markup=keyboard, parse_mode=None)
     return None
 
 
@@ -1013,6 +1081,7 @@ async def _execute_query(
     provider_map: Mapping[str, AnimeSearchProvider],
     state: SearchUiState,
     search_expansion_timeout_seconds: float = 8.0,
+    watchlist_target: WatchlistTarget | None = None,
 ) -> None:
     locale = get_user_locale(owner_user_id)
     parsed_direct = _parse_direct_query(query, direct_lookup.source_keys)
@@ -1024,7 +1093,9 @@ async def _execute_query(
         if not result.items:
             return
         if token is None:
-            token = _remember_results(state, query, owner_user_id, result)
+            token = _remember_results(
+                state, query, owner_user_id, result, watchlist_target
+            )
             session = state.sessions[token]
             async with session.preview_lock:
                 preview = await _send_preview(message, token, session, 0, edit=False)
@@ -1131,7 +1202,9 @@ async def _execute_query(
     if token is not None:
         await publish(result_set)
     else:
-        token = _remember_results(state, query, owner_user_id, result_set)
+        token = _remember_results(
+            state, query, owner_user_id, result_set, watchlist_target
+        )
         await _send_preview(message, token, state.sessions[token], 0, edit=False)
 
 
@@ -1194,6 +1267,10 @@ def register_search_handlers(
     dp: Dispatcher,
     *,
     aggregate_callback: Callable[[Message, SearchCandidate, int], Awaitable[None]],
+    watchlist_callback: Callable[
+        [Message, SearchCandidate, int, WatchlistTarget | None], Awaitable[None]
+    ]
+    | None = None,
     default_service: SearchService,
     direct_lookup: DirectIdLookupService,
     provider_map: Mapping[str, AnimeSearchProvider],
@@ -1225,6 +1302,7 @@ def register_search_handlers(
         user_id = message.from_user.id if message.from_user else 0
         locale = get_user_locale(user_id)
         query = (command.args or "").strip()
+        _clear_pending(state, user_id)
         image_input = _image_input_from_message(message, query)
         if image_input is not None:
             token = _remember_image_input(state, image_input)
@@ -1252,11 +1330,7 @@ def register_search_handlers(
             )
             return
 
-        token = _remember_scope(state, user_id, message.chat.id)
-        await message.answer(
-            _ui(locale, "choose_source"),
-            reply_markup=_scope_keyboard(token, locale),
-        )
+        await open_search_scope(message, state, user_id)
 
     @dp.message(Command("cancel"))
     async def cancel_search_handler(message: Message) -> None:
@@ -1288,7 +1362,10 @@ def register_search_handlers(
                 text("card", "not_owner", locale=locale), show_alert=True
             )
             return
-        if callback.message is None:
+        if (
+            callback.message is None
+            or callback.message.chat.id != scope_session.chat_id
+        ):
             await callback.answer()
             return
 
@@ -1312,11 +1389,21 @@ def register_search_handlers(
             provider_keys=provider_keys,
             direct_source_keys=direct_source_keys,
             scope_label=scope_label,
+            watchlist_target=scope_session.watchlist_target,
+            scope_token=token,
         )
         await callback.answer()
+        prompt = _ui(locale, "waiting", scope=scope_label)
+        if scope_session.watchlist_target is not None:
+            prompt = (
+                text("watchlists", "list_name", locale=locale)
+                + ": "
+                + scope_session.watchlist_target.label
+                + "\n\n"
+                + prompt
+            )
         await callback.message.edit_text(
-            _ui(locale, "waiting", scope=scope_label),
-            reply_markup=_waiting_keyboard(token, locale),
+            prompt, reply_markup=_waiting_keyboard(token, locale), parse_mode=None
         )
 
     @dp.callback_query(F.data.startswith("sx:"))
@@ -1337,7 +1424,9 @@ def register_search_handlers(
             )
             return
 
-        _clear_pending(state, callback.from_user.id)
+        pending = state.pending_inputs.get(_pending_key(callback.from_user.id))
+        if pending is not None and pending.scope_token == token:
+            _clear_pending(state, callback.from_user.id)
         try:
             del state.scope_sessions[token]
         except KeyError:
@@ -1362,6 +1451,7 @@ def register_search_handlers(
             return
         image_input = _image_input_from_message(message, query)
         if image_input is not None:
+            image_input.watchlist_target = pending.watchlist_target
             token = _remember_image_input(state, image_input)
             await _show_image_source_chooser(
                 message,
@@ -1383,6 +1473,7 @@ def register_search_handlers(
             provider_map=provider_map,
             state=state,
             search_expansion_timeout_seconds=search_expansion_timeout_seconds,
+            watchlist_target=pending.watchlist_target,
         )
 
     @dp.callback_query(F.data.startswith("is:"))
@@ -1639,6 +1730,39 @@ def register_search_handlers(
                 return
             session.picker_open = False
             await _send_preview(callback.message, token, session, index, edit=True)
+
+    @dp.callback_query(F.data.startswith("sw:"))
+    async def result_watchlist_callback(callback: CallbackQuery) -> None:
+        locale = get_user_locale(callback.from_user.id)
+        data = TokenIndexCallback.parse(callback.data, prefix="sw")
+        session = state.sessions.get(data.token) if data else None
+        if session is None or data is None:
+            await callback.answer(_ui(locale, "expired"), show_alert=True)
+            return
+        if session.owner_user_id != callback.from_user.id:
+            await callback.answer(
+                text("card", "not_owner", locale=locale), show_alert=True
+            )
+            return
+        if not callback.message or callback.message.chat.type != "private":
+            await callback.answer(
+                text("watchlists", "private", locale=locale), show_alert=True
+            )
+            return
+        async with session.preview_lock:
+            if not 0 <= data.index < len(session.items) or watchlist_callback is None:
+                await callback.answer(
+                    text("search", "result_unavailable", locale=locale), show_alert=True
+                )
+                return
+            candidate = session.items[data.index]
+            target = session.watchlist_target
+        await callback.answer()
+        # Do not stop progressive search or consume its preview. List management
+        # is a separate private message and the user may continue paging.
+        await watchlist_callback(
+            callback.message, candidate, session.owner_user_id, target
+        )
 
     @dp.callback_query(F.data.startswith("sd:"))
     async def result_details_callback(callback: CallbackQuery) -> None:

@@ -350,3 +350,157 @@ class WatchlistUiTests(unittest.IsolatedAsyncioTestCase):
                 self.assertIn(
                     "<table", message.edit_text.await_args.kwargs["rich_message"].html
                 )
+
+    async def test_list_add_uses_command_search_and_keeps_preview_available(self):
+        from types import SimpleNamespace
+        from unittest.mock import AsyncMock, patch
+        from aiogram import Dispatcher
+        from aiogram.filters.command import CommandObject
+        from bots.telegram.watchlists import register_watchlist_handlers
+        from bots.telegram.search import handlers as search
+        from core.models import SearchResultSet
+
+        with tempfile.TemporaryDirectory() as tmp:
+            store = WatchListStore(SQLiteUserSettingsStore(Path(tmp) / "ui.db"))
+            anime = SearchCandidate("Naruto", external_ids={"mal": "20"}, year=2002)
+            other = SearchCandidate("Bleach", external_ids={"mal": "269"})
+            result = SearchResultSet([anime, other])
+            actor = SimpleNamespace(id=7)
+            chat = SimpleNamespace(id=7, type="private")
+            sent = SimpleNamespace(chat=chat, edit_text=AsyncMock())
+            message = SimpleNamespace(
+                chat=chat,
+                from_user=actor,
+                text="Naruto",
+                photo=None,
+                document=None,
+                reply_to_message=None,
+                answer=AsyncMock(return_value=sent),
+                answer_rich=AsyncMock(),
+                edit_text=AsyncMock(),
+            )
+            dp = Dispatcher()
+
+            async def start(message, owner, target):
+                await search.open_search_scope(
+                    message, state, owner, watchlist_target=target
+                )
+
+            chooser = register_watchlist_handlers(
+                dp, SimpleNamespace(anime_sessions={}), start_search=start
+            )
+
+            async def collect(query, *, on_partial):
+                await on_partial(result)
+                return result
+
+            service = SimpleNamespace(
+                settings=SimpleNamespace(
+                    default_provider_keys=search.ALL_PROVIDER_KEYS,
+                    expansion_enabled=False,
+                    collection_max_items=120,
+                ),
+                collect=AsyncMock(side_effect=collect),
+            )
+            lookup = SimpleNamespace(
+                source_keys=("mal",),
+                lookup=AsyncMock(return_value=SearchResultSet([anime])),
+            )
+            aggregate = AsyncMock()
+            state = search.register_search_handlers(
+                dp,
+                aggregate_callback=aggregate,
+                watchlist_callback=chooser,
+                default_service=service,
+                direct_lookup=lookup,
+                provider_map={},
+                image_search_service=object(),
+                image_search_max_bytes=1024,
+                input_ttl_seconds=300,
+            )
+            handlers = {
+                h.callback.__name__: h.callback for h in dp.callback_query.handlers
+            }
+            commands = {h.callback.__name__: h.callback for h in dp.message.handlers}
+
+            def callback(data, who=actor, where=message):
+                return SimpleNamespace(
+                    data=data, from_user=who, message=where, answer=AsyncMock()
+                )
+
+            def find(call, label):
+                return next(
+                    b.callback_data
+                    for row in call.kwargs["reply_markup"].inline_keyboard
+                    for b in row
+                    if label in b.text
+                )
+
+            with (
+                patch("bots.telegram.watchlists.watchlists", return_value=store),
+                patch("bots.telegram.watchlists.get_user_locale", return_value="ru"),
+                patch(
+                    "bots.telegram.search.handlers.get_user_locale", return_value="ru"
+                ),
+                patch(
+                    "bots.telegram.watchlists.get_app_context",
+                    return_value=SimpleNamespace(
+                        identity_resolver=SimpleNamespace(anchor_for=lambda _: None)
+                    ),
+                ),
+            ):
+                await commands["open_lists"](message)
+                await handlers["list_action"](
+                    callback(find(message.answer_rich.await_args, "В планах"))
+                )
+                await handlers["list_action"](
+                    callback(find(message.edit_text.await_args, "Добавить аниме"))
+                )
+                source_keyboard = message.answer.await_args.kwargs["reply_markup"]
+                all_sources = source_keyboard.inline_keyboard[0][0].callback_data
+                await handlers["scope_callback"](callback(all_sources))
+                self.assertEqual(
+                    state.pending_inputs["7"].watchlist_target.list_id, "planned"
+                )
+                await commands["pending_anime_input_handler"](message)
+                service.collect.assert_awaited_once()
+                sw = find(sent.edit_text.await_args, "Добавить в список")
+                self.assertIn(
+                    "В планах", sent.edit_text.await_args.kwargs["rich_message"].html
+                )
+                await handlers["result_watchlist_callback"](
+                    callback(sw, who=SimpleNamespace(id=8))
+                )
+                self.assertEqual(store.entries(7, "planned")[1], 0)
+                await handlers["result_watchlist_callback"](callback(sw))
+                self.assertEqual(store.entries(7, "planned")[1], 1)
+                self.assertTrue(find(message.answer_rich.await_args, "✓ В планах"))
+                token = sw.split(":")[1]
+                self.assertTrue(state.sessions[token].preview_active)
+                await handlers["result_page_callback"](
+                    callback("sr:" + token + ":1", where=sent)
+                )
+                self.assertIn(
+                    "Bleach", sent.edit_text.await_args.kwargs["rich_message"].html
+                )
+                await handlers["result_watchlist_callback"](
+                    callback(find(sent.edit_text.await_args, "Добавить в список"))
+                )
+                self.assertEqual(store.entries(7, "planned")[1], 2)
+                aggregate.assert_not_awaited()
+
+                # Ordinary /anime ID search opens the selector without saving a
+                # membership automatically, and does not inherit the earlier list.
+                await commands["anime_handler"](
+                    message, CommandObject(command="anime", args="mal:20")
+                )
+                sw = find(sent.edit_text.await_args, "Добавить в список")
+                self.assertIsNone(state.sessions[sw.split(":")[1]].watchlist_target)
+                await handlers["result_watchlist_callback"](callback(sw))
+                self.assertTrue(find(message.answer_rich.await_args, "✓ В планах"))
+                await handlers["list_action"](
+                    callback(find(message.answer_rich.await_args, "Избранное"))
+                )
+                self.assertEqual(store.entries(7, "favorites")[1], 1)
+                self.assertEqual(store.entries(7, "planned")[1], 2)
+                aggregate.assert_not_awaited()

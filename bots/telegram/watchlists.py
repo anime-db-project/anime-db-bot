@@ -50,7 +50,7 @@ def label(locale, key, name):
     return t(locale, key) if key in BUILTIN_LISTS else name
 
 
-def register_watchlist_handlers(dp, card_state):
+def register_watchlist_handlers(dp, card_state, *, start_search=None):
     views = ExpiringSessionStore(max_entries=512, ttl_seconds=1800, name="watchlists")
     pending = ExpiringSessionStore(
         max_entries=256, ttl_seconds=300, name="watchlist_input"
@@ -433,6 +433,28 @@ def register_watchlist_handlers(dp, card_state):
         token, view = new(uid)
         await home(callback.message, token, view, locale)
 
+    async def add_search_candidate(message, candidate, owner, target=None):
+        locale = get_user_locale(owner)
+        try:
+            entry = await asyncio.to_thread(
+                entry_for, candidate, get_app_context().identity_resolver
+            )
+            token, view = new(
+                owner, list_id=target.list_id if target else None, entry=entry
+            )
+            if target is not None:
+                store = await asyncio.to_thread(watchlists)
+                await asyncio.to_thread(
+                    store.add_many,
+                    owner,
+                    [(target.list_id, entry)],
+                    settings().watchlist_max_entries,
+                )
+            await choose_list(message, token, view, locale)
+        except Exception:
+            logging.debug("Search watchlist action failed", exc_info=True)
+            await message.answer(t(locale, "failed"))
+
     @dp.callback_query(F.data.startswith("wlcard:"))
     async def card_add(callback: CallbackQuery):
         locale = get_user_locale(callback.from_user.id)
@@ -447,14 +469,9 @@ def register_watchlist_handlers(dp, card_state):
             )
             return
         await callback.answer()
-        token, view = new(
-            callback.from_user.id,
-            entry=await asyncio.to_thread(
-                entry_for, session.anime, get_app_context().identity_resolver
-            ),
+        await add_search_candidate(
+            callback.message, session.anime, callback.from_user.id
         )
-        # Keep card unchanged and expose private list names only in a new private message.
-        await choose_list(callback.message, token, view, locale)
 
     @dp.callback_query(F.data.startswith("wl:"))
     async def list_action(callback: CallbackQuery):
@@ -482,7 +499,7 @@ def register_watchlist_handlers(dp, card_state):
         if action == "stay":
             await callback.answer()
             return
-        if action not in {"open", "card"}:
+        if action not in {"open", "card", "add"}:
             view.revision += 1
         message = callback.message
         try:
@@ -492,7 +509,6 @@ def register_watchlist_handlers(dp, card_state):
                 "entry",
                 "save",
                 "unselect",
-                "result",
             } and not 0 <= idx < len(view.rows):
                 raise ValueError("Index")
             await callback.answer()
@@ -563,20 +579,19 @@ def register_watchlist_handlers(dp, card_state):
                 await choose_list(message, token, view, locale, edit=True)
             elif action == "card":
                 await aggregate_and_send(message, view.entry.candidate, uid, card_state)
-            elif action == "result":
-                entry = await asyncio.to_thread(
-                    entry_for, view.rows[idx], get_app_context().identity_resolver
+            elif action == "add":
+                meta = next(
+                    (item for item in await lists(uid) if item[0] == view.list_id), None
                 )
-                store = await asyncio.to_thread(watchlists)
-                await asyncio.to_thread(
-                    store.add_many,
+                if meta is None or start_search is None:
+                    raise ValueError("List unavailable")
+                from bots.telegram.search.handlers import WatchlistTarget
+
+                await start_search(
+                    message,
                     uid,
-                    [(view.list_id, entry)],
-                    settings().watchlist_max_entries,
+                    WatchlistTarget(meta[0], label(locale, meta[0], meta[1])),
                 )
-                view.entry = entry
-                view.menu_page = 0
-                await choose_list(message, token, view, locale, edit=True)
             elif action == "delete_confirm":
                 await render(
                     message,
@@ -625,7 +640,6 @@ def register_watchlist_handlers(dp, card_state):
             elif action in {
                 "create",
                 "create_for",
-                "add",
                 "progress",
                 "score",
                 "rename",
@@ -642,7 +656,6 @@ def register_watchlist_handlers(dp, card_state):
                             "score": "score_prompt",
                             "rename": "name_prompt",
                             "filter": "filter_prompt",
-                            "add": "search_prompt",
                             "progress": "progress_prompt",
                         }[action],
                     ),
@@ -761,64 +774,6 @@ def register_watchlist_handlers(dp, card_state):
                     await choose_list(message, token, view, locale)
                 else:
                     await detail(message, token, view, locale, edit=False)
-            elif action == "add":
-                if not value or len(value) > 140:
-                    raise ValueError("Query")
-                context = get_app_context()
-                from bots.telegram.search.handlers import _parse_direct_query
-
-                direct = _parse_direct_query(value, context.direct_lookup.source_keys)
-                if direct:
-                    source, external_id = direct
-                    result = await context.direct_lookup.lookup(
-                        external_id, source_keys=(source,) if source else None
-                    )
-                else:
-                    result = await context.search_service.collect(
-                        value, page_size=10, max_pages=1
-                    )
-                view.rows = result.items[:30]
-                rows = [
-                    [
-                        button(
-                            token,
-                            "result",
-                            f"{i + 1}. {c.title}" + (f" ({c.year})" if c.year else ""),
-                            i,
-                        )
-                    ]
-                    for i, c in enumerate(view.rows)
-                ]
-                rows.append([button(token, "page", t(locale, "back"))])
-                await render(
-                    message,
-                    (
-                        t(locale, "choose_title")
-                        + "\n\n"
-                        + "\n".join(
-                            f"{i + 1}. {c.title[:80]}"
-                            + (f" ({c.year})" if c.year else "")
-                            for i, c in enumerate(view.rows)
-                        )
-                    )
-                    if view.rows
-                    else t(locale, "empty"),
-                    rows,
-                    rich=table(
-                        t(locale, "choose_title"),
-                        [t(locale, "anime"), "ID"],
-                        [
-                            (
-                                c.title[:180] + (f" ({c.year})" if c.year else ""),
-                                ", ".join(
-                                    f"{k.upper()}: {v}"
-                                    for k, v in list(c.external_ids.items())[:3]
-                                ),
-                            )
-                            for c in view.rows
-                        ],
-                    ),
-                )
             elif action.startswith("import_"):
                 source = action.removeprefix("import_")
                 await message.answer(t(locale, "importing"))
@@ -865,3 +820,5 @@ def register_watchlist_handlers(dp, card_state):
             )
         finally:
             busy.discard(uid)
+
+    return add_search_candidate

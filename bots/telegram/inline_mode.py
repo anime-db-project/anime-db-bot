@@ -216,7 +216,12 @@ def preview(choice, token, index, locale):
     plain = _preview_text(session, candidate, locale=locale)
     keyboard = inline_keyboard(
         _preview_keyboard(
-            token, index, len(session.items), complete=session.complete, locale=locale
+            token,
+            index,
+            len(session.items),
+            complete=session.complete,
+            locale=locale,
+            allow_watchlists=False,
         )
     )
     return plain, _preview_rich(plain, candidate), keyboard
