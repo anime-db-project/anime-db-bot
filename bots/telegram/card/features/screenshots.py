@@ -197,6 +197,7 @@ async def edit_screenshots_view(
                 rich_message=content, reply_markup=keyboard
             ),
             screenshot_rich_message(anime, source=source, page=page, locale=locale),
+            bot=getattr(message, "bot", None),
         )
     except Exception:
         logger.exception(

@@ -133,10 +133,12 @@ async def _deliver_rich_card(
     text_value: str,
     *,
     locale: str,
+    bot=None,
 ) -> None:
     await deliver_rich_media(
         send,
         rich_view(token, anime, section, text_value, locale=locale),
+        bot=bot,
     )
 
 
@@ -182,6 +184,7 @@ async def send_anime_view(
             section,
             text_value,
             locale=locale,
+            bot=getattr(message, "bot", None),
         )
         return sent, False
     except Exception:
@@ -242,6 +245,7 @@ async def edit_anime_view(
             section,
             text_value,
             locale=locale,
+            bot=getattr(message, "bot", None),
         )
     except Exception:
         logging.exception(
@@ -359,6 +363,7 @@ async def edit_source_section_view(
                 reply_markup=keyboard,
             ),
             rich_message,
+            bot=getattr(message, "bot", None),
         )
     except Exception:
         logging.exception(

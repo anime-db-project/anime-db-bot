@@ -352,6 +352,7 @@ async def edit_related_view(
                 rich_message=content, reply_markup=keyboard
             ),
             _detail_rich(item, section, locale=locale),
+            bot=getattr(message, "bot", None),
         )
     except Exception:
         logging.exception(

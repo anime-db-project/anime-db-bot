@@ -319,6 +319,7 @@ async def edit_trailers_view(
         await deliver_rich_media(
             lambda rich: message.edit_text(rich_message=rich, reply_markup=keyboard),
             _trailer_rich(content, rich_item),
+            bot=getattr(message, "bot", None),
         )
     except Exception:
         logging.exception("Rich trailer view edit failed; falling back to text")

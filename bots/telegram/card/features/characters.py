@@ -484,6 +484,7 @@ async def edit_characters_view(
                     rich_message=rich, reply_markup=keyboard
                 ),
                 _rich(content, urls),
+                bot=getattr(message, "bot", None),
             )
             return
         except Exception:

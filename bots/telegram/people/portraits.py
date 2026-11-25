@@ -118,6 +118,7 @@ async def _render_people_view(
                 rich_message=content, reply_markup=keyboard
             ),
             _rich(text_value, urls),
+            bot=getattr(message, "bot", None),
         )
     except Exception:
         logging.exception(

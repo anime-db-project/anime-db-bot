@@ -400,6 +400,9 @@ async def run_bot(
         mapping_task.cancel()
         status_task.cancel()
         await asyncio.gather(mapping_task, status_task, return_exceptions=True)
+        from bots.telegram.media_cache import get_media_cache
+
+        await get_media_cache().close()
         await transport.close(bot)
         await context.aclose()
 

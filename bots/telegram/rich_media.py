@@ -496,9 +496,91 @@ def inline_delivery_context():
 async def deliver_rich_media(
     send: Callable[[InputRichMessage], Awaitable[object]],
     message: InputRichMessage,
+    *,
+    bot=None,
 ) -> None:
     if _inline_delivery.get():
-        # The inline adapter stages files before editing; do not run a second cascade.
         await send(message)
         return
-    await get_rich_media_delivery().deliver(send, message)
+    manager = get_rich_media_delivery()
+    if bot is None or not isinstance(getattr(bot, "id", None), int):
+        await manager.deliver(send, message)
+        return
+    from bots.telegram.media_cache import get_media_cache
+    from bots.telegram.inline_media import remember_photo
+
+    cache = get_media_cache()
+    urls = _remote_urls(message)
+    # Include existing explicit URL media as well as native HTML photos.
+    urls = list(
+        dict.fromkeys(
+            urls
+            + [
+                item.media.media
+                for item in message.media or ()
+                if isinstance(item.media, InputMediaPhoto)
+                and isinstance(item.media.media, str)
+                and item.media.media.startswith("https://")
+            ]
+        )
+    )
+    urls = urls[: manager.settings.max_images]
+    if not urls or not cache.settings.media_cache_enabled:
+        await manager.deliver(send, message)
+        return
+    ids = dict(
+        zip(urls, await asyncio.gather(*(cache.lookup(bot.id, url) for url in urls)))
+    )
+    if not cache.settings.media_cache_background_upload:
+        deadline = (
+            asyncio.get_running_loop().time() + manager.settings.total_timeout_seconds
+        )
+        for url in urls:
+            if not ids[url]:
+                ids[url] = await cache.stage(bot, url, deadline)
+    if any(ids.values()):
+        bound = bind_remote_photos(message)
+        media = []
+        for item in bound.media or ():
+            value = (
+                item.media.media if isinstance(item.media, InputMediaPhoto) else None
+            )
+            if isinstance(value, str) and ids.get(value):
+                item = item.model_copy(
+                    update={
+                        "media": item.media.model_copy(update={"media": ids[value]})
+                    }
+                )
+            media.append(item)
+        try:
+            await send(bound.model_copy(update={"media": media}))
+            cache.enqueue(bot, [url for url in urls if not ids[url]])
+            return
+        except TelegramBadRequest:
+            for url in urls:
+                if ids[url]:
+                    await cache.forget(bot.id, url)
+            # Preserve the original content and its native fallback.
+
+    async def capture(content):
+        result = await send(content)
+        # Only associate when there is exactly one source and one returned
+        # photo block. Do not guess ordering of multiple Telegram photo blocks.
+        if len(urls) == 1:
+            blocks = (
+                getattr(getattr(result, "rich_message", None), "blocks", None) or []
+            )
+            photo_groups = [
+                getattr(block, "photo", None)
+                for block in blocks
+                if getattr(block, "photo", None)
+            ]
+            if len(photo_groups) == 1:
+                best = max(photo_groups[0], key=lambda p: p.width * p.height)
+                if best.file_id:
+                    remember_photo(bot.id, urls[0], best.file_id)
+                    await cache.remember(bot.id, urls[0], best.file_id)
+        return result
+
+    await manager.deliver(capture, message)
+    cache.enqueue(bot, urls)

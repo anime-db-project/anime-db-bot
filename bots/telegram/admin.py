@@ -566,6 +566,28 @@ def register_admin_handlers(
             runtime_metrics=runtime_metrics,
             source_descriptors=source_descriptors,
         )
+        from bots.telegram.media_cache import get_media_cache
+
+        bot_id = getattr(getattr(message, "bot", None), "id", None)
+        if isinstance(bot_id, int):
+            cache = await get_media_cache().summary(bot_id)
+            lines.extend(
+                [
+                    "",
+                    _t(
+                        locale,
+                        "media_cache_summary",
+                        entries=cache["entries"],
+                        files=cache["files"],
+                        hits=cache.get("hits", 0),
+                        misses=cache.get("misses", 0),
+                        uploads=cache.get("uploads", 0),
+                        errors=cache.get("errors", 0),
+                        queued=cache["queued"],
+                        latency=cache["average_upload_ms"],
+                    ),
+                ]
+            )
         for chunk in _chunk_lines(
             lines[0],
             lines[1:],

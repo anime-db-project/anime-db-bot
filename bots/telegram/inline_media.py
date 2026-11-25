@@ -15,6 +15,7 @@ from aiogram.types import (
 from core.cache import BoundedTTLCache
 from core.settings import get_settings
 from bots.telegram.rich_media import get_rich_media_delivery
+from bots.telegram.media_cache import get_media_cache
 from aiogram.methods.base import TelegramMethod
 from aiogram.exceptions import TelegramBadRequest
 from typing import ClassVar
@@ -23,9 +24,6 @@ import time
 
 # Telegram file IDs are specific to a bot. The normal preview renderer also
 # supplies successful IDs, so the inline path can reuse already-uploaded photos.
-_ids = BoundedTTLCache(
-    max_entries=4096, ttl_seconds=7 * 86400, name="telegram_photo_ids"
-)
 _failures = BoundedTTLCache(
     max_entries=1024, ttl_seconds=300, name="inline_photo_failures"
 )
@@ -37,8 +35,9 @@ _IMG = re.compile(r'<img[^>]*?src="([^"]+)"[^>]*?/?>', re.I)
 
 
 def remember_photo(bot_id, url, file_id):
-    if url and file_id:
-        _ids.set((bot_id, url), file_id)
+    cache = get_media_cache()
+    if cache.settings.media_cache_enabled and url and file_id:
+        cache.hot.set((bot_id, url), file_id)
 
 
 @dataclass(frozen=True)
@@ -103,10 +102,19 @@ async def _stage(bot, target, file, context):
 
 async def photo_id(bot, url, deadline, *, upload=False, context=None):
     key = (bot.id, url)
-    known = _ids.get(key)
+    cache = get_media_cache()
+    known = await cache.lookup(bot.id, url)
     if known:
         return known
     settings = get_settings().telegram
+    if (
+        upload
+        and cache.settings.media_cache_enabled
+        and cache.settings.media_cache_chat_id < 0
+    ):
+        known = await cache.stage(bot, url, deadline)
+        if known:
+            return known
     target = settings.inline_media_cache_chat_id
     ephemeral = (
         getattr(settings, "inline_media_ephemeral_enabled", False)
@@ -117,7 +125,7 @@ async def photo_id(bot, url, deadline, *, upload=False, context=None):
     try:
         async with asyncio.timeout_at(deadline):
             async with _upload_slots:
-                known = _ids.get(key)
+                known = await cache.lookup(bot.id, url)
                 if known:
                     return known
                 manager = get_rich_media_delivery()
@@ -152,6 +160,7 @@ async def photo_id(bot, url, deadline, *, upload=False, context=None):
                         )
                         if known:
                             remember_photo(bot.id, url, known)
+                            await cache.remember(bot.id, url, known)
                             logging.debug("Inline media staged via %s", mode)
                             return known
                     except (TelegramBadRequest, FileNotFoundError):
@@ -203,9 +212,9 @@ def remember_direct_failure(bot, rich):
     _direct_failures.set(remote_key(bot, rich), True)
 
 
-def forget_remote_ids(bot, rich):
+async def forget_remote_ids(bot, rich):
     for url in remote_key(bot, rich)[1]:
-        _ids.pop((bot.id, url), None)
+        await get_media_cache().forget(bot.id, url)
 
 
 async def prepare_inline_rich(

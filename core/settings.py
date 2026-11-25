@@ -211,6 +211,15 @@ def _user_ids(value: str, *, setting: str) -> tuple[int, ...]:
     return tuple(result)
 
 
+def _media_cache_chat_id(value: str) -> int:
+    chat_id = int(value or "0")
+    if chat_id > 0:
+        raise ValueError(
+            "TELEGRAM_MEDIA_CACHE_CHAT_ID must be a negative channel/group ID or zero"
+        )
+    return chat_id
+
+
 def _watchlist_defaults(value: str) -> dict[str, str]:
     result = json.loads(value or "{}")
     if not isinstance(result, dict) or len(result) > 30:
@@ -418,6 +427,18 @@ class TelegramSettings:
     inline_enabled: bool = True
     inline_media_cache_chat_id: int = 0
     inline_media_ephemeral_enabled: bool = True
+    media_cache_enabled: bool = True
+    media_cache_chat_id: int = 0
+    media_cache_persistent: bool = True
+    media_cache_keep_messages: bool = True
+    media_cache_deduplication: bool = True
+    media_cache_background_upload: bool = True
+    media_cache_max_concurrent_uploads: int = 2
+    media_cache_ttl_seconds: int = 0
+    media_cache_batch_size: int = 10
+    media_cache_queue_size: int = 256
+    media_cache_max_entries: int = 100000
+    media_cache_interval_seconds: float = 3.1
     watchlist_custom_defaults: Mapping[str, str] = field(default_factory=dict)
     watchlist_max_custom: int = 30
     watchlist_max_entries: int = 10000
@@ -800,6 +821,40 @@ class AppSettings:
                 ),
                 inline_media_cache_chat_id=int(
                     _raw(values, "TELEGRAM_INLINE_MEDIA_CACHE_CHAT_ID", "0")
+                ),
+                media_cache_enabled=_bool(values, "TELEGRAM_MEDIA_CACHE_ENABLED", True),
+                media_cache_chat_id=_media_cache_chat_id(
+                    _raw(values, "TELEGRAM_MEDIA_CACHE_CHAT_ID", "0")
+                ),
+                media_cache_persistent=_bool(
+                    values, "TELEGRAM_MEDIA_CACHE_PERSISTENT", True
+                ),
+                media_cache_keep_messages=_bool(
+                    values, "TELEGRAM_MEDIA_CACHE_KEEP_MESSAGES", True
+                ),
+                media_cache_deduplication=_bool(
+                    values, "TELEGRAM_MEDIA_CACHE_DEDUPLICATION", True
+                ),
+                media_cache_background_upload=_bool(
+                    values, "TELEGRAM_MEDIA_CACHE_BACKGROUND_UPLOAD", True
+                ),
+                media_cache_max_concurrent_uploads=_strict_int(
+                    values, "TELEGRAM_MEDIA_CACHE_MAX_CONCURRENT_UPLOADS", 2, 1, 8
+                ),
+                media_cache_ttl_seconds=_strict_int(
+                    values, "TELEGRAM_MEDIA_CACHE_TTL_SECONDS", 0, 0, 31536000
+                ),
+                media_cache_batch_size=_strict_int(
+                    values, "TELEGRAM_MEDIA_CACHE_BATCH_SIZE", 10, 1, 10
+                ),
+                media_cache_queue_size=_strict_int(
+                    values, "TELEGRAM_MEDIA_CACHE_QUEUE_SIZE", 256, 1, 4096
+                ),
+                media_cache_max_entries=_strict_int(
+                    values, "TELEGRAM_MEDIA_CACHE_MAX_ENTRIES", 100000, 1, 1000000
+                ),
+                media_cache_interval_seconds=_float(
+                    values, "TELEGRAM_MEDIA_CACHE_INTERVAL_SECONDS", 3.1, 1.0
                 ),
                 watchlist_custom_defaults=_watchlist_defaults(
                     _raw(values, "TELEGRAM_WATCHLIST_DEFAULTS_JSON", "{}")

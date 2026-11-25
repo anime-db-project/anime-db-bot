@@ -199,6 +199,7 @@
     "image_nothing_unavailable": "この画像からアニメを特定できませんでした。利用不可: {sources}"
   },
   "admin": {
+    "media_cache_summary": "メディアキャッシュ：URL {entries}、ファイル {files}、ヒット {hits}、ミス {misses}、アップロード {uploads}、エラー {errors}、待機 {queued}、平均 {latency} ms。",
     "forbidden": "権限がありません。",
     "users_title": "保存済みの Telegram ID: {count}",
     "users_empty": "保存済みの Telegram ID はまだありません。",

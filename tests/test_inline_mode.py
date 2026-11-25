@@ -182,10 +182,25 @@ class InlineTests(unittest.IsolatedAsyncioTestCase):
                 inline_media_cache_chat_id=0, inline_media_ephemeral_enabled=True
             )
         )
+        from dataclasses import replace
+        from core.settings import get_settings
+        from bots.telegram.media_cache import TelegramMediaCache
+
+        isolated_cache = TelegramMediaCache(
+            replace(
+                get_settings().telegram,
+                media_cache_persistent=False,
+                media_cache_chat_id=0,
+            )
+        )
         context = InlineUploadContext("callback", 10, time.monotonic())
         url = "https://example.org/disk-fallback.jpg"
         deadline = asyncio.get_running_loop().time() + 5
         with (
+            patch(
+                "bots.telegram.inline_media.get_media_cache",
+                return_value=isolated_cache,
+            ),
             patch("bots.telegram.inline_media.get_settings", return_value=settings),
             patch(
                 "bots.telegram.inline_media.get_rich_media_delivery",

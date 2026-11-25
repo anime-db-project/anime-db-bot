@@ -199,6 +199,7 @@
     "image_nothing_unavailable": "По изображению ничего не найдено. Недоступны: {sources}"
   },
   "admin": {
+    "media_cache_summary": "Медиа-кэш Telegram: URL {entries}, файлов {files}; попадания {hits}, промахи {misses}; загрузки {uploads}, ошибки {errors}; очередь {queued}; средняя загрузка {latency} мс.",
     "forbidden": "Недостаточно прав.",
     "users_title": "Сохранённые Telegram ID: {count}",
     "users_empty": "Сохранённых Telegram ID пока нет.",

@@ -1004,69 +1004,63 @@ async def _send_preview(
         and getattr(getattr(message, "chat", None), "type", "private") == "private",
     )
     poster_url = _preview_poster_url(candidate)
+    from bots.telegram.media_cache import get_media_cache
 
-    # Telegram occasionally accepts a newly sent rich message but renders its
-    # remote image as text-only. The edit path is reliable in the same clients,
-    # so page 1 is bootstrapped as a normal message and immediately upgraded in
-    # place. Pagination itself remains a single edit per click.
+    cache = get_media_cache()
+    bot = getattr(message, "bot", None)
+    bot_id = getattr(bot, "id", None)
+    cached_file_id = session.poster_file_ids.get(poster_url) if poster_url else None
+    if poster_url and isinstance(bot_id, int) and not cached_file_id:
+        cached_file_id = await cache.lookup(bot_id, poster_url)
     if not edit:
-        sent_message = await message.answer(
+        target = await message.answer(
             text_value, reply_markup=keyboard, parse_mode=None
         )
-        try:
-            result = await sent_message.edit_text(
-                rich_message=_preview_rich(
-                    text_value,
-                    candidate,
-                    media_value=poster_url,
-                ),
-                reply_markup=keyboard,
-            )
-            _remember_preview_file_id(session, candidate, result)
-        except Exception:
-            logging.debug(
-                "Initial rich search preview upgrade failed; keeping plain text",
-                exc_info=True,
-            )
-        return sent_message
+    else:
+        target = message
 
-    cached_file_id = session.poster_file_ids.get(poster_url) if poster_url else None
-
-    async def edit_rich(media_value: str | None) -> Message | bool:
-        return await message.edit_text(
-            rich_message=_preview_rich(
-                text_value,
-                candidate,
-                media_value=media_value,
-            ),
+    async def edit_rich(media_value):
+        result = await target.edit_text(
+            rich_message=_preview_rich(text_value, candidate, media_value=media_value),
             reply_markup=keyboard,
         )
+        if _remember_preview_file_id(session, candidate, result) and isinstance(
+            bot_id, int
+        ):
+            await cache.remember(
+                bot_id, poster_url, session.poster_file_ids[poster_url]
+            )
+        if poster_url and isinstance(bot_id, int):
+            cache.enqueue(bot, [poster_url])
 
     try:
-        result = await edit_rich(cached_file_id)
-        _remember_preview_file_id(session, candidate, result)
-        return None
+        await edit_rich(cached_file_id)
     except Exception:
         if cached_file_id and poster_url:
             session.poster_file_ids.pop(poster_url, None)
-            logging.debug(
-                "Cached Telegram search cover failed; retrying source URL",
-                exc_info=True,
-            )
+            if isinstance(bot_id, int):
+                await cache.forget(bot_id, poster_url)
             try:
-                result = await edit_rich(poster_url)
-                _remember_preview_file_id(session, candidate, result)
-                return None
+                await edit_rich(poster_url)
+                return target if not edit else None
             except Exception:
-                logging.debug(
-                    "Rich search preview retry failed; using plain text",
-                    exc_info=True,
+                logging.debug("Cached search photo retry failed", exc_info=True)
+        if poster_url and isinstance(bot_id, int):
+            cache.enqueue(bot, [poster_url])
+        # Keep the table and actions even if the photo is rejected.
+        try:
+            await target.edit_text(
+                rich_message=_preview_rich(
+                    text_value, SearchCandidate(title=candidate.title)
+                ),
+                reply_markup=keyboard,
+            )
+        except Exception:
+            if edit:
+                await target.edit_text(
+                    text_value, reply_markup=keyboard, parse_mode=None
                 )
-        else:
-            logging.debug("Rich search preview failed; using plain text", exc_info=True)
-
-    await message.edit_text(text_value, reply_markup=keyboard, parse_mode=None)
-    return None
+    return target if not edit else None
 
 
 async def _execute_query(

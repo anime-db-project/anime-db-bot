@@ -144,7 +144,7 @@ class InlineMessage:
             return await send(prepared)
         except TelegramBadRequest:
             if prepared.media:
-                forget_remote_ids(self.bot, rich_message)
+                await forget_remote_ids(self.bot, rich_message)
                 # A stale file_id or a photo-specific failure cannot destroy
                 # tables, rich text, or native embedded buttons.
                 without = await prepare_inline_rich(

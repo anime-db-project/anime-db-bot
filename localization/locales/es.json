@@ -199,6 +199,7 @@
     "image_nothing_unavailable": "No se encontró anime en esta imagen. No disponible: {sources}"
   },
   "admin": {
+    "media_cache_summary": "Caché multimedia: URL {entries}, archivos {files}; aciertos {hits}, fallos {misses}; cargas {uploads}, errores {errors}; cola {queued}; media {latency} ms.",
     "forbidden": "Permisos insuficientes.",
     "users_title": "Telegram ID guardado: {count}",
     "users_empty": "Aún no se han guardado ningún Telegram ID.",

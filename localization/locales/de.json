@@ -199,6 +199,7 @@
     "image_nothing_unavailable": "Für dieses Bild wurde kein Anime gefunden. Nicht verfügbar: {sources}"
   },
   "admin": {
+    "media_cache_summary": "Telegram-Mediencache: URLs {entries}, Dateien {files}; Treffer {hits}, Fehltreffer {misses}; Uploads {uploads}, Fehler {errors}; Warteschlange {queued}; Ø {latency} ms.",
     "forbidden": "Unzureichende Berechtigungen.",
     "users_title": "Gespeicherte Telegram IDs: {count}",
     "users_empty": "Es wurden noch keine Telegram IDs gespeichert.",
