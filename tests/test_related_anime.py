@@ -786,6 +786,114 @@ class RelatedAnimeAvailabilityTests(unittest.IsolatedAsyncioTestCase):
         message.answer.assert_not_awaited()
         message.answer_rich.assert_not_awaited()
 
+    async def test_unlimited_discovery_allows_transition_beyond_fifty_levels(self):
+        import asyncio
+        from dataclasses import replace
+        from bots.telegram.card.features.related import (
+            edit_related_view,
+            send_related_item,
+            return_from_related,
+        )
+        from bots.telegram.card.runtime.state import (
+            AnimeCardSession,
+            RelatedReturnFrame,
+        )
+        from core.settings import get_settings
+
+        state, token = self._setup()
+        session = state.anime_sessions[token]
+        for i in range(51):
+            parent = AnimeCardSession(
+                AggregatedAnime(title=f"Parent {i}"),
+                42,
+                related_return=session.related_return,
+            )
+            session.related_return = RelatedReturnFrame(parent, "related", "all", 0)
+        self.assertEqual(session.related_depth, 51)
+        self.assertTrue(session.can_open_related(0))
+        self.assertFalse(session.can_open_related(50))
+        item = AggregatedAnimeReference(
+            titles={"romaji": "Next"}, external_ids={"mal": "2"}
+        )
+        session.related_loaded = session.recommendations_loaded = True
+        session.related_items = session.recommendation_items = [item]
+        context = SimpleNamespace(
+            aggregator=SimpleNamespace(
+                aggregate=AsyncMock(
+                    return_value=AggregatedAnime(
+                        title="Next", external_ids={"mal": "2"}
+                    )
+                )
+            ),
+            imdb_rating_service=SimpleNamespace(enrich=AsyncMock()),
+            related_anime_service=SimpleNamespace(
+                load_relations=AsyncMock(return_value=RelatedAnimeLoadResult())
+            ),
+        )
+        message = SimpleNamespace(
+            edit_text=AsyncMock(),
+            edit_reply_markup=AsyncMock(),
+            answer=AsyncMock(),
+            answer_rich=AsyncMock(),
+        )
+        settings = get_settings()
+        cfg = replace(
+            settings,
+            telegram=replace(settings.telegram, related_navigation_max_depth=0),
+        )
+        with (
+            patch(
+                "bots.telegram.card.features.related.get_app_context",
+                return_value=context,
+            ),
+            patch(
+                "bots.telegram.card.runtime.service.get_app_context",
+                return_value=context,
+            ),
+            patch(
+                "bots.telegram.card.runtime.service.get_user_locale", return_value="en"
+            ),
+            patch("bots.telegram.card.features.related.get_settings", return_value=cfg),
+        ):
+            for section in ("related", "recommendations"):
+                await edit_related_view(
+                    message, token, session, section=section, page=0, locale="en"
+                )
+                buttons = [
+                    b.callback_data
+                    for row in message.edit_text.await_args.kwargs[
+                        "reply_markup"
+                    ].inline_keyboard
+                    for b in row
+                ]
+                self.assertIn(f"ari:{token}:{section}~all:0", buttons)
+            self.assertTrue(
+                await send_related_item(
+                    message,
+                    session,
+                    state,
+                    section="recommendations",
+                    source_key="all",
+                    index=0,
+                    owner_user_id=42,
+                )
+            )
+            await asyncio.gather(*tuple(state.background_tasks))
+            child_token = next(iter(state.anime_sessions))
+            child = state.anime_sessions[child_token]
+            self.assertEqual(child.related_depth, 52)
+            self.assertTrue(
+                await return_from_related(
+                    message, child_token, child, state, locale="en"
+                )
+            )
+            self.assertIs(
+                state.anime_sessions[next(iter(state.anime_sessions))], session
+            )
+            self.assertEqual(session.related_depth, 51)
+        message.answer.assert_not_awaited()
+        message.answer_rich.assert_not_awaited()
+
     async def test_relations_present_reveal_main_button(self) -> None:
         state, token = self._setup()
         session = state.anime_sessions[token]

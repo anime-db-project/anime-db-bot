@@ -17,8 +17,8 @@ MAX_PEOPLE_LOADS = 256
 class RelatedReturnFrame:
     """Suspended parent card and its exact discovery detail view.
 
-    Only the active card has a live callback token. Ancestors are bounded by
-    the configured depth and share the active session lifetime.
+    Only the active card has a live callback token. Ancestors share the active session lifetime and are bounded by
+    the configured depth unless unlimited navigation is enabled.
     """
 
     parent: AnimeCardSession
@@ -94,7 +94,7 @@ class AnimeCardSession:
         return depth
 
     def can_open_related(self, limit: int) -> bool:
-        return self.related_depth < limit
+        return limit == 0 or self.related_depth < limit
 
 
 @dataclass(slots=True)
