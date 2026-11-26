@@ -25,7 +25,6 @@ from bots.telegram.card.views.renderer import edit_standard_text
 from bots.telegram.card.views.rendering import _table_html, image_gallery_html
 from bots.telegram.card.views.titles import preferred_title_keys
 from core.related_anime import AggregatedAnimeReference
-from core.source_names import source_display_name
 from core.media_urls import usable_image_url
 from localization import text
 from services.runtime.app_context import get_app_context
@@ -153,16 +152,25 @@ def _detail_lines(
             lines.append(
                 text("card", "discovery_relation", locale=locale, value=relation)
             )
-    contributors = _contributing_ids(item)
-    if contributors:
-        lines.append(
-            text(
-                "card",
-                "databases",
-                locale=locale,
-                value=", ".join(source_display_name(key) for key in contributors),
-            )
+    empty = text("card", "none", locale=locale)
+    lines.append(
+        text(
+            "card",
+            "discovery_relation_sources"
+            if section == "related"
+            else "discovery_recommendation_sources",
+            locale=locale,
+            value=", ".join(item.sources) or empty,
         )
+    )
+    lines.append(
+        text(
+            "card",
+            "discovery_metadata_sources",
+            locale=locale,
+            value=", ".join(item.metadata_sources) or empty,
+        )
+    )
     ids = _display_ids(item)
     if ids:
         lines.append(text("card", "ids", locale=locale, value=ids))

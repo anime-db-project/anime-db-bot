@@ -115,6 +115,8 @@ class AggregatedAnimeReference:
     kind: str | None = None
     # Catalogs that returned a reference or verified metadata, not mapping-only edges.
     confirmed_ids: dict[str, str] = field(default_factory=dict)
+    # Providers that supplied descriptive preview data (not merely a relation or ID).
+    metadata_sources: list[str] = field(default_factory=list)
 
     @property
     def identity(self) -> AnimeIdentity:

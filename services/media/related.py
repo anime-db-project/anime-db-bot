@@ -83,6 +83,9 @@ def _borrow_display_metadata(
     target.aliases = _dedupe([*target.aliases, *aggregate.aliases])
     target.posters = _dedupe([*target.posters, *aggregate.posters])
     target.kind = target.kind or aggregate.kind
+    target.metadata_sources = _dedupe(
+        [*target.metadata_sources, *aggregate.metadata_sources]
+    )
     # Preserve source-local relation semantics but attribute all borrowed metadata.
     identity = target.identity
     identity.merge_missing(aggregate.identity)
@@ -326,6 +329,17 @@ class RelatedAnimeService:
                     )
                     item.kind = record.kind or item.kind
                     item.confirmed_ids[key] = id
+                    if (
+                        any(
+                            str(value or "").strip() for value in record.titles.values()
+                        )
+                        or any(str(value or "").strip() for value in record.synonyms)
+                        or any(usable_image_url(url) for url in record.posters)
+                        or record.kind
+                    ):
+                        item.metadata_sources = _dedupe(
+                            [*item.metadata_sources, source_display_name(key)]
+                        )
                     if item.candidate.title != "Unknown anime" and item.posters:
                         return
 
@@ -381,6 +395,15 @@ class RelatedAnimeService:
         )
         target.kind = target.kind or reference.kind
         target.sources = _dedupe([*target.sources, source_display_name(source_key)])
+        if (
+            any(str(value or "").strip() for value in reference.titles.values())
+            or any(str(value or "").strip() for value in reference.aliases)
+            or any(usable_image_url(url) for url in reference.posters)
+            or reference.kind
+        ):
+            target.metadata_sources = _dedupe(
+                [*target.metadata_sources, source_display_name(source_key)]
+            )
         direct_id = reference.identity.get(source_key)
         if direct_id and target.identity.get(source_key) == direct_id:
             target.confirmed_ids[source_key] = direct_id
@@ -407,4 +430,7 @@ class RelatedAnimeService:
         target.kind = target.kind or other.kind
         target.relations = _dedupe([*target.relations, *other.relations])
         target.sources = _dedupe([*target.sources, *other.sources])
+        target.metadata_sources = _dedupe(
+            [*target.metadata_sources, *other.metadata_sources]
+        )
         target.rank_score += other.rank_score

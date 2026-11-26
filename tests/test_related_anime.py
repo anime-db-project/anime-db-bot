@@ -258,7 +258,11 @@ class RelatedAnimeServiceTests(unittest.IsolatedAsyncioTestCase):
                 item.candidate.display_ids, {"mal": "20", "anilist": "200"}
             )
             lines = _detail_lines(item, "recommendations", locale="ru")
-            self.assertIn("Базы данных: MAL (MyAnimeList) / Jikan, AniList", lines)
+            self.assertIn("БД рекомендаций: " + ", ".join(item.sources), lines)
+            self.assertIn("БД обогащения: " + ", ".join(item.metadata_sources), lines)
+            self.assertEqual(
+                set(item.metadata_sources), {"MAL (MyAnimeList) / Jikan", "AniList"}
+            )
             self.assertIn("ID: MAL: 20 | ANILIST: 200", lines)
             self.assertNotIn("KITSU", " ".join(lines))
         # Borrowing data from another provider is a real contribution,
@@ -282,7 +286,68 @@ class RelatedAnimeServiceTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(item.confirmed_ids, {"mal": "20", "anilist": "200"})
         self.assertEqual(result.by_source["mal"][0].confirmed_ids, item.confirmed_ids)
         self.assertEqual(item.rank_score, 1.0)
+        self.assertEqual(
+            item.metadata_sources, ["MAL (MyAnimeList) / Jikan", "AniList"]
+        )
+        self.assertIn(
+            "БД рекомендаций: MAL (MyAnimeList) / Jikan",
+            _detail_lines(item, "recommendations", locale="ru"),
+        )
+        self.assertIn(
+            "БД обогащения: MAL (MyAnimeList) / Jikan, AniList",
+            _detail_lines(item, "recommendations", locale="ru"),
+        )
+        self.assertEqual(
+            result.by_source["mal"][0].metadata_sources, item.metadata_sources
+        )
         ani.get_details.assert_awaited_once()
+
+    async def test_relation_id_only_source_is_not_a_metadata_source(self):
+        from bots.telegram.card.features.related import (
+            _detail_lines,
+            _detail_rich,
+            _detail_text,
+        )
+        from core.models import AnimeRecord
+
+        mal = _Source(
+            "MAL (MyAnimeList) / Jikan",
+            "mal",
+            relations=[
+                AnimeReference(
+                    source="MAL (MyAnimeList)",
+                    external_ids={"mal": "20"},
+                    relation="sequel",
+                )
+            ],
+        )
+        ani = _Source("AniList", "anilist")
+        ani.get_details = AsyncMock(
+            return_value=AnimeRecord(
+                source="AniList",
+                source_id="200",
+                titles={"romaji": "Target"},
+                posters=["https://example.org/poster.jpg"],
+            )
+        )
+        result = await RelatedAnimeService(
+            [mal, ani], _MappingResolver()
+        ).load_relations(AnimeIdentity({"mal": "1", "anilist": "1"}))
+        item = result.items[0]
+        self.assertEqual(item.sources, ["MAL (MyAnimeList) / Jikan"])
+        self.assertEqual(item.metadata_sources, ["AniList"])
+        self.assertEqual(item.confirmed_ids, {"mal": "20", "anilist": "200"})
+        for preview in (item, result.by_source["mal"][0]):
+            lines = _detail_lines(preview, "related", locale="ru")
+            self.assertIn("БД связей: MAL (MyAnimeList) / Jikan", lines)
+            self.assertIn("БД обогащения: AniList", lines)
+            self.assertIn("ID: MAL: 20 | ANILIST: 200", lines)
+            self.assertIn(
+                "БД обогащения: AniList", _detail_text(preview, "related", locale="ru")
+            )
+            rich = _detail_rich(preview, "related", locale="ru").html or ""
+            self.assertIn(">БД связей</th>", rich)
+            self.assertIn(">БД обогащения</th>", rich)
 
     async def test_current_anime_is_filtered_from_results(self) -> None:
         service = RelatedAnimeService(
