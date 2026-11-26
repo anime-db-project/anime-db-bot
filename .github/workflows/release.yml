@@ -2,10 +2,7 @@ name: Build and publish releases
 
 on:
   push:
-    branches: [main]
     tags: ["v*"]
-    paths:
-      - ".github/workflows/release.yml"
   workflow_dispatch:
     inputs:
       version:
@@ -268,8 +265,18 @@ jobs:
           print("GHCR API-only REST/GraphQL and raw-provider smoke passed.")
           PY
 
+  jikan:
+    needs: [prepare, verify]
+    if: needs.prepare.outputs.publish == 'true'
+    permissions:
+      contents: read
+      packages: write
+    uses: ./.github/workflows/jikan.yml
+    with:
+      version: ${{ needs.prepare.outputs.version }}
+
   publish:
-    needs: [prepare, verify, binaries, docker]
+    needs: [prepare, verify, binaries, docker, jikan]
     if: needs.prepare.outputs.publish == 'true'
     runs-on: ubuntu-latest
     permissions:
@@ -317,6 +324,7 @@ jobs:
           - Portable Linux x64 and arm64 executables (TAR.GZ, CLI or supported file manager).
           - Portable macOS Intel and Apple Silicon executables (TAR.GZ, Run.command opens Terminal).
           - Multi-architecture Docker image: \`ghcr.io/anime-db-project/anime-db-bot:$VERSION\` and \`:latest\` (amd64/arm64).
+          - Companion Jikan image: ghcr.io/anime-db-project/anime-db-bot-jikan:$VERSION and :latest (amd64/arm64).
           - SHA256SUMS.txt and manifest.json with verified SHA-256, sizes, platform, source SHA and release metadata.
 
           Binary commands: \`run\`, \`start\`, \`stop\`, \`restart\`, \`status\`, \`init\`, \`check\`, \`doctor\`; pass \`--help\` for flags.

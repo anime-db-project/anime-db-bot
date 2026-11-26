@@ -10,6 +10,7 @@ services:
     command: ["api"]
     environment:
       ANIME_DB_BOT_HOME: /data
+      JIKAN_API_URL: ${JIKAN_API_URL:-http://jikan:8091}
       ANIME_DB_BOT_RUN_MODE: api
       API_ENABLED: "true"
       API_HOST: 0.0.0.0
@@ -23,6 +24,12 @@ services:
       - anime-db-bot-data:/data
     ports:
       - "127.0.0.1:${API_PORT:-8181}:8181"
+
+  jikan:
+    image: ${JIKAN_IMAGE:-ghcr.io/anime-db-project/anime-db-bot-jikan:${ANIME_DB_BOT_TAG:-latest}}
+    restart: unless-stopped
+    environment:
+      JIKAN_PORT: "8091"
 
 volumes:
   anime-db-bot-data:

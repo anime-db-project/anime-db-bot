@@ -547,7 +547,6 @@ class SourceSettings:
     jikan_request_timeout_seconds: float
     jikan_supplement_cache_ttl_seconds: float
     jikan_people_cache_ttl_seconds: float
-    jikan_update_idle_wait_seconds: int
     anidb_client: str
     anidb_client_version: int
     anidb_http_api_url: str
@@ -1160,12 +1159,6 @@ class AppSettings:
                     values,
                     "JIKAN_PEOPLE_CACHE_TTL_SECONDS",
                     21600.0,
-                ),
-                jikan_update_idle_wait_seconds=_int(
-                    values,
-                    "JIKAN_UPDATE_IDLE_WAIT_SECONDS",
-                    300,
-                    30,
                 ),
                 anidb_client=_raw(values, "ANIDB_CLIENT"),
                 anidb_client_version=_int(values, "ANIDB_CLIENT_VERSION", 1, 1),

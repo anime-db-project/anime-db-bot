@@ -1,0 +1,95 @@
+name: Publish Jikan companion image
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Matching bot release version (without v), e.g. 0.3.3"
+        required: true
+        type: string
+      jikan_version:
+        description: "Optional exact Jikan library version (default: latest stable release)"
+        required: false
+        type: string
+  workflow_call:
+    inputs:
+      version:
+        required: true
+        type: string
+      jikan_version:
+        required: false
+        type: string
+
+permissions:
+  contents: read
+  packages: write
+
+concurrency:
+  group: anime-db-bot-jikan-publication
+  cancel-in-progress: false
+
+jobs:
+  docker:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - name: Resolve exact Jikan release and image tags
+        id: plan
+        env:
+          VERSION: ${{ inputs.version }}
+          JIKAN_VERSION: ${{ inputs.jikan_version }}
+        run: |
+          set -euo pipefail
+          version="${VERSION#v}"
+          [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+([.-][a-zA-Z0-9.-]+)?$ ]]
+          jikan="${JIKAN_VERSION#v}"
+          if [[ -z "$jikan" ]]; then
+            jikan="$(curl -fsSL --connect-timeout 10 --max-time 30 https://api.github.com/repos/jikan-me/jikan/releases/latest | python3 -c 'import json,sys; print(json.load(sys.stdin)["tag_name"].removeprefix("v"))')"
+          fi
+          [[ "$jikan" =~ ^[0-9]+\.[0-9]+\.[0-9]+([.-][a-zA-Z0-9.-]+)?$ ]]
+          echo "image=ghcr.io/${GITHUB_REPOSITORY,,}-jikan" >> "$GITHUB_OUTPUT"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "jikan=$jikan" >> "$GITHUB_OUTPUT"
+      - uses: docker/setup-qemu-action@v3
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Build and publish AMD64 and ARM64
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: jikan_service/Dockerfile
+          platforms: linux/amd64,linux/arm64
+          push: true
+          pull: true
+          no-cache: true
+          build-args: |
+            JIKAN_VERSION=${{ steps.plan.outputs.jikan }}
+          tags: |
+            ${{ steps.plan.outputs.image }}:${{ steps.plan.outputs.version }}
+            ${{ steps.plan.outputs.image }}:latest
+          labels: |
+            org.opencontainers.image.source=https://github.com/${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.version=${{ steps.plan.outputs.version }}
+      - name: Validate published image
+        env:
+          IMAGE: ${{ steps.plan.outputs.image }}:${{ steps.plan.outputs.version }}
+          EXPECTED: ${{ steps.plan.outputs.jikan }}
+        run: |
+          set -euo pipefail
+          docker pull "$IMAGE"
+          docker run --rm --entrypoint php "$IMAGE" -l /app/public/router.php
+          cid="$(docker run -d "$IMAGE")"
+          trap 'docker rm -f "$cid" >/dev/null 2>&1 || true' EXIT
+          for _ in {1..30}; do
+            if [[ "$(docker inspect --format '{{.State.Health.Status}}' "$cid")" == healthy ]]; then break; fi
+            sleep 2
+          done
+          [[ "$(docker inspect --format '{{.State.Health.Status}}' "$cid")" == healthy ]]
+          actual="$(docker exec "$cid" php -r 'require "/app/vendor/autoload.php"; echo Composer\\InstalledVersions::getPrettyVersion("jikan-me/jikan");')"
+          [[ "${actual#v}" == "$EXPECTED" ]]

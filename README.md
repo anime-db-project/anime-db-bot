@@ -181,7 +181,7 @@ CORS, GraphQL examples, resource limits, and Docker instructions.
 
 The cross-platform launcher manages virtual environments, checks, foreground/background execution and process status. For Linux, `start.sh` provides the existing tmux-based deployment path. Windows has `start.ps1`/`start.cmd`; macOS also includes `start.command`.
 
-Docker Compose and local Jikan are optional supplements. The official MAL integration can operate without Jikan. Linux `systemd` templates are available under `deploy/systemd/` for maintenance; they are not required on Windows or macOS.
+Docker Compose and local Jikan are optional supplements. The official MAL integration can operate without Jikan. Use the published companion image with Docker Compose; local builds are manual via `./scripts/build-jikan.sh`. See [Docker deployment](docs/releases.md#docker--ghcr).
 
 ```bash
 python3 scripts/project.py doctor
@@ -379,7 +379,6 @@ sources/          API providers and source health
 mappings/         local cross-ID resolution and updater
 localization/     seven UI locale catalogs
 jikan_service/    optional local MAL supplement
-deploy/systemd/   optional Linux service/timer units
 tests/            automated regression tests
 ```
 

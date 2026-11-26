@@ -107,7 +107,7 @@ En Windows, utilice `py -3 scripts\project.py` en lugar de `python3 scripts/proj
 
 El iniciador multiplataforma gestiona entorno virtual, verificaciones y procesos. Linux incluye `start.sh` con tmux, Windows `start.ps1`/`start.cmd` y macOS `start.command`.
 
-Docker Compose y Jikan local son complementos opcionales. La API oficial de MAL sigue disponible sin Jikan. Las unidades `systemd` de `deploy/systemd/` son específicas de Linux.
+Docker Compose y Jikan local son complementos opcionales. La API oficial de MAL sigue disponible sin Jikan.
 
 ```bash
 python3 scripts/project.py doctor
@@ -241,7 +241,6 @@ sources/          API providers and source health
 mappings/         local cross-ID resolution and updater
 localization/     seven UI locale catalogs
 jikan_service/    optional local MAL supplement
-deploy/systemd/   optional Linux service/timer units
 tests/            automated regression tests
 ```
 

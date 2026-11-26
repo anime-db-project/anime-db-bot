@@ -107,7 +107,7 @@ Windows では `python3 scripts/project.py` の代わりに `py -3 scripts\proje
 
 共通ランチャーが仮想環境、検査、バックグラウンド起動と停止を管理します。Linux には tmux を使う `start.sh`、Windows には `start.ps1` と `start.cmd`、macOS には `start.command` があります。
 
-Docker Compose とローカル Jikan は任意の補助機能です。Jikan がなくても公式 MAL API を利用できます。`deploy/systemd/` のユニットは Linux 専用です。
+Docker Compose とローカル Jikan は任意の補助機能です。Jikan がなくても公式 MAL API を利用できます。
 
 ```bash
 python3 scripts/project.py doctor
@@ -241,7 +241,6 @@ sources/          API providers and source health
 mappings/         local cross-ID resolution and updater
 localization/     seven UI locale catalogs
 jikan_service/    optional local MAL supplement
-deploy/systemd/   optional Linux service/timer units
 tests/            automated regression tests
 ```
 

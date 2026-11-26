@@ -3,6 +3,7 @@
 Manifest describes the exact archives that have passed native smoke tests.
 No checksums or sizes are taken from GitHub Actions artifact metadata.
 """
+
 from __future__ import annotations
 
 import argparse
@@ -17,8 +18,11 @@ ARCHIVE_NAME = re.compile(
     r"(windows|linux|macos)-(x64|arm64)\.(zip|tar\.gz)$"
 )
 EXPECTED_PLATFORMS = {
-    ("windows", "x64"), ("linux", "x64"), ("linux", "arm64"),
-    ("macos", "x64"), ("macos", "arm64"),
+    ("windows", "x64"),
+    ("linux", "x64"),
+    ("linux", "arm64"),
+    ("macos", "x64"),
+    ("macos", "arm64"),
 }
 SHA256 = re.compile(r"^[a-f0-9]{64}$")
 
@@ -51,19 +55,22 @@ def _archives(directory: Path, tag: str) -> list[dict[str, object]]:
         size = path.stat().st_size
         if size <= 0:
             raise ValueError(f"Empty release archive: {path.name}")
-        output.append({
-            "name": path.name,
-            "platform": platform,
-            "architecture": arch,
-            "format": suffix,
-            "size": size,
-            "sha256": _hash(path),
-        })
+        output.append(
+            {
+                "name": path.name,
+                "platform": platform,
+                "architecture": arch,
+                "format": suffix,
+                "size": size,
+                "sha256": _hash(path),
+            }
+        )
     if platforms != EXPECTED_PLATFORMS:
         raise ValueError(
             "Expected 5 release platforms; missing="
             + repr(sorted(EXPECTED_PLATFORMS - platforms))
-            + " unexpected=" + repr(sorted(platforms - EXPECTED_PLATFORMS))
+            + " unexpected="
+            + repr(sorted(platforms - EXPECTED_PLATFORMS))
         )
     return output
 
@@ -92,14 +99,19 @@ def create_release_metadata(
         "release_tag": tag,
         "version": tag.removeprefix("v"),
         "source_commit": commit.lower(),
-        "generated_at": datetime.now(timezone.utc).isoformat(
-            timespec="seconds"
-        ).replace("+00:00", "Z"),
+        "generated_at": datetime.now(timezone.utc)
+        .isoformat(timespec="seconds")
+        .replace("+00:00", "Z"),
         "artifacts": artifacts,
         "checksums": {
             "name": checksums.name,
             "size": checksums.stat().st_size,
             "sha256": _hash(checksums),
+        },
+        "jikan_container": {
+            "image": f"ghcr.io/{repository.lower()}-jikan",
+            "tags": [tag.removeprefix("v"), "latest"],
+            "platforms": ["linux/amd64", "linux/arm64"],
         },
         "container": {
             "image": f"ghcr.io/{repository.lower()}",

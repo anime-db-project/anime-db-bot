@@ -1,4 +1,4 @@
-# Standalone bot image (the existing compose.yml is dedicated to local Jikan).
+# Bot and optional Jikan supplement on a private Compose network.
 # Set BOT_TOKEN in the shell or an untracked .env file before deploying.
 services:
   anime-db-bot:
@@ -8,10 +8,17 @@ services:
     environment:
       BOT_TOKEN: ${BOT_TOKEN:?Set BOT_TOKEN first}
       ANIME_DB_BOT_HOME: /data
+      JIKAN_API_URL: ${JIKAN_API_URL:-http://jikan:8091}
       PYTHONUNBUFFERED: "1"
     volumes:
       - anime-db-bot-data:/data
     command: ["run"]
+
+  jikan:
+    image: ${JIKAN_IMAGE:-ghcr.io/anime-db-project/anime-db-bot-jikan:${ANIME_DB_BOT_TAG:-latest}}
+    restart: unless-stopped
+    environment:
+      JIKAN_PORT: "8091"
 
 volumes:
   anime-db-bot-data:

@@ -161,10 +161,17 @@ installation directory is read-only. Inside the home:
 ## Docker / GHCR
 
 The Docker image includes the same features and optional Redis/PostgreSQL
-clients. It uses Python 3.12 and a non-root account. No Jikan service is
-started inside the bot container; use a separately managed Jikan instance
-and configure `JIKAN_API_URL` if required. The existing
-`compose.yml` is for local Jikan; `compose.bot.yml` is for the bot image.
+clients. It uses Python 3.12 and a non-root account. Jikan runs in a separate container. Use `docker compose -f compose.bot.yml up -d`
+or `docker compose -f compose.api.yml up -d` for the private network
+(`http://jikan:8091`). For native binaries or source installs, use
+`docker compose up -d --no-build jikan` (loopback port 8091).
+The companion image is `ghcr.io/anime-db-project/anime-db-bot-jikan:latest`;
+set `ANIME_DB_BOT_TAG` for a matching release or `JIKAN_IMAGE` to override it.
+Native binary users without a source checkout can run:\n\n```sh\ndocker run -d --name anime-db-bot-Jikan --restart unless-stopped \\\n  -p 127.0.0.1:8091:8091 ghcr.io/anime-db-project/anime-db-bot-jikan:latest\n```\n\nManual local build: `./scripts/build-jikan.sh [--yes] [JIKAN_VERSION]`.
+The old container remains running during the no-cache build; successful
+replacement removes it. No scheduled Jikan builds or updates are installed.
+For bot-only Docker deployment, start just the bot service or use the
+standalone command below.
 
 ```sh
 docker pull ghcr.io/anime-db-project/anime-db-bot:latest

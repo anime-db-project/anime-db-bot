@@ -1,4 +1,6 @@
 FROM php:8.4-cli
+LABEL org.opencontainers.image.source="https://github.com/anime-db-project/anime-db-bot"
+LABEL org.opencontainers.image.description="Optional Jikan companion for anime-db-bot"
 
 RUN apt-get update \
     && apt-get install -y --no-install-recommends unzip \

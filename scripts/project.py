@@ -279,14 +279,30 @@ def docker_compose_available() -> bool:
     return result.returncode == 0
 
 
-def ensure_jikan(*, build: bool = False) -> bool:
+def ensure_jikan() -> bool:
     if not docker_compose_available():
         _info(
             "Docker Compose is unavailable; continuing without the optional local Jikan supplement."
         )
         return False
+    # Keep an existing manually built or downloaded container; never replace
+    # it merely because the bot is starting.
+    existing = subprocess.run(
+        ["docker", "inspect", "--format", "{{.State.Status}}", "anime-db-bot-Jikan"],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if existing.returncode == 0:
+        if existing.stdout.strip() == "running":
+            return True
+        try:
+            _run(["docker", "start", "anime-db-bot-Jikan"])
+            return True
+        except subprocess.CalledProcessError:
+            return False
     command = ["docker", "compose", "-f", str(ROOT_DIR / "compose.yml"), "up", "-d"]
-    command.append("--build" if build else "--no-build")
+    command.append("--no-build")
     command.append("jikan")
     try:
         _run(command)

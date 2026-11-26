@@ -107,7 +107,7 @@ python3 scripts/project.py run
 
 Универсальный launcher создаёт окружение, выполняет проверки и управляет фоновым процессом. Для Linux есть запуск через `start.sh` и tmux. В Windows доступны `start.ps1`/`start.cmd`, а в macOS — `start.command`.
 
-Docker Compose и локальный Jikan необязательны: официальный MAL продолжает работать без них. Для Linux предусмотрены вспомогательные unit-файлы `systemd` в `deploy/systemd/`; на Windows и macOS они не нужны.
+Docker Compose и локальный Jikan необязательны: официальный MAL продолжает работать без них.
 
 ```bash
 python3 scripts/project.py doctor
@@ -241,7 +241,6 @@ sources/          API providers and source health
 mappings/         local cross-ID resolution and updater
 localization/     seven UI locale catalogs
 jikan_service/    optional local MAL supplement
-deploy/systemd/   optional Linux service/timer units
 tests/            automated regression tests
 ```
 

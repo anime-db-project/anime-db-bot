@@ -107,7 +107,7 @@ Su Windows usa `py -3 scripts\project.py` al posto di `python3 scripts/project.p
 
 Il launcher multipiattaforma gestisce ambiente virtuale, controlli e processi. Linux include `start.sh` con tmux, Windows `start.ps1`/`start.cmd`, macOS `start.command`.
 
-Docker Compose e Jikan locale sono opzionali. La fonte MAL ufficiale resta operativa senza Jikan. Le unità `systemd` in `deploy/systemd/` sono destinate a Linux.
+Docker Compose e Jikan locale sono opzionali. La fonte MAL ufficiale resta operativa senza Jikan.
 
 ```bash
 python3 scripts/project.py doctor
@@ -241,7 +241,6 @@ sources/          API providers and source health
 mappings/         local cross-ID resolution and updater
 localization/     seven UI locale catalogs
 jikan_service/    optional local MAL supplement
-deploy/systemd/   optional Linux service/timer units
 tests/            automated regression tests
 ```
 

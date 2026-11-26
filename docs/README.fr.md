@@ -107,7 +107,7 @@ Sous Windows, utilisez `py -3 scripts\project.py` à la place de `python3 script
 
 Le lanceur multiplateforme prépare l'environnement, vérifie l'installation et gère l'exécution. Linux dispose de `start.sh` et tmux, Windows de `start.ps1`/`start.cmd`, macOS de `start.command`.
 
-Docker Compose et Jikan local sont facultatifs. L'API officielle de MAL reste utilisable sans Jikan. Les unités `systemd` dans `deploy/systemd/` sont réservées à Linux.
+Docker Compose et Jikan local sont facultatifs. L'API officielle de MAL reste utilisable sans Jikan.
 
 ```bash
 python3 scripts/project.py doctor
@@ -241,7 +241,6 @@ sources/          API providers and source health
 mappings/         local cross-ID resolution and updater
 localization/     seven UI locale catalogs
 jikan_service/    optional local MAL supplement
-deploy/systemd/   optional Linux service/timer units
 tests/            automated regression tests
 ```
 

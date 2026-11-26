@@ -1,9 +1,6 @@
 services:
   jikan:
-    image: anime-db-bot-jikan:current
-    build:
-      context: .
-      dockerfile: jikan_service/Dockerfile
+    image: ${JIKAN_IMAGE:-ghcr.io/anime-db-project/anime-db-bot-jikan:${ANIME_DB_BOT_TAG:-latest}}
     container_name: anime-db-bot-Jikan
     restart: unless-stopped
     ports:

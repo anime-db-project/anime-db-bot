@@ -107,7 +107,7 @@ Unter Windows `py -3 scripts\project.py` statt `python3 scripts/project.py` verw
 
 Der plattformübergreifende Launcher verwaltet Umgebung, Checks, Vorder- und Hintergrundprozesse. Linux bietet zusätzlich `start.sh` mit tmux, Windows `start.ps1`/`start.cmd` und macOS `start.command`.
 
-Docker Compose und das lokale Jikan sind optional. Die offizielle MAL-Anbindung funktioniert ohne Jikan weiter. Linux-spezifische `systemd`-Einheiten liegen unter `deploy/systemd/`.
+Docker Compose und das lokale Jikan sind optional. Die offizielle MAL-Anbindung funktioniert ohne Jikan weiter.
 
 ```bash
 python3 scripts/project.py doctor
@@ -241,7 +241,6 @@ sources/          API providers and source health
 mappings/         local cross-ID resolution and updater
 localization/     seven UI locale catalogs
 jikan_service/    optional local MAL supplement
-deploy/systemd/   optional Linux service/timer units
 tests/            automated regression tests
 ```
 

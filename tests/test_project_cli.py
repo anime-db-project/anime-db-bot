@@ -3,6 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 from tempfile import TemporaryDirectory
 import unittest
+from types import SimpleNamespace
 from unittest.mock import patch
 
 from scripts import project
@@ -100,14 +101,19 @@ class CrossPlatformProjectCliTests(unittest.TestCase):
         with (
             patch.object(project, "docker_compose_available", return_value=True),
             patch.object(project, "_run") as run,
+            patch.object(
+                project.subprocess,
+                "run",
+                return_value=SimpleNamespace(returncode=1, stdout=""),
+            ),
         ):
-            self.assertTrue(project.ensure_jikan(build=True))
+            self.assertTrue(project.ensure_jikan())
         command = run.call_args.args[0]
         self.assertEqual(
             command[:4],
             ["docker", "compose", "-f", str(project.ROOT_DIR / "compose.yml")],
         )
-        self.assertIn("--build", command)
+        self.assertIn("--no-build", command)
         self.assertEqual(command[-1], "jikan")
 
 

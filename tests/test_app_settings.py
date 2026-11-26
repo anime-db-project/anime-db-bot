@@ -142,7 +142,6 @@ class AppSettingsTests(unittest.TestCase):
                 "WHATANIMEISTHIS_API_KEY": "what-key",
                 "WHATANIMEISTHIS_API_DAILY_LIMIT": "0",
                 "IMAGE_SEARCH_MAX_BYTES": "123456",
-                "JIKAN_UPDATE_IDLE_WAIT_SECONDS": "123",
                 "UPSTREAM_RATE_LIMIT_KITSU_PER_MINUTE": "44",
                 "UPSTREAM_RATE_LIMIT_KITSU_EPISODES_PER_MINUTE": "33",
                 "ANISEARCH_API_URL": "https://anisearch.example/api/",
@@ -208,7 +207,6 @@ class AppSettingsTests(unittest.TestCase):
         self.assertEqual(settings.sources.whatanimeisthis_api_key, "what-key")
         self.assertEqual(settings.sources.whatanimeisthis_api_daily_limit, 0)
         self.assertEqual(settings.sources.image_search_max_bytes, 123456)
-        self.assertEqual(settings.sources.jikan_update_idle_wait_seconds, 123)
         self.assertEqual(settings.rate_limits.source_limit("kitsu"), 44)
         self.assertEqual(settings.rate_limits.operation_limit("kitsu", "episodes"), 33)
         self.assertEqual(
@@ -356,7 +354,7 @@ class AppSettingsTests(unittest.TestCase):
             },
             set(DEFAULT_MAPPING_LINKS),
         )
-        self.assertEqual(len(values), 275 + len(DEFAULT_MAPPING_LINKS))
+        self.assertEqual(len(values), 274 + len(DEFAULT_MAPPING_LINKS))
         for key in (
             "BOT_ON_FAILURE",
             "BOT_ON_CLEAN_EXIT",
