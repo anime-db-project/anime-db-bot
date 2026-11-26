@@ -41,6 +41,7 @@ from bots.telegram.card.features.wikipedia import (
 )
 from bots.telegram.card.runtime.picker_entries import (
     labels_for_route,
+    picker_display_entries,
     picker_parent_callback,
     picker_prompt,
     prepare_initial_picker,
@@ -399,10 +400,14 @@ def build_dispatcher(mode_name: str, state: TelegramCardState) -> Dispatcher:
         if data is None:
             return
         try:
+            labels, record_ranges = picker_display_entries(
+                session, data.route, locale=locale, labels=labels
+            )
             keyboard = card_picker_keyboard(
                 data,
                 locale=locale,
                 labels=labels,
+                record_ranges=record_ranges,
                 highlight_current=False,
                 back_callback=picker_parent_callback(token, data.route),
             )
@@ -435,10 +440,14 @@ def build_dispatcher(mode_name: str, state: TelegramCardState) -> Dispatcher:
             await callback.answer()
             return
         try:
+            labels, record_ranges = picker_display_entries(
+                session, data.route, locale=locale
+            )
             keyboard = card_picker_keyboard(
                 data,
                 locale=locale,
-                labels=labels_for_route(session, data.route, locale=locale),
+                labels=labels,
+                record_ranges=record_ranges,
             )
         except ValueError:
             await callback.answer(

@@ -74,6 +74,8 @@ def indexed_selection_rows(
     block: str | None = None,
     total: int | None = None,
     fallback_label: Callable[[int], str] | None = None,
+    record_ranges: Sequence[tuple[int, int]] | None = None,
+    pre_numbered: int = 0,
 ) -> tuple[list[list[InlineKeyboardButton]], int, int]:
     """Numbered single-column selection; resolve labels only for visible rows."""
     size = selection_page_size(block) if page_size is None else page_size
@@ -82,6 +84,8 @@ def indexed_selection_rows(
     count = len(labels) if total is None else total
     if count < 0 or (count > len(labels) and fallback_label is None):
         raise ValueError("Missing labels for selection entries")
+    if record_ranges is not None and len(record_ranges) != count:
+        raise ValueError("Record ranges must match selection entries")
     pages = max(1, (count + size - 1) // size)
     window = max(0, min(int(window), pages - 1))
     start = window * size
@@ -94,10 +98,20 @@ def indexed_selection_rows(
             if fallback_label is not None
             else ""
         )
+        prefix = f"{index + 1}. "
+        if record_ranges is not None:
+            first, last = record_ranges[index]
+            prefix = (
+                ""
+                if index < pre_numbered
+                else f"{first}. "
+                if first == last
+                else f"{first}–{last}. "
+            )
         rows.append(
             [
                 InlineKeyboardButton(
-                    text=f"{'✓ ' if current == index else ''}{index + 1}. {label}",
+                    text=f"{'✓ ' if current == index else ''}{prefix}{label}",
                     callback_data=destination(index),
                 )
             ]
@@ -108,9 +122,12 @@ def indexed_selection_rows(
             navigation.append(
                 InlineKeyboardButton(text="◀️", callback_data=change_window(window - 1))
             )
-        navigation.append(
-            InlineKeyboardButton(text=f"{window + 1}/{pages}", callback_data="noop")
-        )
+        range_text = f"{window + 1}/{pages}"
+        if record_ranges:
+            first = record_ranges[start][0]
+            last = record_ranges[min(count, start + size) - 1][1]
+            range_text = f"{first}–{last}/{record_ranges[-1][1]}"
+        navigation.append(InlineKeyboardButton(text=range_text, callback_data="noop"))
         if window + 1 < pages:
             navigation.append(
                 InlineKeyboardButton(text="▶️", callback_data=change_window(window + 1))
@@ -246,9 +263,16 @@ def _picker_keyboard(
     back_callback: str | None = None,
     show_back: bool = True,
     highlight_current: bool = True,
+    record_ranges: Sequence[tuple[int, int]] | None = None,
 ) -> InlineKeyboardMarkup:
     total = max(1, int(data.total))
     current = max(0, min(int(data.current), total - 1))
+    pre_numbered = 0
+    if record_ranges is not None:
+        if data.route.startswith("gx~"):
+            pre_numbered = int(data.route.rsplit("~", 1)[1])
+        elif data.route == "av~screenshots" or data.route.startswith("as~screenshots~"):
+            pre_numbered = len(record_ranges)
     rows, _, _ = indexed_selection_rows(
         labels if labels is not None else (),
         window=data.window,
@@ -260,6 +284,8 @@ def _picker_keyboard(
             data.prefix, data.token, data.route, current, total, window
         ).encode(),
         current=current if highlight_current else None,
+        record_ranges=record_ranges,
+        pre_numbered=pre_numbered,
     )
     if show_back:
         rows.append(
@@ -280,6 +306,7 @@ def card_picker_keyboard(
     labels: Sequence[str] | None = None,
     back_callback: str | None = None,
     highlight_current: bool = True,
+    record_ranges: Sequence[tuple[int, int]] | None = None,
 ) -> InlineKeyboardMarkup:
     return _picker_keyboard(
         data,
@@ -288,6 +315,7 @@ def card_picker_keyboard(
         labels=labels,
         back_callback=back_callback,
         highlight_current=highlight_current,
+        record_ranges=record_ranges,
     )
 
 

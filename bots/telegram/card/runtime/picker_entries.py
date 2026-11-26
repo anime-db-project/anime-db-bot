@@ -157,11 +157,54 @@ def _episode_labels(session: AnimeCardSession, backend: str, locale: str) -> lis
     return labels
 
 
+def _gallery_labels(
+    groups, portraits, locale: str, record_ranges: list[tuple[int, int]] | None
+) -> list[str]:
+    labels = []
+    offset = 0
+    for group in groups:
+        start, end = offset + 1, offset + len(group)
+        labels.append(text("card", "record_range", locale=locale, start=start, end=end))
+        if record_ranges is not None:
+            record_ranges.append((start, end))
+        offset = end
+    for item in portraits:
+        offset += 1
+        labels.append(display_person_name(item.name, item.aliases, locale=locale))
+        if record_ranges is not None:
+            record_ranges.append((offset, offset))
+    return labels
+
+
+def picker_display_entries(
+    session: AnimeCardSession,
+    route: str,
+    *,
+    locale: str,
+    labels: list[str] | None = None,
+) -> tuple[list[str], list[tuple[int, int]] | None]:
+    """Resolve real record ordinals separately from callback/page positions."""
+    if (
+        route.startswith("gx~")
+        or route == "av~screenshots"
+        or route.startswith("as~screenshots~")
+    ):
+        spans: list[tuple[int, int]] = []
+        values = labels_for_route(session, route, locale=locale, record_ranges=spans)
+        return values, spans
+    return (
+        labels
+        if labels is not None
+        else labels_for_route(session, route, locale=locale)
+    ), None
+
+
 def labels_for_route(
     session: AnimeCardSession,
     route: str,
     *,
     locale: str,
+    record_ranges: list[tuple[int, int]] | None = None,
 ) -> list[str]:
     """Return grounded item names for the existing compact callback route."""
     parts = route.split("~")
@@ -280,23 +323,12 @@ def labels_for_route(
                 groups, portrait_entries = staff_gallery(
                     session.anime, source, locale, indices, section=parts[2]
                 )
-                labels = []
-                offset = 0
-                for group in groups:
-                    labels.append(
-                        text(
-                            "card",
-                            "record_range",
-                            locale=locale,
-                            start=offset + 1,
-                            end=offset + len(group),
-                        )
-                    )
-                    offset += len(group)
-                return labels + [
-                    display_person_name(person.name, person.aliases, locale=locale)
-                    for _, person in portrait_entries
-                ]
+                return _gallery_labels(
+                    groups,
+                    [person for _, person in portrait_entries],
+                    locale,
+                    record_ranges,
+                )
             without, portraits = people_state(
                 session.anime, parts[2], source, locale=locale
             )
@@ -306,23 +338,7 @@ def labels_for_route(
             "characters" if parts[1] == "ac" or parts[2] == "characters" else parts[2]
         )
         groups = _group_records(without, section, locale, source)
-        labels = []
-        offset = 0
-        for group in groups:
-            labels.append(
-                text(
-                    "card",
-                    "record_range",
-                    locale=locale,
-                    start=offset + 1,
-                    end=offset + len(group),
-                )
-            )
-            offset += len(group)
-        return labels + [
-            display_person_name(item.name, item.aliases, locale=locale)
-            for item in portraits
-        ]
+        return _gallery_labels(groups, portraits, locale, record_ranges)
 
     if kind in {"ac", "pv"}:
         from bots.telegram.card.features.characters import (
@@ -376,6 +392,11 @@ def labels_for_route(
         )
 
         count = len(screenshot_urls(session.anime, source))
+        if record_ranges is not None:
+            record_ranges.extend(
+                (index + 1, min(index + SCREENSHOTS_PER_PAGE, count))
+                for index in range(0, count, SCREENSHOTS_PER_PAGE)
+            )
         return [
             (
                 f"Скриншоты {index + 1}–{min(index + SCREENSHOTS_PER_PAGE, count)}"
