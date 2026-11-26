@@ -407,6 +407,7 @@ class RelatedAnimeService:
         direct_id = reference.identity.get(source_key)
         if direct_id and target.identity.get(source_key) == direct_id:
             target.confirmed_ids[source_key] = direct_id
+            target.discovery_ids[source_key] = direct_id
         if reference.relation:
             relation = canonical_relation_kind(reference.relation)
             target.relations = _dedupe([*target.relations, relation])
@@ -419,6 +420,7 @@ class RelatedAnimeService:
     ) -> None:
         target.external_ids.update(other.external_ids)
         target.confirmed_ids.update(other.confirmed_ids)
+        target.discovery_ids.update(other.discovery_ids)
         for key, value in other.titles.items():
             existing = target.titles.get(key)
             if existing is None:

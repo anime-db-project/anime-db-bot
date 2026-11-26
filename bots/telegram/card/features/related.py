@@ -115,8 +115,8 @@ def _relation_label(item: AggregatedAnimeReference, locale: str) -> str | None:
     return ", ".join(labels)
 
 
-def _contributing_ids(item: AggregatedAnimeReference) -> dict[str, str]:
-    ids = item.confirmed_ids
+def _discovery_ids(item: AggregatedAnimeReference) -> dict[str, str]:
+    ids = item.discovery_ids
     return {
         key: item.external_ids[key]
         for key in _DISPLAY_ID_ORDER
@@ -126,7 +126,7 @@ def _contributing_ids(item: AggregatedAnimeReference) -> dict[str, str]:
 
 def _display_ids(item: AggregatedAnimeReference) -> str:
     return " | ".join(
-        f"{key.upper()}: {value}" for key, value in _contributing_ids(item).items()
+        f"{key.upper()}: {value}" for key, value in _discovery_ids(item).items()
     )
 
 
@@ -152,25 +152,10 @@ def _detail_lines(
             lines.append(
                 text("card", "discovery_relation", locale=locale, value=relation)
             )
-    empty = text("card", "none", locale=locale)
-    lines.append(
-        text(
-            "card",
-            "discovery_relation_sources"
-            if section == "related"
-            else "discovery_recommendation_sources",
-            locale=locale,
-            value=", ".join(item.sources) or empty,
+    if item.sources:
+        lines.append(
+            text("card", "databases", locale=locale, value=", ".join(item.sources))
         )
-    )
-    lines.append(
-        text(
-            "card",
-            "discovery_metadata_sources",
-            locale=locale,
-            value=", ".join(item.metadata_sources) or empty,
-        )
-    )
     ids = _display_ids(item)
     if ids:
         lines.append(text("card", "ids", locale=locale, value=ids))

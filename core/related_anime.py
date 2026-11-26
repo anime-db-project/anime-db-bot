@@ -117,6 +117,8 @@ class AggregatedAnimeReference:
     confirmed_ids: dict[str, str] = field(default_factory=dict)
     # Providers that supplied descriptive preview data (not merely a relation or ID).
     metadata_sources: list[str] = field(default_factory=list)
+    # IDs actually returned by the relation/recommendation providers in this view.
+    discovery_ids: dict[str, str] = field(default_factory=dict)
 
     @property
     def identity(self) -> AnimeIdentity:

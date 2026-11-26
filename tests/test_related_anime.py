@@ -258,12 +258,24 @@ class RelatedAnimeServiceTests(unittest.IsolatedAsyncioTestCase):
                 item.candidate.display_ids, {"mal": "20", "anilist": "200"}
             )
             lines = _detail_lines(item, "recommendations", locale="ru")
-            self.assertIn("БД рекомендаций: " + ", ".join(item.sources), lines)
-            self.assertIn("БД обогащения: " + ", ".join(item.metadata_sources), lines)
+            self.assertIn("Базы данных: " + ", ".join(item.sources), lines)
             self.assertEqual(
                 set(item.metadata_sources), {"MAL (MyAnimeList) / Jikan", "AniList"}
             )
-            self.assertIn("ID: MAL: 20 | ANILIST: 200", lines)
+            expected = {"mal": "20", "anilist": "200"}
+            if item is result.by_source["mal"][0]:
+                expected = {"mal": "20"}
+            elif item is result.by_source["anilist"][0]:
+                expected = {"anilist": "200"}
+            self.assertEqual(item.discovery_ids, expected)
+            self.assertIn(
+                "ID: "
+                + " | ".join(
+                    f"{key.upper()}: {value}" for key, value in expected.items()
+                ),
+                lines,
+            )
+            self.assertNotIn("БД обогащения", " ".join(lines))
             self.assertNotIn("KITSU", " ".join(lines))
         # Borrowing data from another provider is a real contribution,
         # not a recommendation vote: the two concepts must stay separate.
@@ -289,14 +301,15 @@ class RelatedAnimeServiceTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(
             item.metadata_sources, ["MAL (MyAnimeList) / Jikan", "AniList"]
         )
-        self.assertIn(
-            "БД рекомендаций: MAL (MyAnimeList) / Jikan",
-            _detail_lines(item, "recommendations", locale="ru"),
-        )
-        self.assertIn(
-            "БД обогащения: MAL (MyAnimeList) / Jikan, AniList",
-            _detail_lines(item, "recommendations", locale="ru"),
-        )
+        for preview in (item, result.by_source["mal"][0]):
+            self.assertEqual(preview.discovery_ids, {"mal": "20"})
+            lines = _detail_lines(preview, "recommendations", locale="ru")
+            self.assertIn("Базы данных: MAL (MyAnimeList) / Jikan", lines)
+            self.assertIn("ID: MAL: 20", lines)
+            self.assertNotIn("ANILIST: 200", " ".join(lines))
+            self.assertNotIn("БД обогащения", " ".join(lines))
+            self.assertEqual(preview.posters, ["https://example.org/poster.jpg"])
+            self.assertEqual(preview.candidate.external_ids["anilist"], "200")
         self.assertEqual(
             result.by_source["mal"][0].metadata_sources, item.metadata_sources
         )
@@ -339,15 +352,18 @@ class RelatedAnimeServiceTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(item.confirmed_ids, {"mal": "20", "anilist": "200"})
         for preview in (item, result.by_source["mal"][0]):
             lines = _detail_lines(preview, "related", locale="ru")
-            self.assertIn("БД связей: MAL (MyAnimeList) / Jikan", lines)
-            self.assertIn("БД обогащения: AniList", lines)
-            self.assertIn("ID: MAL: 20 | ANILIST: 200", lines)
-            self.assertIn(
-                "БД обогащения: AniList", _detail_text(preview, "related", locale="ru")
+            self.assertEqual(preview.discovery_ids, {"mal": "20"})
+            self.assertIn("Базы данных: MAL (MyAnimeList) / Jikan", lines)
+            self.assertIn("ID: MAL: 20", lines)
+            self.assertNotIn("ANILIST: 200", " ".join(lines))
+            self.assertNotIn(
+                "БД обогащения", _detail_text(preview, "related", locale="ru")
             )
+            self.assertEqual(preview.candidate.title, "Target")
             rich = _detail_rich(preview, "related", locale="ru").html or ""
-            self.assertIn(">БД связей</th>", rich)
-            self.assertIn(">БД обогащения</th>", rich)
+            self.assertIn(">Базы данных</th>", rich)
+            self.assertNotIn(">БД обогащения</th>", rich)
+            self.assertNotIn("ANILIST: 200", rich)
 
     async def test_current_anime_is_filtered_from_results(self) -> None:
         service = RelatedAnimeService(
