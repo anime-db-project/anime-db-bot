@@ -224,6 +224,7 @@ async def edit_anime_view(
     locale: str,
     show_related: bool = False,
     replace_only: bool = False,
+    related_back: bool = False,
 ) -> None:
     pages = view_pages(anime, section, locale=locale)
     page = max(0, min(page, len(pages) - 1))
@@ -235,6 +236,7 @@ async def edit_anime_view(
         len(pages),
         locale=locale,
         show_related=show_related,
+        related_back=related_back,
     )
     text_value = pages[page]
 
@@ -261,6 +263,7 @@ async def edit_anime_view(
                 locale=locale,
                 show_all_ids=bool(anime.amdb_id),
                 show_related=show_related,
+                related_back=related_back,
             )
             if section == "main"
             else keyboard

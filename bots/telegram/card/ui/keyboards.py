@@ -115,6 +115,7 @@ def navigation_keyboard(
     locale: str,
     pagination_first: bool = False,
     show_related: bool = False,
+    related_back: bool = False,
 ) -> InlineKeyboardMarkup | None:
     rows: list[list[InlineKeyboardButton]] = []
 
@@ -210,6 +211,15 @@ def navigation_keyboard(
     if nav and not pagination_first:
         rows.append(nav)
 
+    if current_section == "main" and related_back:
+        rows.append(
+            [
+                InlineKeyboardButton(
+                    text=text("common", "back", locale=locale),
+                    callback_data=f"ab:{token}",
+                )
+            ]
+        )
     return InlineKeyboardMarkup(inline_keyboard=rows) if rows else None
 
 
@@ -344,7 +354,12 @@ def source_section_keyboard(
 
 
 def fallback_main_keyboard(
-    token: str, *, locale: str, show_all_ids: bool = False, show_related: bool = False
+    token: str,
+    *,
+    locale: str,
+    show_all_ids: bool = False,
+    show_related: bool = False,
+    related_back: bool = False,
 ) -> InlineKeyboardMarkup:
     rows = [
         [
@@ -435,6 +450,15 @@ def fallback_main_keyboard(
                 InlineKeyboardButton(
                     text=text("card", "all_ids_button", locale=locale),
                     callback_data=f"ci:{token}:all_ids",
+                )
+            ]
+        )
+    if related_back:
+        rows.append(
+            [
+                InlineKeyboardButton(
+                    text=text("common", "back", locale=locale),
+                    callback_data=f"ab:{token}",
                 )
             ]
         )

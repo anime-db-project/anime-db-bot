@@ -595,6 +595,197 @@ class RelatedAnimeAvailabilityTests(unittest.IsolatedAsyncioTestCase):
         self.assertIsNone(state.anime_sessions.get(old_token))
         self.assertEqual(len(state.anime_sessions), 1)
 
+    async def test_nested_discovery_depth_back_and_stale_callbacks(self):
+        import asyncio
+        from bots.telegram.card.features.related import (
+            send_related_item,
+            return_from_related,
+            edit_related_view,
+        )
+        from bots.telegram.card.views.renderer import edit_anime_view
+        from bots.telegram.card.ui.keyboards import fallback_main_keyboard
+        from bots.telegram.card.runtime.service import _check_related_and_update_button
+        from bots.telegram.inline_mode import CARD_PREFIXES
+        from core.settings import get_settings
+        from dataclasses import replace
+        from core.models import SearchCandidate
+
+        state, root_token = self._setup()
+        root = state.anime_sessions[root_token]
+        root_progress = SimpleNamespace(marker="saved")
+        state.people_loads[f"{root_token}:staff"] = root_progress
+
+        def populate(session, number):
+            items = [
+                AggregatedAnimeReference(
+                    titles={"romaji": f"Title {number + 1}"},
+                    external_ids={"mal": str(number + 1)},
+                ),
+                AggregatedAnimeReference(
+                    titles={"romaji": f"Title {number + 2}"},
+                    external_ids={"mal": str(number + 2)},
+                ),
+            ]
+            session.related_loaded = True
+            session.related_items = items
+            session.related_by_source = {"mal": items}
+            session.related_source_names = {"mal": "MAL"}
+            session.recommendations_loaded = True
+            session.recommendation_items = items
+            session.recommendation_by_source = {"mal": items}
+            session.recommendation_source_names = {"mal": "MAL"}
+
+        async def aggregate(candidate):
+            return AggregatedAnime(
+                title=candidate.title, external_ids=dict(candidate.external_ids)
+            )
+
+        context = SimpleNamespace(
+            aggregator=SimpleNamespace(aggregate=AsyncMock(side_effect=aggregate)),
+            imdb_rating_service=SimpleNamespace(enrich=AsyncMock()),
+            related_anime_service=SimpleNamespace(
+                load_relations=AsyncMock(return_value=RelatedAnimeLoadResult())
+            ),
+        )
+        message = SimpleNamespace(
+            answer=AsyncMock(),
+            answer_rich=AsyncMock(),
+            edit_text=AsyncMock(),
+            edit_reply_markup=AsyncMock(),
+        )
+        settings = get_settings()
+        cfg = replace(
+            settings,
+            telegram=replace(settings.telegram, related_navigation_max_depth=10),
+        )
+        self.assertIn("ab", CARD_PREFIXES)
+
+        def buttons(markup):
+            return [b.callback_data for row in markup.inline_keyboard for b in row]
+
+        def last_markup():
+            return message.edit_text.await_args.kwargs["reply_markup"]
+
+        def active():
+            self.assertEqual(len(state.anime_sessions), 1)
+            token = next(iter(state.anime_sessions))
+            return token, state.anime_sessions[token]
+
+        with (
+            patch(
+                "bots.telegram.card.features.related.get_app_context",
+                return_value=context,
+            ),
+            patch(
+                "bots.telegram.card.runtime.service.get_app_context",
+                return_value=context,
+            ),
+            patch(
+                "bots.telegram.card.runtime.service.get_user_locale", return_value="en"
+            ),
+            patch("bots.telegram.card.features.related.get_settings", return_value=cfg),
+        ):
+            token, session = active()
+            original_sessions = [root]
+            previous_tokens = [root_token]
+            for depth in range(10):
+                populate(session, depth * 2 + 10)
+                section = "related" if depth % 2 == 0 else "recommendations"
+                source = "mal" if depth % 2 == 0 else "all"
+                self.assertTrue(
+                    await send_related_item(
+                        message,
+                        session,
+                        state,
+                        section=section,
+                        source_key=source,
+                        index=1,
+                        owner_user_id=42,
+                    )
+                )
+                await asyncio.gather(*tuple(state.background_tasks))
+                token, session = active()
+                self.assertEqual(session.related_depth, depth + 1)
+                self.assertEqual(
+                    last_markup().inline_keyboard[-1][0].callback_data, f"ab:{token}"
+                )
+                self.assertIsNone(state.anime_sessions.get(previous_tokens[-1]))
+                original_sessions.append(session)
+                previous_tokens.append(token)
+            populate(session, 99)
+            for section in ("related", "recommendations"):
+                await edit_related_view(
+                    message, token, session, section=section, page=1, locale="en"
+                )
+                self.assertFalse(
+                    any((b or "").startswith("ari:") for b in buttons(last_markup()))
+                )
+                self.assertFalse(
+                    await send_related_item(
+                        message,
+                        session,
+                        state,
+                        section=section,
+                        source_key="all",
+                        index=1,
+                        owner_user_id=42,
+                    )
+                )
+            self.assertEqual(context.aggregator.aggregate.await_count, 10)
+            # Background discovery must keep the history button as the bottom row.
+            context.related_anime_service.load_relations.return_value = (
+                RelatedAnimeLoadResult(items=session.related_items)
+            )
+            await _check_related_and_update_button(
+                message, token, session, state, locale="en", plain_fallback=False
+            )
+            self.assertEqual(
+                message.edit_reply_markup.await_args.kwargs["reply_markup"]
+                .inline_keyboard[-1][0]
+                .callback_data,
+                f"ab:{token}",
+            )
+            self.assertEqual(
+                fallback_main_keyboard(token, locale="en", related_back=True)
+                .inline_keyboard[-1][0]
+                .callback_data,
+                f"ab:{token}",
+            )
+            for depth in range(10, 0, -1):
+                old_token = token
+                self.assertTrue(
+                    await return_from_related(
+                        message, token, session, state, locale="en"
+                    )
+                )
+                token, session = active()
+                self.assertIs(session, original_sessions[depth - 1])
+                self.assertEqual(session.related_depth, depth - 1)
+                self.assertNotIn(token, previous_tokens)
+                self.assertIsNone(state.anime_sessions.get(old_token))
+                section = "related" if (depth - 1) % 2 == 0 else "recommendations"
+                source = "mal" if (depth - 1) % 2 == 0 else "all"
+                self.assertIn(
+                    f"ari:{token}:{section}~{source}:1", buttons(last_markup())
+                )
+                await edit_anime_view(
+                    message,
+                    token,
+                    session.anime,
+                    "main",
+                    0,
+                    locale="en",
+                    related_back=session.related_return is not None,
+                )
+                self.assertEqual(f"ab:{token}" in buttons(last_markup()), depth > 1)
+            self.assertIs(state.people_loads.get(f"{token}:staff"), root_progress)
+            self.assertFalse(
+                await return_from_related(message, token, session, state, locale="en")
+            )
+            self.assertEqual(context.aggregator.aggregate.await_count, 10)
+        message.answer.assert_not_awaited()
+        message.answer_rich.assert_not_awaited()
+
     async def test_relations_present_reveal_main_button(self) -> None:
         state, token = self._setup()
         session = state.anime_sessions[token]

@@ -7,7 +7,11 @@ from aiogram.exceptions import TelegramBadRequest
 
 from aiogram.types import Message
 
-from bots.telegram.card.runtime.state import AnimeCardSession, TelegramCardState
+from bots.telegram.card.runtime.state import (
+    AnimeCardSession,
+    TelegramCardState,
+    RelatedReturnFrame,
+)
 from bots.telegram.card.ui.keyboards import fallback_main_keyboard, navigation_keyboard
 from bots.telegram.card.views.renderer import send_anime_view, edit_anime_view
 from core.models import SearchCandidate
@@ -58,6 +62,7 @@ async def _check_related_and_update_button(
             locale=locale,
             show_all_ids=bool(session.anime.amdb_id),
             show_related=True,
+            related_back=session.related_return is not None,
         )
         if plain_fallback
         else navigation_keyboard(
@@ -68,6 +73,7 @@ async def _check_related_and_update_button(
             1,
             locale=locale,
             show_related=True,
+            related_back=session.related_return is not None,
         )
     )
     try:
@@ -86,6 +92,7 @@ async def aggregate_and_send(
     state: TelegramCardState,
     *,
     replace_message: bool = False,
+    related_return: RelatedReturnFrame | None = None,
 ) -> bool:
     locale = get_user_locale(owner_user_id)
     identity = candidate.identity
@@ -121,22 +128,29 @@ async def aggregate_and_send(
         )
 
     token = state.remember_anime(anime, owner_user_id)
+    state.anime_sessions[token].related_return = related_return
     state.anime_sessions[token].inline_message_id = (
         getattr(message, "inline_message_id", None)
         if isinstance(getattr(message, "inline_message_id", None), str)
         else None
     )
     if replace_message:
-        await edit_anime_view(
-            message,
-            token,
-            anime,
-            "main",
-            0,
-            locale=locale,
-            show_related=False,
-            replace_only=True,
-        )
+        try:
+            await edit_anime_view(
+                message,
+                token,
+                anime,
+                "main",
+                0,
+                locale=locale,
+                show_related=False,
+                replace_only=True,
+                related_back=related_return is not None,
+            )
+        except Exception:
+            state.anime_sessions.pop(token, None)
+            logging.exception("Could not replace discovery card")
+            return False
         sent_message, plain_fallback = message, False
     else:
         sent_message, plain_fallback = await send_anime_view(

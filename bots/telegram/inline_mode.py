@@ -183,6 +183,7 @@ CARD_PREFIXES = frozenset(
         "at",
         "ar",
         "ari",
+        "ab",
         "wk",
         "pv",
         "pr",

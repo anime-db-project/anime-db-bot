@@ -436,6 +436,7 @@
     "discovery_relation": "Связь: {value}",
     "discovery_all_sources": "Все источники",
     "discovery_more_details": "Подробнее",
+    "discovery_depth_limit": "Достигнут лимит переходов. Вернитесь назад, чтобы продолжить.",
     "discovery_open_card": "Подробнее"
   },
   "people": {

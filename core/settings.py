@@ -451,6 +451,7 @@ class TelegramSettings:
     denied_global_replies_per_minute: int = 20
     denied_max_tracked_users: int = 4096
     max_concurrent_updates: int = 64
+    related_navigation_max_depth: int = 10
     max_card_sessions: int = 256
     max_people_sessions: int = 256
     max_search_sessions: int = 192
@@ -806,6 +807,9 @@ class AppSettings:
                 bot_api_local=_bool(values, "TELEGRAM_BOT_API_LOCAL", False),
                 session_ttl_seconds=_int(
                     values, "TELEGRAM_SESSION_TTL_SECONDS", 3600, 30
+                ),
+                related_navigation_max_depth=_strict_int(
+                    values, "TELEGRAM_RELATED_NAVIGATION_MAX_DEPTH", 10, 0, 50
                 ),
                 anime_input_ttl_seconds=_int(
                     values, "ANIME_INPUT_TTL_SECONDS", 300, 30

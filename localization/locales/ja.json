@@ -436,6 +436,7 @@
     "discovery_relation": "関係: {value}",
     "discovery_all_sources": "すべてのソース",
     "discovery_more_details": "詳細",
+    "discovery_depth_limit": "移動回数の上限に達しました。戻ってから続けてください。",
     "discovery_open_card": "詳細"
   },
   "people": {

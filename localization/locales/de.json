@@ -436,6 +436,7 @@
     "discovery_relation": "Beziehung: {value}",
     "discovery_all_sources": "Alle Quellen",
     "discovery_more_details": "Mehr Details",
+    "discovery_depth_limit": "Navigationslimit erreicht. Gehe zurück, um fortzufahren.",
     "discovery_open_card": "Details"
   },
   "people": {

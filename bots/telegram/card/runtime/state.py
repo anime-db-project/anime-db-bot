@@ -14,10 +14,26 @@ MAX_PEOPLE_LOADS = 256
 
 
 @dataclass(slots=True)
+class RelatedReturnFrame:
+    """Suspended parent card and its exact discovery detail view.
+
+    Only the active card has a live callback token. Ancestors are bounded by
+    the configured depth and share the active session lifetime.
+    """
+
+    parent: AnimeCardSession
+    section: str
+    source_key: str
+    page: int
+    people: dict[str, PeopleLoadProgress] = field(default_factory=dict)
+
+
+@dataclass(slots=True)
 class AnimeCardSession:
     anime: AggregatedAnime
     owner_user_id: int
     inline_message_id: str | None = None
+    related_return: RelatedReturnFrame | None = None
     staff_gallery_indices: dict[str | None, list[int]] | None = None
     voice_gallery_indices: dict[str | None, list[int]] | None = None
     media_prefetch_batches: set[tuple[str, str | None, int]] = field(
@@ -67,6 +83,18 @@ class AnimeCardSession:
     )
     recommendation_source_names: dict[str, str] = field(default_factory=dict)
     recommendation_errors: dict[str, str] = field(default_factory=dict)
+
+    @property
+    def related_depth(self) -> int:
+        depth = 0
+        frame = self.related_return
+        while frame is not None:
+            depth += 1
+            frame = frame.parent.related_return
+        return depth
+
+    def can_open_related(self, limit: int) -> bool:
+        return self.related_depth < limit
 
 
 @dataclass(slots=True)

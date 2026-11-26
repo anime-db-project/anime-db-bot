@@ -29,6 +29,7 @@ from bots.telegram.card.features.related import (
     edit_related_view,
     parse_related_route,
     send_related_item,
+    return_from_related,
 )
 from bots.telegram.card.features.screenshots import (
     edit_screenshots_view,
@@ -780,6 +781,13 @@ def build_dispatcher(mode_name: str, state: TelegramCardState) -> Dispatcher:
         if callback.message is None:
             await callback.answer()
             return
+        if not session.can_open_related(
+            get_settings().telegram.related_navigation_max_depth
+        ):
+            await callback.answer(
+                text("card", "discovery_depth_limit", locale=locale), show_alert=True
+            )
+            return
         section, source_key = route
         await callback.answer()
         try:
@@ -794,6 +802,31 @@ def build_dispatcher(mode_name: str, state: TelegramCardState) -> Dispatcher:
             )
         except IndexError:
             return
+
+    @dp.callback_query(F.data.startswith("ab:"))
+    async def related_back_callback_handler(callback: CallbackQuery) -> None:
+        locale = get_user_locale(callback.from_user.id)
+        parts = (callback.data or "").split(":")
+        if len(parts) != 2:
+            await callback.answer()
+            return
+        token = parts[1]
+        session = _session_for_callback(callback, token, state)
+        if session is None:
+            key = (
+                "not_owner"
+                if state.anime_sessions.get(token) is not None
+                else "expired"
+            )
+            await callback.answer(text("card", key, locale=locale), show_alert=True)
+            return
+        if callback.message is None or session.related_return is None:
+            await callback.answer()
+            return
+        await callback.answer()
+        await return_from_related(
+            callback.message, token, session, state, locale=locale
+        )
 
     @dp.callback_query(F.data.startswith("av:"))
     async def anime_view_callback_handler(callback: CallbackQuery) -> None:
@@ -915,6 +948,7 @@ def build_dispatcher(mode_name: str, state: TelegramCardState) -> Dispatcher:
             page=data.page,
             locale=locale,
             show_related=bool(raw_session.related_items),
+            related_back=raw_session.related_return is not None,
         )
 
     return dp

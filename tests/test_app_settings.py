@@ -80,6 +80,34 @@ class AppSettingsTests(unittest.TestCase):
                         {"BOT_TOKEN": "token", "TELEGRAM_PAGINATION_PAGE_SIZE": invalid}
                     )
 
+    def test_related_navigation_depth_setting(self):
+        self.assertEqual(
+            AppSettings.from_env(
+                {"BOT_TOKEN": "token"}
+            ).telegram.related_navigation_max_depth,
+            10,
+        )
+        for value in (0, 3, 50):
+            self.assertEqual(
+                AppSettings.from_env(
+                    {
+                        "BOT_TOKEN": "token",
+                        "TELEGRAM_RELATED_NAVIGATION_MAX_DEPTH": str(value),
+                    }
+                ).telegram.related_navigation_max_depth,
+                value,
+            )
+        for value in ("-1", "51", "x"):
+            with self.assertRaisesRegex(
+                ValueError, "TELEGRAM_RELATED_NAVIGATION_MAX_DEPTH"
+            ):
+                AppSettings.from_env(
+                    {
+                        "BOT_TOKEN": "token",
+                        "TELEGRAM_RELATED_NAVIGATION_MAX_DEPTH": value,
+                    }
+                )
+
     def test_typed_environment_parsing(self) -> None:
         settings = AppSettings.from_env(
             {
@@ -326,7 +354,7 @@ class AppSettingsTests(unittest.TestCase):
             },
             set(DEFAULT_MAPPING_LINKS),
         )
-        self.assertEqual(len(values), 270 + len(DEFAULT_MAPPING_LINKS))
+        self.assertEqual(len(values), 271 + len(DEFAULT_MAPPING_LINKS))
         for key in (
             "BOT_ON_FAILURE",
             "BOT_ON_CLEAN_EXIT",

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import html
 import logging
+import secrets
 
 from aiogram.types import (
     InlineKeyboardButton,
@@ -14,7 +15,12 @@ from bots.telegram.callbacks import KeyedPageCallback
 from bots.telegram.rich_media import deliver_rich_media
 from bots.telegram.pagination import card_picker_callback
 from bots.telegram.card.runtime.service import aggregate_and_send
-from bots.telegram.card.runtime.state import AnimeCardSession, TelegramCardState
+from bots.telegram.card.runtime.state import (
+    AnimeCardSession,
+    TelegramCardState,
+    RelatedReturnFrame,
+)
+from core.settings import get_settings
 from bots.telegram.card.views.renderer import edit_standard_text
 from bots.telegram.card.views.rendering import _table_html, image_gallery_html
 from bots.telegram.card.views.titles import preferred_title_keys
@@ -240,12 +246,13 @@ def related_keyboard(
     source_key: str,
     source_names: dict[str, str],
     locale: str,
+    allow_details: bool = True,
 ) -> InlineKeyboardMarkup:
     page_count = max(1, len(items))
     page = max(0, min(int(page), page_count - 1))
     rows: list[list[InlineKeyboardButton]] = []
 
-    if items:
+    if items and allow_details:
         rows.append(
             [
                 InlineKeyboardButton(
@@ -357,6 +364,9 @@ async def edit_related_view(
         source_key=source_key,
         source_names=source_names,
         locale=locale,
+        allow_details=session.can_open_related(
+            get_settings().telegram.related_navigation_max_depth
+        ),
     )
 
     if not items:
@@ -409,11 +419,32 @@ async def send_related_item(
     source_key: str,
     index: int,
     owner_user_id: int,
-) -> None:
+) -> bool:
+    # Validate even if an old or fabricated Подробнее callback reaches here.
+    if session.owner_user_id != owner_user_id or not session.can_open_related(
+        get_settings().telegram.related_navigation_max_depth
+    ):
+        return False
+    token = next(
+        (
+            key
+            for key in state.anime_sessions
+            if state.anime_sessions.get(key) is session
+        ),
+        None,
+    )
+    if token is None:
+        return False
     await ensure_related_loaded(session, section)
     items = _items(session, section, source_key)
     if not 0 <= int(index) < len(items):
         raise IndexError(index)
+    people = {}
+    for kind in ("staff", "voices"):
+        progress = state.people_loads.get(f"{token}:{kind}")
+        if progress is not None:
+            people[kind] = progress
+    frame = RelatedReturnFrame(session, section, source_key, int(index), people)
     session.main_view_active = False
     replaced = await aggregate_and_send(
         message,
@@ -421,11 +452,51 @@ async def send_related_item(
         owner_user_id,
         state,
         replace_message=True,
+        related_return=frame,
     )
     if replaced:
-        for token in tuple(state.anime_sessions):
-            if state.anime_sessions.get(token) is session:
-                state.anime_sessions.pop(token, None)
-                for kind in ("staff", "voices"):
-                    state.people_loads.pop(f"{token}:{kind}", None)
-                break
+        state.anime_sessions.pop(token, None)
+        for kind in people:
+            state.people_loads.pop(f"{token}:{kind}", None)
+    elif state.anime_sessions.get(token) is None:
+        # A low session capacity can evict the parent while preparing the child.
+        state.anime_sessions[token] = session
+    return replaced
+
+
+async def return_from_related(
+    message: Message,
+    token: str,
+    session: AnimeCardSession,
+    state: TelegramCardState,
+    *,
+    locale: str,
+) -> bool:
+    frame = session.related_return
+    if frame is None or state.anime_sessions.get(token) is not session:
+        return False
+    # Fresh token invalidates every callback from the previous visit, including
+    # queued clicks from the child. No aggregation of the parent is needed.
+    restored_token = secrets.token_urlsafe(6)
+    frame.parent.main_view_active = False
+    try:
+        await edit_related_view(
+            message,
+            restored_token,
+            frame.parent,
+            section=frame.section,
+            source_key=frame.source_key,
+            page=frame.page,
+            locale=locale,
+        )
+    except Exception:
+        logging.exception("Could not restore discovery view")
+        return False
+    session.main_view_active = False
+    state.anime_sessions.pop(token, None)
+    for kind in ("staff", "voices"):
+        state.people_loads.pop(f"{token}:{kind}", None)
+    state.anime_sessions[restored_token] = frame.parent
+    for kind, progress in frame.people.items():
+        state.people_loads[f"{restored_token}:{kind}"] = progress
+    return True
