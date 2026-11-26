@@ -91,13 +91,41 @@ async def ensure_lazy_people(
                 exc_info=True,
             )
 
-    return await service.ensure(
+    progress = await service.ensure(
         anime,
         section,
         progress,
         source=source,
         requested_page=requested_page,
     )
+    if (
+        section == "staff"
+        and progress.portrait_cursor > progress.staff_prefetched_cursor
+    ):
+        from bots.telegram.media_cache import get_media_cache
+        from core.people import portrait_urls
+
+        bot = getattr(message, "bot", None)
+        if isinstance(getattr(bot, "id", None), int):
+            start = progress.staff_prefetched_cursor
+            end = progress.portrait_cursor
+            portraits = [
+                portrait_urls(person, source_order=anime.sources)
+                for person in anime.staff[start:end]
+            ]
+            # Give every person one image before queueing alternate portraits,
+            # so a multi-source portrait set cannot monopolize the bounded queue.
+            urls = list(
+                dict.fromkeys(
+                    [
+                        *(images[0] for images in portraits if images),
+                        *(url for images in portraits for url in images[1:]),
+                    ]
+                )
+            )
+            get_media_cache().enqueue(bot, urls)
+            progress.staff_prefetched_cursor = end
+    return progress
 
 
 __all__ = [

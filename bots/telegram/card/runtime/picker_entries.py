@@ -4,6 +4,7 @@ The picker never fetches secrets, creates anime identities or bypasses an
 existing source selector. It reads already loaded state; only the first entry
 into a lazy section initiates its normal service-level loading.
 """
+
 from __future__ import annotations
 
 from aiogram.types import Message
@@ -11,7 +12,7 @@ from aiogram.types import Message
 from bots.telegram.card.runtime.state import AnimeCardSession, TelegramCardState
 from core.canonicalization import display_person_name
 from bots.telegram.card.text_expansion import record_pages
-from core.people import people_state
+from core.people import people_state, people_for_scope
 from localization import text
 from services.runtime.app_context import get_app_context
 
@@ -20,14 +21,35 @@ def picker_prompt(route: str, locale: str) -> str:
     parts = route.split("~")
     kind = parts[0]
     section = (
-        "episodes" if kind in {"ap", "apg"}
-        else "characters" if kind == "ac" or (kind == "gx" and parts[1] == "ac")
-        else "trailers" if kind == "at"
-        else "description" if kind == "ad"
-        else parts[2] if kind in {"gx", "pv"} and len(parts) > 2
-        else parts[1] if len(parts) > 1 else kind
+        "episodes"
+        if kind in {"ap", "apg"}
+        else "characters"
+        if kind == "ac" or (kind == "gx" and parts[1] == "ac")
+        else "trailers"
+        if kind == "at"
+        else "description"
+        if kind == "ad"
+        else parts[2]
+        if kind in {"gx", "pv"} and len(parts) > 2
+        else parts[1]
+        if len(parts) > 1
+        else kind
     )
-    key = section if section in {"episodes", "staff", "voices", "characters", "trailers", "related", "recommendations", "screenshots"} else "page"
+    key = (
+        section
+        if section
+        in {
+            "episodes",
+            "staff",
+            "voices",
+            "characters",
+            "trailers",
+            "related",
+            "recommendations",
+            "screenshots",
+        }
+        else "page"
+    )
     return text("picker", key, locale=locale)
 
 
@@ -38,11 +60,7 @@ def picker_parent_callback(token: str, route: str) -> str:
     if kind == "ar" and len(parts) == 3 and parts[1] in {"related", "recommendations"}:
         # The all-sources selector is itself the entry screen: never return to
         # the same callback and trigger Telegram's "message is not modified".
-        return (
-            f"av:{token}:main:0"
-            if parts[2] == "all"
-            else f"ci:{token}:{parts[1]}"
-        )
+        return f"av:{token}:main:0" if parts[2] == "all" else f"ci:{token}:{parts[1]}"
     if kind == "ap":
         return f"av:{token}:main:0"
     if kind == "apg":
@@ -55,9 +73,11 @@ def picker_parent_callback(token: str, route: str) -> str:
         return f"ci:{token}:{parts[2]}"
     if kind == "gx" and len(parts) == 4 and parts[1] == "ac":
         return f"ci:{token}:characters"
-    if kind == "as" and len(parts) == 3 and parts[1] in {
-        "screenshots", "titles", "popularity"
-    }:
+    if (
+        kind == "as"
+        and len(parts) == 3
+        and parts[1] in {"screenshots", "titles", "popularity"}
+    ):
         return f"ci:{token}:{parts[1]}"
     if kind == "ad":
         return f"av:{token}:description:0"
@@ -90,7 +110,9 @@ def source_character_choices(
     if source_key is None or source_name is None:
         return None
     _, without, _ = _character_state(session, source_name)
-    route = f"gx~ac~{source_key}~{_group_count(without, 'characters', locale, source_name)}"
+    route = (
+        f"gx~ac~{source_key}~{_group_count(without, 'characters', locale, source_name)}"
+    )
     labels = labels_for_route(session, route, locale=locale)
     return (route, labels) if labels else None
 
@@ -102,22 +124,31 @@ def _group_count(without, section: str, locale: str, source: str | None = None) 
 def _group_records(without, section: str, locale: str, source: str | None = None):
     from bots.telegram.people.views import _person_line
     from bots.telegram.card.features.characters import _character_line
-    render = _character_line if section == 'characters' else _person_line
-    heading = text('characters', 'title', locale=locale) if section == 'characters' else text('people', section, locale=locale)
+
+    render = _character_line if section == "characters" else _person_line
+    heading = (
+        text("characters", "title", locale=locale)
+        if section == "characters"
+        else text("people", section, locale=locale)
+    )
     if source:
-        heading += f' — {source}'
-    return record_pages([render(item, locale) for item in without], heading=heading + ':')
+        heading += f" — {source}"
+    return record_pages(
+        [render(item, locale) for item in without], heading=heading + ":"
+    )
 
 
-def _episode_labels(
-    session: AnimeCardSession, backend: str, locale: str
-) -> list[str]:
+def _episode_labels(session: AnimeCardSession, backend: str, locale: str) -> list[str]:
     from bots.telegram.card.features.episodes import _episode_title
 
     catalog = session.episode_catalogs.get(backend, [])
     labels: list[str] = []
     for index, item in enumerate(catalog):
-        ordinal = item.number if isinstance(item.number, int) and item.number > 0 else index + 1
+        ordinal = (
+            item.number
+            if isinstance(item.number, int) and item.number > 0
+            else index + 1
+        )
         label = f"{ordinal} серия" if locale == "ru" else f"Episode {ordinal}"
         title = _episode_title(item, locale)
         if title and title != text("card", "episode_untitled", locale=locale):
@@ -159,7 +190,9 @@ def labels_for_route(
             if locale == "ru"
             else f"Source IDs — part {i + 1}"
             for i, _ in enumerate(
-                mapping_ids_pages(session.anime.amdb_id or "", source_ids, locale=locale)
+                mapping_ids_pages(
+                    session.anime.amdb_id or "", source_ids, locale=locale
+                )
             )
         ]
 
@@ -167,9 +200,7 @@ def labels_for_route(
         from bots.telegram.card.ui.selectors import source_section_options
         from bots.telegram.card.views.sections import source_section_pages
 
-        source = dict(source_section_options(
-            session.anime, parts[1]
-        )).get(parts[2])
+        source = dict(source_section_options(session.anime, parts[1])).get(parts[2])
         if source is None:
             return []
         return [
@@ -187,16 +218,19 @@ def labels_for_route(
         if source is None:
             return []
         return [
-            f"Описание — часть {i + 1}" if locale == "ru" else f"Description — part {i + 1}"
-            for i, _ in enumerate(description_pages(session.anime, source, locale=locale))
+            f"Описание — часть {i + 1}"
+            if locale == "ru"
+            else f"Description — part {i + 1}"
+            for i, _ in enumerate(
+                description_pages(session.anime, source, locale=locale)
+            )
         ]
 
     if kind == "ar" and len(parts) == 3:
         from bots.telegram.card.features.related import _display_title, _items
 
         return [
-            _display_title(item, locale)
-            for item in _items(session, parts[1], parts[2])
+            _display_title(item, locale) for item in _items(session, parts[1], parts[2])
         ]
 
     if kind == "at" and len(parts) == 2:
@@ -217,9 +251,7 @@ def labels_for_route(
     if kind == "gx" and len(parts) in {4, 5}:
         from bots.telegram.card.ui.selectors import source_section_options
 
-        if parts[1] == "ac" or (
-            parts[1] == "av" and parts[2] == "characters"
-        ):
+        if parts[1] == "ac" or (parts[1] == "av" and parts[2] == "characters"):
             from bots.telegram.card.features.characters import (
                 _character_state,
                 _source_name_for_selector,
@@ -234,26 +266,40 @@ def labels_for_route(
         elif parts[2] in {"staff", "voices"}:
             source = None
             if parts[1] == "as" and len(parts) == 5:
-                source = dict(source_section_options(
-                    session.anime, parts[2]
-                )).get(parts[3])
-            without, portraits = people_state(session.anime, parts[2], source, locale=locale)
+                source = dict(source_section_options(session.anime, parts[2])).get(
+                    parts[3]
+                )
+            if parts[2] == "staff":
+                return [
+                    display_person_name(person.name, person.aliases, locale=locale)
+                    for person in people_for_scope(session.anime, "staff", source)
+                ]
+            without, portraits = people_state(
+                session.anime, parts[2], source, locale=locale
+            )
         else:
             return []
-        section = 'characters' if parts[1] == 'ac' or parts[2] == 'characters' else parts[2]
+        section = (
+            "characters" if parts[1] == "ac" or parts[2] == "characters" else parts[2]
+        )
         groups = _group_records(without, section, locale, source)
         labels = []
         offset = 0
         for group in groups:
-            labels.append(text('card', 'record_range', locale=locale, start=offset+1, end=offset+len(group)))
+            labels.append(
+                text(
+                    "card",
+                    "record_range",
+                    locale=locale,
+                    start=offset + 1,
+                    end=offset + len(group),
+                )
+            )
             offset += len(group)
-        return (
-            labels
-            + [
-                display_person_name(item.name, item.aliases, locale=locale)
-                for item in portraits
-            ]
-        )
+        return labels + [
+            display_person_name(item.name, item.aliases, locale=locale)
+            for item in portraits
+        ]
 
     if kind in {"ac", "pv"}:
         from bots.telegram.card.features.characters import (
@@ -262,12 +308,11 @@ def labels_for_route(
         )
 
         character_scope = kind == "ac" or (
-            kind == "pv" and len(parts) >= 3
-            and (parts[2] == "characters")
+            kind == "pv" and len(parts) >= 3 and (parts[2] == "characters")
         )
         if character_scope:
-            selector = parts[1] if kind == "ac" else (
-                parts[3] if len(parts) == 5 else None
+            selector = (
+                parts[1] if kind == "ac" else (parts[3] if len(parts) == 5 else None)
             )
             try:
                 _, source = _source_name_for_selector(session, selector)
@@ -285,9 +330,7 @@ def labels_for_route(
         section = parts[2]
         source = None
         if len(parts) == 5:
-            source = dict(source_section_options(
-                session.anime, section
-            )).get(parts[3])
+            source = dict(source_section_options(session.anime, section)).get(parts[3])
         without, portraits = people_state(session.anime, section, source, locale=locale)
         return [
             display_person_name(item.name, item.aliases, locale=locale)
@@ -302,9 +345,7 @@ def labels_for_route(
         from bots.telegram.card.ui.selectors import source_section_options
 
         section = parts[1]
-        source = dict(source_section_options(
-            session.anime, section
-        )).get(parts[2])
+        source = dict(source_section_options(session.anime, section)).get(parts[2])
     if section == "screenshots":
         from bots.telegram.card.features.screenshots import (
             SCREENSHOTS_PER_PAGE,
@@ -347,9 +388,9 @@ async def prepare_initial_picker(
             return None
         people_section, source_key = parts[1:]
         progress = state.people_loads.get(progress_key(token, people_section))
-        available = dict(source_options(
-            source_names(session.anime, people_section, progress)
-        ))
+        available = dict(
+            source_options(source_names(session.anime, people_section, progress))
+        )
         source_name = available.get(source_key)
         if source_name is None:
             return None
@@ -363,8 +404,10 @@ async def prepare_initial_picker(
             source=source_name,
             requested_page=0,
         )
-        without, _ = people_state(session.anime, people_section, source_name, locale=locale)
-        route = f"gx~as~{people_section}~{source_key}~{_group_count(without, people_section, locale, source_name)}"
+        without, _ = people_state(
+            session.anime, people_section, source_name, locale=locale
+        )
+        route = f"gx~as~{people_section}~{source_key}~{0 if people_section == 'staff' else _group_count(without, people_section, locale, source_name)}"
         labels = labels_for_route(session, route, locale=locale)
         return (route, labels) if labels else None
 
@@ -428,11 +471,16 @@ async def prepare_initial_picker(
         from bots.telegram.people.loading import ensure_lazy_people
 
         await ensure_lazy_people(
-            state, token, session.anime, message, section,
-            locale=locale, requested_page=0,
+            state,
+            token,
+            session.anime,
+            message,
+            section,
+            locale=locale,
+            requested_page=0,
         )
         without, portraits = people_state(session.anime, section, None, locale=locale)
-        route = f"gx~av~{section}~{_group_count(without, section, locale)}"
+        route = f"gx~av~{section}~{0 if section == 'staff' else _group_count(without, section, locale)}"
         labels = labels_for_route(session, route, locale=locale)
         return (route, labels) if labels else None
 

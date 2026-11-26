@@ -52,6 +52,7 @@ from bots.telegram.people.views import (
     _sources_with_portraits,
 )
 from core.models import AggregatedAnime
+from core.people import people_for_scope
 from localization import text
 from services.users.settings import get_user_locale
 
@@ -77,16 +78,22 @@ async def _render_people_view(
         )
         source = dict(options)[source_key]
 
-    without, with_portraits = _people_state(anime, section, source, locale=locale)
-    groups = record_pages(
-        [_person_line(person, locale) for person in without],
-        heading=text("people", section, locale=locale)
-        + (f" — {source}" if source else "")
-        + ":",
-    )
-    max_page = len(with_portraits) + max(0, len(groups) - 1)
-    first_page = _first_people_page(without, with_portraits)
-    page = max(first_page, min(int(page), max_page))
+    if section == "staff":
+        max_page = len(people_for_scope(anime, section, source))
+        first_page = 1 if max_page else 0
+        page = max(first_page, min(int(page), max_page))
+        groups = []
+    else:
+        without, with_portraits = _people_state(anime, section, source, locale=locale)
+        groups = record_pages(
+            [_person_line(person, locale) for person in without],
+            heading=text("people", section, locale=locale)
+            + (f" — {source}" if source else "")
+            + ":",
+        )
+        max_page = len(with_portraits) + max(0, len(groups) - 1)
+        first_page = _first_people_page(without, with_portraits)
+        page = max(first_page, min(int(page), max_page))
     total_hint = _scope_total_hint(anime, section, progress, source)
     text_value, urls, shown, total, page = _page_text(
         anime,
@@ -107,7 +114,7 @@ async def _render_people_view(
         max_page,
         locale=locale,
         source_names=sources,
-        has_more=_scope_has_more(progress, source),
+        has_more=section != "staff" and _scope_has_more(progress, source),
         first_page=first_page,
         group_pages=len(groups),
     )

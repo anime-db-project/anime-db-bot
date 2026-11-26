@@ -141,7 +141,8 @@ class PeopleProgressServiceTests(unittest.IsolatedAsyncioTestCase):
         source = FullOnlySource()
         service = PeopleProgressService([source], _FakeAggregator())
         anime = AggregatedAnime(
-            title="Example", sources=["AniList"],
+            title="Example",
+            sources=["AniList"],
             external_ids={"anilist": "1"},
             staff_by_source={"AniList": [PersonCredit(name="Staff 0")]},
             staff=[PersonCredit(name="Staff 0")],
@@ -151,6 +152,65 @@ class PeopleProgressServiceTests(unittest.IsolatedAsyncioTestCase):
         await service.ensure(anime, "staff", progress, requested_page=0)
         self.assertEqual(len(anime.staff), 56)
         self.assertEqual(source.calls, 1)
+
+    async def test_staff_full_roster_stable_picker_and_real_portrait_batches(self):
+        from bots.telegram.card.runtime.state import AnimeCardSession
+        from bots.telegram.card.runtime.picker_entries import labels_for_route
+        from bots.telegram.people.views import _page_text
+        from bots.telegram.pagination import card_route_callback
+        from services.aggregation.merge import AggregationMergeSupport
+
+        class StaffSource(_ManifestSource):
+            async def load_staff_manifest(self, identity):
+                return await self.load_voices_manifest(identity)
+
+        source = StaffSource(count=141)
+        # 20 names have no photo at all and must not consume the budget.
+        for person in source.people[:20]:
+            person.portraits = {}
+        service = PeopleProgressService(
+            [source], AggregationMergeSupport([source]), portrait_batch_size=50
+        )
+        anime = AggregatedAnime(
+            title="Example", sources=["AniList"], external_ids={"anilist": "1"}
+        )
+        progress = service.build_progress(anime, "staff")
+        await service.settle_manifests(anime, "staff", progress)
+        self.assertEqual(len(anime.staff), 141)
+        self.assertEqual(sum(bool(p.portraits) for p in anime.staff), 0)
+        session = AnimeCardSession(anime=anime, owner_user_id=7)
+        route = "gx~av~staff~0"
+        before = labels_for_route(session, route, locale="en")
+        self.assertEqual(len(before), 141)
+        self.assertEqual(card_route_callback("token", route, 140), "av:token:staff:141")
+
+        await service.ensure(anime, "staff", progress, requested_page=0)
+        self.assertEqual(len(anime.staff), 141)
+        self.assertEqual(progress.portrait_cursor, 70)
+        self.assertEqual(sum(bool(p.portraits) for p in anime.staff), 50)
+        self.assertEqual(labels_for_route(session, route, locale="en"), before)
+        self.assertEqual(_page_text(anime, "staff", None, 1, locale="en")[1], [])
+        self.assertTrue(_page_text(anime, "staff", None, 70, locale="en")[1])
+        self.assertEqual(_page_text(anime, "staff", None, 71, locale="en")[1], [])
+        await service.ensure(anime, "staff", progress, requested_page=70)
+        self.assertEqual(progress.portrait_cursor, 70)
+        await service.ensure(anime, "staff", progress, requested_page=71)
+        self.assertEqual(progress.portrait_cursor, 120)
+        self.assertEqual(sum(bool(p.portraits) for p in anime.staff), 100)
+        self.assertTrue(_page_text(anime, "staff", None, 71, locale="en")[1])
+        await service.ensure(
+            anime, "staff", progress, source="AniList", requested_page=141
+        )
+        self.assertEqual(progress.portrait_cursor, 141)
+        self.assertEqual(sum(bool(p.portraits) for p in anime.staff), 121)
+        self.assertEqual(labels_for_route(session, route, locale="en"), before)
+        self.assertEqual(
+            labels_for_route(session, "gx~as~staff~anilist~0", locale="en"), before
+        )
+        self.assertEqual(
+            _page_text(anime, "staff", None, 141, locale="en")[2:], (141, 141, 141)
+        )
+        self.assertEqual(source.manifest_calls, 1)
 
     async def test_preview_people_do_not_mark_manifest_as_complete(self) -> None:
         source = _ManifestSource(count=56)

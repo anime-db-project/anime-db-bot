@@ -37,7 +37,9 @@ def _localized_roles(person: PersonCredit, locale: str) -> str:
 
 
 def _person_line(person: PersonCredit, locale: str) -> str:
-    return " ".join(f"• {display_person_name(person.name, person.aliases, locale=locale)} — {_localized_roles(person, locale)}".split())
+    return " ".join(
+        f"• {display_person_name(person.name, person.aliases, locale=locale)} — {_localized_roles(person, locale)}".split()
+    )
 
 
 def _page_text(
@@ -49,22 +51,62 @@ def _page_text(
     locale: str,
     total_hint: int | None = None,
 ) -> tuple[str, list[str], int, int, int]:
+    if section == "staff":
+        people = _people_for_scope(anime, section, source)
+        title_value = text("people", section, locale=locale) + (
+            f" — {source}" if source else ""
+        )
+        if not people:
+            return (
+                title_value + ":\n\n" + text("people", "none", locale=locale),
+                [],
+                0,
+                0,
+                0,
+            )
+        page = max(1, min(int(page), len(people)))
+        person = people[page - 1]
+        urls = _portrait_urls(person, source=source, source_order=anime.sources)
+        lines = [
+            title_value + ":",
+            "",
+            display_person_name(person.name, person.aliases, locale=locale),
+            text(
+                "people", "roles", locale=locale, roles=_localized_roles(person, locale)
+            ),
+        ]
+        sources = _portrait_source_names(person, anime.sources)
+        if sources:
+            lines.append(
+                text("people", "portraits", locale=locale, sources=", ".join(sources))
+            )
+        return "\n".join(lines), urls, page, len(people), page
     without, with_portraits = _people_state(anime, section, source, locale=locale)
     actual_total = len(without) + len(with_portraits)
-    total = actual_total if section == 'voices' else max(actual_total, int(total_hint or 0))
+    total = (
+        actual_total if section == "voices" else max(actual_total, int(total_hint or 0))
+    )
     title_value = text("people", section, locale=locale)
     if source:
         title_value += f" — {source}"
-    groups = record_pages([_person_line(person, locale) for person in without], heading=title_value + ":")
+    groups = record_pages(
+        [_person_line(person, locale) for person in without], heading=title_value + ":"
+    )
     group_count = len(groups)
     first_page = _first_people_page(without, with_portraits)
     max_page = len(with_portraits) + max(0, group_count - 1)
     page = max(first_page, min(int(page), max_page))
     if not with_portraits and not groups:
-        return title_value + ":\n\n" + text("people", "none", locale=locale), [], 0, total, page
+        return (
+            title_value + ":\n\n" + text("people", "none", locale=locale),
+            [],
+            0,
+            total,
+            page,
+        )
     if page < group_count:
         lines = [title_value + ":", "", *groups[page]]
-        shown = sum(len(group) for group in groups[:page+1])
+        shown = sum(len(group) for group in groups[: page + 1])
         return "\n".join(lines), [], shown, total, page
 
     portrait_index = page - group_count if group_count else page - 1
@@ -98,9 +140,7 @@ def _portrait_html(urls: list[str]) -> str:
 
 
 def _rich(text_value: str, urls: list[str]) -> InputRichMessage:
-    return InputRichMessage(
-        html=_portrait_html(urls) + records_rich_html(text_value)
-    )
+    return InputRichMessage(html=_portrait_html(urls) + records_rich_html(text_value))
 
 
 def _page_callback(token: str, section: str, source_key: str | None, page: int) -> str:

@@ -61,7 +61,8 @@ class SourceScopedInitialPickerTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_invalid_people_source_does_not_open_another_source(self) -> None:
         anime = AggregatedAnime(
-            title="Example", sources=["AniList"],
+            title="Example",
+            sources=["AniList"],
         )
         session = AnimeCardSession(anime=anime, owner_user_id=1)
         state = Mock()
@@ -106,19 +107,22 @@ class SourceScopedInitialPickerTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(card_route_callback("token", route, 1), "ac:token:shikimori:1")
         self.assertIsNone(source_character_choices(session, "unknown", locale="ru"))
 
-    async def test_unpictured_staff_appears_as_one_group_not_many_dead_links(self) -> None:
+    async def test_unpictured_staff_all_have_distinct_stable_pages(self) -> None:
         people = [PersonCredit(name=f"Staff {n}") for n in range(5)]
         anime = AggregatedAnime(
-            title="Example", sources=["AniList"],
-            staff=people, staff_by_source={"AniList": people},
+            title="Example",
+            sources=["AniList"],
+            staff=people,
+            staff_by_source={"AniList": people},
         )
         session = AnimeCardSession(anime=anime, owner_user_id=1)
-        labels = labels_for_route(session, "gx~av~staff~1", locale="ru")
-        self.assertEqual(labels, ["Без портретов 1–5"])
-        self.assertEqual(
-            card_route_callback("token", "gx~av~staff~1", 0),
-            "av:token:staff:0",
-        )
+        labels = labels_for_route(session, "gx~av~staff~0", locale="ru")
+        self.assertEqual(labels, [f"Staff {n}" for n in range(5)])
+        for i in range(5):
+            self.assertEqual(
+                card_route_callback("token", "gx~av~staff~0", i),
+                f"av:token:staff:{i + 1}",
+            )
 
 
 if __name__ == "__main__":
