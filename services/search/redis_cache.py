@@ -18,7 +18,7 @@ class RedisSearchCache:
     neither lose persistent data nor interrupt searching.
     """
 
-    _VERSION = 1
+    _VERSION = 2
 
     def __init__(
         self,
@@ -69,18 +69,14 @@ class RedisSearchCache:
             from asyncio import wait_for
 
             method = getattr(self._redis, operation)
-            value = await wait_for(
-                method(*args, **kwargs), timeout=self._timeout
-            )
+            value = await wait_for(method(*args, **kwargs), timeout=self._timeout)
             self._unavailable_until = 0.0
             return value
         except Exception as exc:
             now = time.monotonic()
             # An unavailable cache must not impose its socket timeout on
             # every bot request. Retry after a short cooling-off period.
-            self._unavailable_until = (
-                now + self._failure_cooldown_seconds
-            )
+            self._unavailable_until = now + self._failure_cooldown_seconds
             if now - self._last_failure >= 60.0:
                 logging.warning(
                     "Redis search cache unavailable, using local/upstream fallback",
@@ -97,7 +93,9 @@ class RedisSearchCache:
         if not isinstance(value, dict) or not isinstance(value.get("title"), str):
             raise ValueError("invalid search cache candidate")
         fields = SearchCandidate.__dataclass_fields__
-        return SearchCandidate(**{key: item for key, item in value.items() if key in fields})
+        return SearchCandidate(
+            **{key: item for key, item in value.items() if key in fields}
+        )
 
     async def get_page(self, key: tuple[str, int, int]) -> SearchPage | None:
         if self._ttl <= 0:
@@ -131,7 +129,8 @@ class RedisSearchCache:
             "has_next": value.has_next,
         }
         await self._call(
-            "set", self._key("page", key),
+            "set",
+            self._key("page", key),
             json.dumps(body, ensure_ascii=False, separators=(",", ":")),
             ex=self._ttl,
         )
@@ -168,7 +167,8 @@ class RedisSearchCache:
             "complete": value.complete,
         }
         await self._call(
-            "set", self._key("results", key),
+            "set",
+            self._key("results", key),
             json.dumps(body, ensure_ascii=False, separators=(",", ":")),
             ex=self._ttl,
         )

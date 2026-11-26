@@ -186,6 +186,7 @@ class KitsuSearchProvider:
                     aliases=aliases,
                     year=year,
                     external_ids=_external_ids(raw, mapping_index),
+                    confirmed_ids={"kitsu": _clean(raw.get("id"))},
                     scores=scores,
                     posters=[poster] if poster else [],
                 )

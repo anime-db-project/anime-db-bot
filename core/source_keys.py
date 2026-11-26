@@ -33,7 +33,13 @@ def normalize_source_key(value: SourceKey | str) -> SourceKey:
 def metadata_source_key(source_name: str) -> SourceKey | None:
     """Identify a metadata provider without treating Jikan as a separate catalog."""
     name = " ".join((source_name or "").split()).strip().casefold()
-    if name in {MAL_SOURCE_NAME.casefold(), "myanimelist"}:
+    if name in {
+        MAL_SOURCE_NAME.casefold(),
+        "myanimelist",
+        "mal (myanimelist)",
+        "mal / jikan",
+        "jikan",
+    }:
         return SourceKey.MAL
     try:
         return SourceKey(name)

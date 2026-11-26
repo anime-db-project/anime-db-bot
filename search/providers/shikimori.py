@@ -139,6 +139,7 @@ class ShikimoriSearchProvider:
                     aliases=aliases,
                     year=(raw.get("airedOn") or {}).get("year"),
                     external_ids=external_ids,
+                    confirmed_ids={"shikimori": shikimori_id},
                     scores=scores,
                     posters=[poster_url] if poster_url else [],
                 )

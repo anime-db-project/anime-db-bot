@@ -26,6 +26,19 @@ class SearchCandidate:
     scores: dict[str, float] = field(default_factory=dict)
     romaji_title: str | None = None
     posters: list[str] = field(default_factory=list)
+    # None preserves legacy/manual candidates without recorded provenance.
+    # Provider results always populate their own confirmed catalog IDs.
+    confirmed_ids: dict[str, str] | None = None
+
+    @property
+    def display_ids(self) -> dict[str, str]:
+        if self.confirmed_ids is None:
+            return dict(self.external_ids)
+        return {
+            key: value
+            for key, value in self.confirmed_ids.items()
+            if self.external_ids.get(key) == value
+        }
 
     @property
     def identity(self) -> AnimeIdentity:
@@ -324,6 +337,9 @@ class AnimeRecord:
         if source_key and self.source_id:
             aliases = {
                 "myanimelist": "mal",
+                "mal (myanimelist)": "mal",
+                "mal / jikan": "mal",
+                "jikan": "mal",
                 "mal (myanimelist) / jikan": "mal",
                 "anilist": "anilist",
                 "shikimori": "shikimori",

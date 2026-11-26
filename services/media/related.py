@@ -12,6 +12,7 @@ from typing import Any, Protocol
 
 from core.capabilities import SourceCapability
 from core.identity import AnimeIdentity
+from core.source_names import source_display_name
 from core.media_urls import usable_image_url
 from core.models import AnimeRecord
 from core.related_anime import (
@@ -82,6 +83,13 @@ def _borrow_display_metadata(
     target.aliases = _dedupe([*target.aliases, *aggregate.aliases])
     target.posters = _dedupe([*target.posters, *aggregate.posters])
     target.kind = target.kind or aggregate.kind
+    # Preserve source-local relation semantics but attribute all borrowed metadata.
+    identity = target.identity
+    identity.merge_missing(aggregate.identity)
+    target.external_ids = dict(identity.external_ids)
+    target.confirmed_ids.update(
+        {k: v for k, v in aggregate.confirmed_ids.items() if identity.get(k) == v}
+    )
 
 
 class RelatedAnimeService:
@@ -220,20 +228,17 @@ class RelatedAnimeService:
                 enriched = self._mapping_resolver.enrich(reference.identity)
                 if enriched.matches(identity):
                     continue
-                self._merge_reference(local_items, reference, enriched)
-                self._merge_reference(merged, reference, enriched)
+                self._merge_reference(
+                    local_items, reference, enriched, source_key=source_key
+                )
+                self._merge_reference(
+                    merged, reference, enriched, source_key=source_key
+                )
 
             if local_items:
                 _sort_items(local_items, recommendations=recommendations)
                 result.by_source[source_key] = local_items
-                result.source_names[source_key] = next(
-                    (
-                        value.source
-                        for value in values
-                        if isinstance(value, AnimeReference) and value.source.strip()
-                    ),
-                    source_name,
-                )
+                result.source_names[source_key] = source_display_name(source_key)
 
         if is_background_upstream():
             result.complete = not any(
@@ -320,6 +325,7 @@ class RelatedAnimeService:
                         ]
                     )
                     item.kind = record.kind or item.kind
+                    item.confirmed_ids[key] = id
                     if item.candidate.title != "Unknown anime" and item.posters:
                         return
 
@@ -334,6 +340,8 @@ class RelatedAnimeService:
         merged: list[AggregatedAnimeReference],
         reference: AnimeReference,
         identity: AnimeIdentity,
+        *,
+        source_key: str,
     ) -> None:
         matching = [
             index
@@ -372,7 +380,10 @@ class RelatedAnimeService:
             ]
         )
         target.kind = target.kind or reference.kind
-        target.sources = _dedupe([*target.sources, reference.source])
+        target.sources = _dedupe([*target.sources, source_display_name(source_key)])
+        direct_id = reference.identity.get(source_key)
+        if direct_id and target.identity.get(source_key) == direct_id:
+            target.confirmed_ids[source_key] = direct_id
         if reference.relation:
             relation = canonical_relation_kind(reference.relation)
             target.relations = _dedupe([*target.relations, relation])
@@ -384,6 +395,7 @@ class RelatedAnimeService:
         other: AggregatedAnimeReference,
     ) -> None:
         target.external_ids.update(other.external_ids)
+        target.confirmed_ids.update(other.confirmed_ids)
         for key, value in other.titles.items():
             existing = target.titles.get(key)
             if existing is None:

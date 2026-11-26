@@ -7,7 +7,9 @@ from services.identity.direct_lookup import DirectIdLookupService
 
 
 class FakeSource:
-    def __init__(self, source_key: str, name: str, records: dict[str, AnimeRecord]) -> None:
+    def __init__(
+        self, source_key: str, name: str, records: dict[str, AnimeRecord]
+    ) -> None:
         self.source_key = source_key
         self.name = name
         self.records = records
@@ -38,7 +40,9 @@ def record(
 
 
 class DirectIdLookupTests(unittest.IsolatedAsyncioTestCase):
-    async def test_selected_source_confirms_id_then_expands_confirmed_cross_ids(self) -> None:
+    async def test_selected_source_confirms_id_then_expands_confirmed_cross_ids(
+        self,
+    ) -> None:
         mal = FakeSource(
             "mal",
             "MyAnimeList",
@@ -83,7 +87,9 @@ class DirectIdLookupTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(anilist.calls, ["30"])
         self.assertNotIn("10", anilist.calls)
 
-    async def test_preview_lookup_can_skip_cross_source_metadata_enrichment(self) -> None:
+    async def test_preview_lookup_can_skip_cross_source_metadata_enrichment(
+        self,
+    ) -> None:
         mal = FakeSource(
             "mal",
             "MyAnimeList",
@@ -117,6 +123,40 @@ class DirectIdLookupTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(len(result.items), 1)
         self.assertEqual(result.items[0].title, "Preview Only")
         self.assertEqual(anilist.calls, [])
+
+    async def test_missing_metadata_keeps_internal_id_but_not_display_id(self):
+        mal = FakeSource(
+            "mal",
+            "MAL (MyAnimeList) / Jikan",
+            {
+                "10": record(
+                    "MAL (MyAnimeList) / Jikan",
+                    "10",
+                    title="Example",
+                    external_ids={"mal": "10", "anilist": "30", "kitsu": "40"},
+                )
+            },
+        )
+        ani = FakeSource(
+            "anilist",
+            "AniList",
+            {
+                "30": record(
+                    "AniList", "30", title="Example", external_ids={"anilist": "30"}
+                )
+            },
+        )
+        kitsu = FakeSource("kitsu", "Kitsu", {})
+        result = await DirectIdLookupService([mal, ani, kitsu]).lookup(
+            "10", source_keys=("mal",)
+        )
+        candidate = result.items[0]
+        self.assertEqual(
+            candidate.external_ids, {"mal": "10", "anilist": "30", "kitsu": "40"}
+        )
+        self.assertEqual(candidate.display_ids, {"mal": "10", "anilist": "30"})
+        self.assertEqual(ani.calls, ["30"])
+        self.assertEqual(kitsu.calls, ["40"])
 
     async def test_confirmed_cross_ids_merge_direct_hits(self) -> None:
         mal = FakeSource(
@@ -161,23 +201,35 @@ class DirectIdLookupTests(unittest.IsolatedAsyncioTestCase):
         result = await service.lookup("20")
 
         self.assertEqual(len(result.items), 2)
-        linked = next(item for item in result.items if item.external_ids.get("mal") == "20")
+        linked = next(
+            item for item in result.items if item.external_ids.get("mal") == "20"
+        )
         self.assertEqual(
             linked.external_ids,
             {"mal": "20", "anilist": "30", "future": "20"},
         )
         self.assertIn("https://example.invalid/mal.jpg", linked.posters)
 
-    async def test_same_number_and_same_title_do_not_merge_without_identity_edge(self) -> None:
+    async def test_same_number_and_same_title_do_not_merge_without_identity_edge(
+        self,
+    ) -> None:
         mal = FakeSource(
             "mal",
             "MyAnimeList",
-            {"42": record("MyAnimeList", "42", title="Same title", external_ids={"mal": "42"})},
+            {
+                "42": record(
+                    "MyAnimeList", "42", title="Same title", external_ids={"mal": "42"}
+                )
+            },
         )
         anilist = FakeSource(
             "anilist",
             "AniList",
-            {"42": record("AniList", "42", title="Same title", external_ids={"anilist": "42"})},
+            {
+                "42": record(
+                    "AniList", "42", title="Same title", external_ids={"anilist": "42"}
+                )
+            },
         )
         service = DirectIdLookupService((mal, anilist))
 

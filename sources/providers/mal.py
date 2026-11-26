@@ -160,7 +160,7 @@ def _anime_reference(
     picture = node.get("main_picture") or {}
     poster = _clean(picture.get("large")) or _clean(picture.get("medium"))
     return AnimeReference(
-        source="MAL (MyAnimeList)",
+        source=JIKAN_DISPLAY_NAME,
         titles={"romaji": title},
         external_ids={"mal": mal_id},
         posters=[poster] if poster else [],

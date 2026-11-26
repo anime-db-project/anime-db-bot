@@ -148,6 +148,7 @@ class AniListSearchProvider:
                     aliases=aliases,
                     year=raw.get("seasonYear"),
                     external_ids=external_ids,
+                    confirmed_ids={"anilist": anilist_id},
                     scores=scores,
                     posters=[poster_url] if poster_url else [],
                 )

@@ -586,6 +586,8 @@ def _merge_entries(
         posters: list[str] = []
         year: int | None = None
         scores: dict[str, float] = {}
+        confirmed_ids: dict[str, str] = {}
+        has_provenance = False
 
         rank = min(
             (
@@ -602,6 +604,9 @@ def _merge_entries(
             if year is None:
                 year = candidate.year
             scores.update(candidate.scores)
+            if candidate.confirmed_ids is not None:
+                has_provenance = True
+                confirmed_ids.update(candidate.display_ids)
 
         aliases = [
             value for value in _dedupe(aliases) if value.casefold() != title.casefold()
@@ -614,6 +619,13 @@ def _merge_entries(
                     aliases=aliases,
                     year=year,
                     external_ids=dict(candidate_group.identity.external_ids),
+                    confirmed_ids={
+                        k: v
+                        for k, v in confirmed_ids.items()
+                        if candidate_group.identity.get(k) == v
+                    }
+                    if has_provenance
+                    else None,
                     scores=scores,
                     romaji_title=romaji_title,
                     posters=_dedupe(posters),

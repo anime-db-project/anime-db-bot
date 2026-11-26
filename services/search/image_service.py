@@ -135,6 +135,7 @@ class ImageSearchService:
                     if value and value.casefold() != title.casefold()
                 ),
                 external_ids=external_ids,
+                confirmed_ids={"anilist": anilist_id},
                 romaji_title=best.titles.get("romaji"),
             )
             try:
@@ -157,6 +158,9 @@ class ImageSearchService:
                     ],
                     year=candidate.year,
                     external_ids=dict(candidate.external_ids),
+                    confirmed_ids=dict(candidate.confirmed_ids)
+                    if candidate.confirmed_ids is not None
+                    else None,
                     scores=dict(candidate.scores),
                     romaji_title=candidate.romaji_title,
                     posters=list(candidate.posters),

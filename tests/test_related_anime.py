@@ -123,11 +123,15 @@ class RelatedAnimeServiceTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(item.external_ids["mal"], "20")
         self.assertEqual(item.external_ids["anilist"], "200")
         self.assertEqual(item.external_ids["shikimori"], "2000")
-        self.assertEqual(item.sources, ["MAL (MyAnimeList)", "AniList", "Shikimori"])
+        self.assertEqual(
+            item.sources, ["MAL (MyAnimeList) / Jikan", "AniList", "Shikimori"]
+        )
         self.assertEqual(set(result.by_source), {"mal", "anilist", "shikimori"})
-        self.assertEqual(result.source_names["mal"], "MAL (MyAnimeList)")
+        self.assertEqual(result.source_names["mal"], "MAL (MyAnimeList) / Jikan")
         self.assertEqual(len(result.by_source["mal"]), 1)
-        self.assertEqual(result.by_source["mal"][0].sources, ["MAL (MyAnimeList)"])
+        self.assertEqual(
+            result.by_source["mal"][0].sources, ["MAL (MyAnimeList) / Jikan"]
+        )
 
     async def test_same_title_without_identity_evidence_does_not_merge(self) -> None:
         service = RelatedAnimeService(
@@ -196,6 +200,89 @@ class RelatedAnimeServiceTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(
             result.by_source["anilist"][0].candidate.title, "Sports Festival"
         )
+
+    async def test_display_ids_follow_real_reference_and_metadata_provenance(self):
+        from bots.telegram.card.features.related import _detail_lines
+        from core.models import AnimeRecord
+
+        class Mapping:
+            def enrich(self, identity):
+                result = identity.copy()
+                if result.get("mal") == "20" or result.get("anilist") == "200":
+                    result.merge_missing(
+                        {
+                            "mal": "20",
+                            "anilist": "200",
+                            "kitsu": "400",
+                            "anidb": "500",
+                            "anisearch": "600",
+                        }
+                    )
+                return result
+
+        mal = _Source(
+            "MAL (MyAnimeList) / Jikan",
+            "mal",
+            recommendations=[
+                AnimeReference(
+                    source="MAL (MyAnimeList)",
+                    titles={"romaji": "Target"},
+                    external_ids={"mal": "20"},
+                    posters=["https://example.org/poster.jpg"],
+                )
+            ],
+        )
+        ani = _Source(
+            "AniList",
+            "anilist",
+            recommendations=[
+                AnimeReference(
+                    source="AniList",
+                    titles={"english": "Target English"},
+                    external_ids={"anilist": "200"},
+                )
+            ],
+        )
+        service = RelatedAnimeService([mal, ani], Mapping())
+        result = await service.load_recommendations(
+            AnimeIdentity({"mal": "1", "anilist": "1"})
+        )
+        for item in (
+            result.items[0],
+            result.by_source["mal"][0],
+            result.by_source["anilist"][0],
+        ):
+            self.assertEqual(len(item.external_ids), 5)
+            self.assertEqual(item.confirmed_ids, {"mal": "20", "anilist": "200"})
+            self.assertEqual(
+                item.candidate.display_ids, {"mal": "20", "anilist": "200"}
+            )
+            lines = _detail_lines(item, "recommendations", locale="ru")
+            self.assertIn("Базы данных: MAL (MyAnimeList) / Jikan, AniList", lines)
+            self.assertIn("ID: MAL: 20 | ANILIST: 200", lines)
+            self.assertNotIn("KITSU", " ".join(lines))
+        # Borrowing data from another provider is a real contribution,
+        # not a recommendation vote: the two concepts must stay separate.
+        mal._recommendations[0].posters = []
+        ani._recommendations = []
+        ani.get_details = AsyncMock(
+            return_value=AnimeRecord(
+                source="AniList",
+                source_id="200",
+                titles={"english": "Target English"},
+                posters=["https://example.org/poster.jpg"],
+            )
+        )
+        service = RelatedAnimeService([mal, ani], Mapping())
+        result = await service.load_recommendations(
+            AnimeIdentity({"mal": "1", "anilist": "1"})
+        )
+        item = result.items[0]
+        self.assertEqual(item.sources, ["MAL (MyAnimeList) / Jikan"])
+        self.assertEqual(item.confirmed_ids, {"mal": "20", "anilist": "200"})
+        self.assertEqual(result.by_source["mal"][0].confirmed_ids, item.confirmed_ids)
+        self.assertEqual(item.rank_score, 1.0)
+        ani.get_details.assert_awaited_once()
 
     async def test_current_anime_is_filtered_from_results(self) -> None:
         service = RelatedAnimeService(

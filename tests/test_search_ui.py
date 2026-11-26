@@ -165,6 +165,32 @@ class UnifiedSearchUiTests(unittest.TestCase):
         self.assertIn("Shikimori: 37430", value)
         self.assertIn("FUTUREDB: 77", value)
 
+    def test_search_preview_excludes_mapping_only_ids(self):
+        from services.search.service import merge_candidates
+
+        a = SearchCandidate(
+            title="Target",
+            external_ids={"mal": "20", "anilist": "200", "kitsu": "400"},
+            confirmed_ids={"mal": "20"},
+        )
+        b = SearchCandidate(
+            title="Target",
+            external_ids={"anilist": "200", "mal": "20"},
+            confirmed_ids={"anilist": "200"},
+        )
+        merged = merge_candidates([a, b])[0]
+        self.assertEqual(
+            merged.external_ids, {"mal": "20", "anilist": "200", "kitsu": "400"}
+        )
+        self.assertEqual(merged.display_ids, {"mal": "20", "anilist": "200"})
+        session = search_ui.SearchSession(
+            query="Target", owner_user_id=1, items=[merged]
+        )
+        value = search_ui._preview_text(session, merged, locale="ru")
+        self.assertIn("MAL (MyAnimeList) / Jikan: 20", value)
+        self.assertIn("AniList: 200", value)
+        self.assertNotIn("Kitsu: 400", value)
+
     def test_preview_pagination_marks_incomplete_count(self) -> None:
         keyboard = search_ui._preview_keyboard(
             "token",

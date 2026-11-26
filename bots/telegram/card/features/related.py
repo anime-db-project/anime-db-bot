@@ -25,6 +25,7 @@ from bots.telegram.card.views.renderer import edit_standard_text
 from bots.telegram.card.views.rendering import _table_html, image_gallery_html
 from bots.telegram.card.views.titles import preferred_title_keys
 from core.related_anime import AggregatedAnimeReference
+from core.source_names import source_display_name
 from core.media_urls import usable_image_url
 from localization import text
 from services.runtime.app_context import get_app_context
@@ -115,13 +116,19 @@ def _relation_label(item: AggregatedAnimeReference, locale: str) -> str | None:
     return ", ".join(labels)
 
 
-def _display_ids(item: AggregatedAnimeReference) -> str:
-    values = [
-        f"{key.upper()}: {item.external_ids[key]}"
+def _contributing_ids(item: AggregatedAnimeReference) -> dict[str, str]:
+    ids = item.confirmed_ids
+    return {
+        key: item.external_ids[key]
         for key in _DISPLAY_ID_ORDER
-        if item.external_ids.get(key)
-    ]
-    return " | ".join(values)
+        if ids.get(key) and ids[key] == item.external_ids.get(key)
+    }
+
+
+def _display_ids(item: AggregatedAnimeReference) -> str:
+    return " | ".join(
+        f"{key.upper()}: {value}" for key, value in _contributing_ids(item).items()
+    )
 
 
 def _detail_lines(
@@ -146,13 +153,14 @@ def _detail_lines(
             lines.append(
                 text("card", "discovery_relation", locale=locale, value=relation)
             )
-    if item.sources:
+    contributors = _contributing_ids(item)
+    if contributors:
         lines.append(
             text(
                 "card",
                 "databases",
                 locale=locale,
-                value=", ".join(item.sources),
+                value=", ".join(source_display_name(key) for key in contributors),
             )
         )
     ids = _display_ids(item)

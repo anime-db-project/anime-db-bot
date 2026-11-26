@@ -113,6 +113,8 @@ class AggregatedAnimeReference:
     sources: list[str] = field(default_factory=list)
     rank_score: float = 0.0
     kind: str | None = None
+    # Catalogs that returned a reference or verified metadata, not mapping-only edges.
+    confirmed_ids: dict[str, str] = field(default_factory=dict)
 
     @property
     def identity(self) -> AnimeIdentity:
@@ -128,6 +130,7 @@ class AggregatedAnimeReference:
             title=title,
             aliases=aliases,
             external_ids=dict(self.external_ids),
+            confirmed_ids=dict(self.confirmed_ids),
             romaji_title=self.titles.get("romaji"),
             posters=_dedupe(self.posters),
         )

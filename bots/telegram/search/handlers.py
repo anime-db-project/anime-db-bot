@@ -741,13 +741,12 @@ def _preview_text(
         lines.extend(_image_match_text(match, locale) for match in matches)
 
     lines.extend(["", _ui(locale, "ids")])
-    if candidate.external_ids:
+    ids = candidate.display_ids
+    if ids:
         preferred = ["mal", "anilist", "shikimori"]
-        ordered = [key for key in preferred if key in candidate.external_ids]
-        ordered.extend(sorted(set(candidate.external_ids) - set(ordered)))
-        lines.extend(
-            f"{_source_label(key)}: {candidate.external_ids[key]}" for key in ordered
-        )
+        ordered = [key for key in preferred if key in ids]
+        ordered.extend(sorted(set(ids) - set(ordered)))
+        lines.extend(f"{_source_label(key)}: {ids[key]}" for key in ordered)
     else:
         lines.append(_ui(locale, "no_ids"))
 

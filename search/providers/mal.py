@@ -119,6 +119,7 @@ class MALSearchProvider:
                     aliases=aliases,
                     year=year,
                     external_ids={"mal": mal_id},
+                    confirmed_ids={"mal": mal_id},
                     scores=scores,
                     posters=[poster] if poster else [],
                 )

@@ -4,6 +4,7 @@ import asyncio
 import logging
 
 from core.identity import AnimeIdentity
+from core.source_keys import metadata_source_key
 from core.models import AnimeRecord, SearchCandidate, SearchResultSet
 from services.identity.resolver import IdentityResolver
 from services.search.service import merge_candidates
@@ -204,6 +205,17 @@ def _record_year(record: AnimeRecord) -> int | None:
     return record.aired_on.year if record.aired_on is not None else None
 
 
+def _confirmed_record_id(record: AnimeRecord) -> dict[str, str]:
+    key = metadata_source_key(record.source)
+    source = str(key) if key is not None else record.source.strip().casefold()
+    value = str(record.source_id or "").strip()
+    return (
+        {source: value}
+        if source and value and record.identity.get(source) == value
+        else {}
+    )
+
+
 def _merge_candidate_records(
     candidate: SearchCandidate,
     identity: AnimeIdentity,
@@ -214,8 +226,10 @@ def _merge_candidate_records(
     scores = dict(candidate.scores)
     romaji_title = candidate.romaji_title
     year = candidate.year
+    confirmed_ids = dict(candidate.display_ids)
 
     for record in records:
+        confirmed_ids.update(_confirmed_record_id(record))
         aliases.extend(record.titles.values())
         aliases.extend(record.synonyms)
         posters.extend(record.posters)
@@ -236,6 +250,7 @@ def _merge_candidate_records(
         aliases=aliases,
         year=year,
         external_ids=dict(identity.external_ids),
+        confirmed_ids={k: v for k, v in confirmed_ids.items() if identity.get(k) == v},
         scores=scores,
         romaji_title=romaji_title,
         posters=_dedupe(posters),
@@ -264,6 +279,7 @@ def _candidate_from_record(record: AnimeRecord) -> SearchCandidate:
         aliases=aliases,
         year=_record_year(record),
         external_ids=dict(record.identity.external_ids),
+        confirmed_ids=_confirmed_record_id(record),
         scores=scores,
         romaji_title=record.titles.get("romaji"),
         posters=list(record.posters),
