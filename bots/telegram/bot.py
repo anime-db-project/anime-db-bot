@@ -193,6 +193,13 @@ class _CallbackRoutingMiddleware(BaseMiddleware):
         pending.add(raw)
         try:
             async with lock:
+                # A return to main leaves speculative gallery work behind.
+                if event.message is not None and (
+                    raw.startswith("av:") and raw.endswith(":main:0")
+                ):
+                    from bots.telegram.card.media_prefetch import cancel_prefetch
+
+                    cancel_prefetch(event.message)
                 return await self._dispatch(handler, event, data)
         finally:
             pending.discard(raw)

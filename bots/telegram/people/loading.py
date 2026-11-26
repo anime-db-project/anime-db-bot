@@ -113,6 +113,20 @@ async def ensure_lazy_people(
                 session.staff_gallery_indices = progress.staff_source_portrait_indices
             else:
                 session.voice_gallery_indices = progress.staff_source_portrait_indices
+    from bots.telegram.card.media_prefetch import activate_prefetch
+
+    group = (token, section, source)
+    scope, changed = activate_prefetch(message, group)
+    if changed and progress.staff_portrait_indices:
+        from core.settings import get_settings
+
+        loaded = [
+            i for i in progress.staff_portrait_indices if i < progress.portrait_cursor
+        ]
+        if loaded:
+            progress.staff_prefetched_cursor = loaded[
+                -min(len(loaded), get_settings().sources.people_portrait_batch_size)
+            ]
     if (
         progress.staff_portrait_indices is not None
         and progress.portrait_cursor > progress.staff_prefetched_cursor
@@ -132,6 +146,8 @@ async def ensure_lazy_people(
                         portrait_urls(person, source_order=anime.sources)
                         for person in all_people(anime, section)[start:end]
                     ],
+                    scope=scope,
+                    group=group,
                 )
 
             if enqueue_batch():

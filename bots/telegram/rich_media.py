@@ -55,6 +55,18 @@ _MEDIA_FAILURES = (
 )
 
 
+_background_media = ContextVar("background_media", default=False)
+
+
+@contextmanager
+def background_media():
+    token = _background_media.set(True)
+    try:
+        yield
+    finally:
+        _background_media.reset(token)
+
+
 class MissingRichPhoto(RuntimeError):
     """Telegram accepted the message but omitted all requested photos."""
 
@@ -99,10 +111,41 @@ def _remote_urls(message: InputRichMessage) -> list[str]:
     return result
 
 
-def _image_free(message: InputRichMessage) -> InputRichMessage:
-    body = _IMAGE_TAG.sub("", message.html or "")
+_ALL_PHOTO_TAG = re.compile(
+    r'<img\s+[^>]*?\bsrc="(https?://[^"]+|tg://photo\?id=[^"]+)"[^>]*?/?>',
+    re.IGNORECASE,
+)
+
+
+def _limit_photos(message: InputRichMessage, limit: int) -> InputRichMessage:
+    seen = 0
+    retained: set[str] = set()
+    removed: set[str] = set()
+
+    def select(match: re.Match[str]) -> str:
+        nonlocal seen
+        seen += 1
+        url = html.unescape(match.group(1))
+        identifier = url.split("=", 1)[1] if url.startswith("tg://photo?id=") else None
+        if seen <= limit:
+            if identifier:
+                retained.add(identifier)
+            return match.group(0)
+        if identifier:
+            removed.add(identifier)
+        return ""
+
+    body = _ALL_PHOTO_TAG.sub(select, message.html or "")
+    if seen <= limit:
+        return message
     body = _EMPTY_SLIDESHOW.sub("", body)
-    return message.model_copy(update={"html": body, "media": None})
+    body = _SINGLE_SLIDESHOW.sub(r"\1", body)
+    media = [item for item in message.media or [] if item.id not in removed - retained]
+    return message.model_copy(update={"html": body, "media": media or None})
+
+
+def _image_free(message: InputRichMessage) -> InputRichMessage:
+    return _limit_photos(message, 0)
 
 
 def bind_remote_photos(message: InputRichMessage) -> InputRichMessage:
@@ -230,8 +273,44 @@ class RichMediaDelivery:
             name="rich_media_failures",
         )
         self._disk_last_prune = 0.0
+        self._downloads: dict[str, tuple[asyncio.Task[bytes | None], int]] = {}
+        self._background_slots = asyncio.Semaphore(
+            max(1, self.settings.max_downloads // 4)
+        )
 
     async def _fetch(self, url: str, deadline: float) -> bytes | None:
+        # A foreground request can join a download already in progress.
+        existing = self._downloads.get(url)
+        if existing is None:
+
+            async def fetch():
+                if _background_media.get():
+                    async with self._background_slots:
+                        return await self._fetch_inner(url, deadline)
+                return await self._fetch_inner(url, deadline)
+
+            task = asyncio.create_task(fetch())
+            self._downloads[url] = (task, 1)
+        else:
+            task, count = existing
+            self._downloads[url] = (task, count + 1)
+        try:
+            async with asyncio.timeout_at(deadline):
+                return await asyncio.shield(task)
+        except TimeoutError:
+            return None
+        finally:
+            active = self._downloads.get(url)
+            if active is not None and active[0] is task:
+                if active[1] <= 1:
+                    self._downloads.pop(url, None)
+                    if not task.done():
+                        task.cancel()
+                        await asyncio.gather(task, return_exceptions=True)
+                else:
+                    self._downloads[url] = (task, active[1] - 1)
+
+    async def _fetch_inner(self, url: str, deadline: float) -> bytes | None:
         if self.settings.ram_enabled and self.settings.ram_cache_bytes:
             cached = self._memory.get(url)
             if cached is not None:
@@ -448,6 +527,7 @@ class RichMediaDelivery:
         *,
         retry_transient: bool = False,
     ) -> None:
+        message = _limit_photos(message, self.settings.max_images)
         urls = _remote_urls(message)
         if not urls:
             await send(message)
@@ -532,7 +612,7 @@ def inline_delivery_context():
         _inline_delivery.reset(token)
 
 
-async def deliver_rich_media(
+async def _deliver_rich_media_impl(
     send: Callable[[InputRichMessage], Awaitable[object]],
     message: InputRichMessage,
     *,
@@ -715,3 +795,49 @@ async def deliver_rich_media(
     else:
         await manager.deliver(capture, message)
     cache.enqueue(bot, urls)
+
+
+async def deliver_rich_media(
+    send: Callable[[InputRichMessage], Awaitable[object]],
+    message: InputRichMessage,
+    *,
+    bot=None,
+    verify_photo: bool = False,
+) -> None:
+    manager = get_rich_media_delivery()
+    message = _limit_photos(message, manager.settings.max_images)
+    loop = asyncio.get_running_loop()
+    started = loop.time()
+    budget = manager.settings.total_timeout_seconds
+    has_photos = bool(_ALL_PHOTO_TAG.search(message.html or ""))
+    deadline = started + budget
+    outcome = "success"
+    try:
+        async with asyncio.timeout_at(
+            deadline - min(1.5, budget * 0.25) if has_photos else deadline
+        ):
+            await _deliver_rich_media_impl(
+                send, message, bot=bot, verify_photo=verify_photo
+            )
+    except TimeoutError:
+        if not has_photos:
+            raise
+        outcome = "rich_without_photos_timeout"
+        # No new network/cache work can extend the image budget. Preserve
+        # tables and native rich buttons even if the media attempt timed out.
+        async with asyncio.timeout_at(deadline):
+            await send(_image_free(message))
+        if isinstance(getattr(bot, "id", None), int):
+            from bots.telegram.media_cache import get_media_cache
+
+            get_media_cache().enqueue(bot, _remote_urls(message))
+    finally:
+        logging.info(
+            "Rich media delivery completed",
+            extra={
+                "event": "rich_media_delivery",
+                "outcome": outcome,
+                "duration_ms": round((loop.time() - started) * 1000, 3),
+                "size": len(_ALL_PHOTO_TAG.findall(message.html or "")),
+            },
+        )

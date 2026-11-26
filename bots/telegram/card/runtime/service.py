@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import time
+from services.runtime.rate_limits import background_upstream
 
 from aiogram.exceptions import TelegramBadRequest
 
@@ -35,19 +37,25 @@ async def _check_related_and_update_button(
     service returns at least one verified, non-self anime reference. An empty
     result, including a failed upstream lookup, never creates a dead button.
     """
+    if state.anime_sessions.get(token) is not session:
+        return
     try:
-        result = await get_app_context().related_anime_service.load_relations(
-            session.anime.identity
-        )
+        with background_upstream():
+            async with asyncio.timeout(12):
+                result = await get_app_context().related_anime_service.load_relations(
+                    session.anime.identity
+                )
     except Exception:
         logging.exception("Unable to check related anime availability")
         return
 
+    if session.related_loaded and not result.complete:
+        return
     session.related_items = result.items
     session.related_by_source = result.by_source
     session.related_source_names = result.source_names
     session.related_errors = result.errors
-    session.related_loaded = True
+    session.related_loaded = result.complete
 
     if (
         not result.items
@@ -85,6 +93,42 @@ async def _check_related_and_update_button(
         logging.exception("Failed to update related anime button")
 
 
+def cancel_related_probe(session: AnimeCardSession) -> None:
+    task = session.related_probe_task
+    if task is not None and not task.done():
+        task.cancel()
+    session.related_probe_task = None
+
+
+def schedule_related_probe(
+    message: Message,
+    token: str,
+    session: AnimeCardSession,
+    state: TelegramCardState,
+    *,
+    locale: str,
+    plain_fallback: bool = False,
+) -> None:
+    if session.related_loaded or session.related_items:
+        return
+    if session.related_probe_task is not None and not session.related_probe_task.done():
+        return
+    task = asyncio.create_task(
+        _check_related_and_update_button(
+            message, token, session, state, locale=locale, plain_fallback=plain_fallback
+        )
+    )
+    session.related_probe_task = task
+    state.background_tasks.add(task)
+
+    def finished(done):
+        state.background_tasks.discard(done)
+        if session.related_probe_task is done:
+            session.related_probe_task = None
+
+    task.add_done_callback(finished)
+
+
 async def aggregate_and_send(
     message: Message,
     candidate: SearchCandidate,
@@ -94,6 +138,7 @@ async def aggregate_and_send(
     replace_message: bool = False,
     related_return: RelatedReturnFrame | None = None,
 ) -> bool:
+    started = time.monotonic()
     locale = get_user_locale(owner_user_id)
     identity = candidate.identity
     if identity.is_empty():
@@ -116,8 +161,10 @@ async def aggregate_and_send(
             await message.answer(text("search", "get_result_failed", locale=locale))
         return False
 
+    metadata_done = time.monotonic()
     try:
-        await context.imdb_rating_service.enrich(anime)
+        async with asyncio.timeout(2):
+            await context.imdb_rating_service.enrich(anime)
     except Exception as exc:
         logging.warning(
             "IMDb rating supplement failed for %s: %s: %s",
@@ -127,6 +174,7 @@ async def aggregate_and_send(
             exc_info=True,
         )
 
+    imdb_done = time.monotonic()
     token = state.remember_anime(anime, owner_user_id)
     state.anime_sessions[token].related_return = related_return
     state.anime_sessions[token].inline_message_id = (
@@ -136,7 +184,7 @@ async def aggregate_and_send(
     )
     if replace_message:
         try:
-            await edit_anime_view(
+            plain_fallback = await edit_anime_view(
                 message,
                 token,
                 anime,
@@ -151,7 +199,7 @@ async def aggregate_and_send(
             state.anime_sessions.pop(token, None)
             logging.exception("Could not replace discovery card")
             return False
-        sent_message, plain_fallback = message, False
+        sent_message = message
     else:
         sent_message, plain_fallback = await send_anime_view(
             message,
@@ -162,17 +210,26 @@ async def aggregate_and_send(
             locale=locale,
             show_related=False,
         )
+    logging.info(
+        "Anime card delivery stages",
+        extra={
+            "event": "card_delivery",
+            "operation": "replace" if replace_message else "send",
+            "duration_ms": round((time.monotonic() - started) * 1000, 3),
+            "metadata_ms": round((metadata_done - started) * 1000, 3),
+            "imdb_ms": round((imdb_done - metadata_done) * 1000, 3),
+            "delivery_ms": round((time.monotonic() - imdb_done) * 1000, 3),
+            "depth": state.anime_sessions[token].related_depth,
+            "size": len(anime.posters),
+        },
+    )
     if sent_message is not None:
-        task = asyncio.create_task(
-            _check_related_and_update_button(
-                sent_message,
-                token,
-                state.anime_sessions[token],
-                state,
-                locale=locale,
-                plain_fallback=plain_fallback,
-            )
+        schedule_related_probe(
+            sent_message,
+            token,
+            state.anime_sessions[token],
+            state,
+            locale=locale,
+            plain_fallback=plain_fallback,
         )
-        state.background_tasks.add(task)
-        task.add_done_callback(state.background_tasks.discard)
     return sent_message is not None

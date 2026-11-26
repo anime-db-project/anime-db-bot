@@ -452,6 +452,9 @@ class TelegramSettings:
     denied_max_tracked_users: int = 4096
     max_concurrent_updates: int = 64
     related_navigation_max_depth: int = 10
+    related_prefetch_size: int = 8
+    card_metadata_cache_entries: int = 128
+    card_metadata_cache_ttl_seconds: int = 300
     max_card_sessions: int = 256
     max_people_sessions: int = 256
     max_search_sessions: int = 192
@@ -810,6 +813,15 @@ class AppSettings:
                 ),
                 related_navigation_max_depth=_strict_int(
                     values, "TELEGRAM_RELATED_NAVIGATION_MAX_DEPTH", 10, 0, 50
+                ),
+                related_prefetch_size=_strict_int(
+                    values, "TELEGRAM_RELATED_PREFETCH_SIZE", 8, 1, 50
+                ),
+                card_metadata_cache_entries=_strict_int(
+                    values, "CARD_METADATA_CACHE_ENTRIES", 128, 1, 1024
+                ),
+                card_metadata_cache_ttl_seconds=_strict_int(
+                    values, "CARD_METADATA_CACHE_TTL_SECONDS", 300, 0, 86400
                 ),
                 anime_input_ttl_seconds=_int(
                     values, "ANIME_INPUT_TTL_SECONDS", 300, 30

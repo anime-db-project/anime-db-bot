@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import math
+import logging
 import threading
 import time
 from collections import defaultdict, deque
@@ -95,6 +96,28 @@ class PersonalRateLimiter:
             self._last_sweep_at = None
 
 
+class BackgroundQuotaUnavailable(RuntimeError):
+    pass
+
+
+_BACKGROUND_UPSTREAM: ContextVar[bool] = ContextVar(
+    "background_upstream", default=False
+)
+
+
+def is_background_upstream() -> bool:
+    return _BACKGROUND_UPSTREAM.get()
+
+
+@contextmanager
+def background_upstream():
+    token = _BACKGROUND_UPSTREAM.set(True)
+    try:
+        yield
+    finally:
+        _BACKGROUND_UPSTREAM.reset(token)
+
+
 class UpstreamRateLimiter:
     """Async source-global + optional endpoint sliding-window safety limiter."""
 
@@ -116,6 +139,12 @@ class UpstreamRateLimiter:
                 while events and events[0] <= floor:
                     events.popleft()
 
+                if _BACKGROUND_UPSTREAM.get() and len(events) >= max(
+                    0, int(limit * 0.75)
+                ):
+                    raise BackgroundQuotaUnavailable(
+                        "Reserved upstream quota for interactive requests"
+                    )
                 if len(events) < limit:
                     events.append(now)
                     return
@@ -192,7 +221,21 @@ def activate_rate_limiters(
 
 
 async def wait_for_upstream(source: str, operation: str = "default") -> None:
-    await get_upstream_rate_limiter().acquire(source, operation)
+    started = time.monotonic()
+    try:
+        await get_upstream_rate_limiter().acquire(source, operation)
+    finally:
+        elapsed = time.monotonic() - started
+        if elapsed >= 0.1:
+            logging.info(
+                "Upstream quota wait",
+                extra={
+                    "event": "upstream_wait",
+                    "source": source,
+                    "operation": operation,
+                    "duration_ms": round(elapsed * 1000, 3),
+                },
+            )
 
 
 def reset_rate_limits() -> None:

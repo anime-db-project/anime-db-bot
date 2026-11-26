@@ -2,6 +2,9 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import time
+from core.async_snapshot import AsyncSnapshotCache
+from core.settings import get_settings, TelegramSettings
 
 from core.canonicalization import canonical_genre_token
 from core.company_names import dedupe_company_names
@@ -54,9 +57,17 @@ class AnimeAggregator(AggregationMergeSupport):
         self,
         sources: tuple[AnimeSource, ...] | list[AnimeSource],
         identity_resolver: IdentityResolver | None = None,
+        *,
+        cache_settings: TelegramSettings | None = None,
     ) -> None:
         super().__init__(sources)
         self._identity_resolver = identity_resolver or IdentityResolver()
+        settings = cache_settings or get_settings().telegram
+        self._snapshots = AsyncSnapshotCache[tuple, AggregatedAnime](
+            entries=settings.card_metadata_cache_entries,
+            ttl=settings.card_metadata_cache_ttl_seconds,
+            name="aggregated_anime",
+        )
 
     @property
     def identity_resolver(self) -> IdentityResolver:
@@ -92,6 +103,31 @@ class AnimeAggregator(AggregationMergeSupport):
             return identity
 
     async def aggregate(self, candidate: SearchCandidate) -> AggregatedAnime:
+        # Preserve candidate-specific hints and score inputs in the key.
+        key = (
+            candidate.identity.fingerprint(),
+            candidate.title,
+            tuple(candidate.aliases),
+            tuple(sorted(candidate.scores.items())),
+        )
+        started = time.monotonic()
+        try:
+            return await self._snapshots.get(
+                key,
+                lambda: self._aggregate_uncached(candidate),
+                cacheable=lambda anime: not anime.errors,
+            )
+        finally:
+            logging.info(
+                "Anime metadata stage completed",
+                extra={
+                    "event": "card_stage",
+                    "operation": "aggregate",
+                    "duration_ms": round((time.monotonic() - started) * 1000, 3),
+                },
+            )
+
+    async def _aggregate_uncached(self, candidate: SearchCandidate) -> AggregatedAnime:
         titles_for_resolution = [candidate.title, *candidate.aliases]
         identity = (
             await self._enrich_with_budget(candidate.identity, titles_for_resolution)
@@ -102,6 +138,7 @@ class AnimeAggregator(AggregationMergeSupport):
             )
 
         async def run(source: AnimeSource, current_identity: AnimeIdentity):
+            started = time.monotonic()
             try:
                 record = await asyncio.wait_for(
                     source.get_details(current_identity.copy()),
@@ -110,6 +147,16 @@ class AnimeAggregator(AggregationMergeSupport):
                 return source.name, record, None
             except Exception as exc:
                 return source.name, None, f"{type(exc).__name__}: {exc}"
+            finally:
+                logging.info(
+                    "Card source metadata completed",
+                    extra={
+                        "event": "card_source_stage",
+                        "source": source.name,
+                        "operation": "metadata",
+                        "duration_ms": round((time.monotonic() - started) * 1000, 3),
+                    },
+                )
 
         first_pass_fingerprint = identity.fingerprint()
         first_results = await asyncio.gather(

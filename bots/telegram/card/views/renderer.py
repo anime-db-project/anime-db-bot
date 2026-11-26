@@ -225,7 +225,7 @@ async def edit_anime_view(
     show_related: bool = False,
     replace_only: bool = False,
     related_back: bool = False,
-) -> None:
+) -> bool:
     pages = view_pages(anime, section, locale=locale)
     page = max(0, min(page, len(pages) - 1))
     keyboard = navigation_keyboard(
@@ -253,6 +253,7 @@ async def edit_anime_view(
             locale=locale,
             bot=getattr(message, "bot", None),
         )
+        return False
     except Exception:
         logging.exception(
             "Rich message edit failed; falling back to standard text edit"
@@ -276,6 +277,7 @@ async def edit_anime_view(
             limit=STANDARD_MESSAGE_LIMIT if section == "main" else 4050,
             allow_overflow_messages=not replace_only,
         )
+        return True
 
 
 async def edit_description_view(

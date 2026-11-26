@@ -1,6 +1,12 @@
 from __future__ import annotations
 
 import asyncio
+import logging
+import time
+from copy import deepcopy
+from core.async_snapshot import AsyncSnapshotCache
+from core.settings import get_settings, TelegramSettings
+from services.runtime.rate_limits import is_background_upstream
 from dataclasses import dataclass, field
 from typing import Any, Protocol
 
@@ -27,6 +33,7 @@ class RelatedAnimeLoadResult:
     by_source: dict[str, list[AggregatedAnimeReference]] = field(default_factory=dict)
     source_names: dict[str, str] = field(default_factory=dict)
     errors: dict[str, str] = field(default_factory=dict)
+    complete: bool = True
 
 
 def _dedupe(values: list[str]) -> list[str]:
@@ -84,9 +91,17 @@ class RelatedAnimeService:
         self,
         sources: tuple[Any, ...] | list[Any],
         mapping_resolver: IdentityMappingResolver,
+        *,
+        cache_settings: TelegramSettings | None = None,
     ) -> None:
         self._sources = tuple(sources)
         self._mapping_resolver = mapping_resolver
+        settings = cache_settings or get_settings().telegram
+        self._snapshots = AsyncSnapshotCache[tuple, RelatedAnimeLoadResult](
+            entries=settings.card_metadata_cache_entries,
+            ttl=settings.card_metadata_cache_ttl_seconds,
+            name="related_metadata",
+        )
 
     async def load_relations(self, identity: AnimeIdentity) -> RelatedAnimeLoadResult:
         return await self._load(
@@ -107,6 +122,51 @@ class RelatedAnimeService:
         )
 
     async def _load(
+        self,
+        identity: AnimeIdentity,
+        *,
+        loader_name: str,
+        capability: SourceCapability,
+        recommendations: bool,
+    ) -> RelatedAnimeLoadResult:
+        key = (identity.fingerprint(), loader_name)
+        started = time.monotonic()
+        try:
+            result = await self._snapshots.get(
+                key,
+                lambda: self._load_uncached(
+                    identity,
+                    loader_name=loader_name,
+                    capability=capability,
+                    recommendations=recommendations,
+                ),
+                cacheable=lambda result: not result.errors and result.complete,
+            )
+            if not result.complete and not is_background_upstream():
+                result = await self._snapshots.get(
+                    (key, "full"),
+                    lambda: self._load_uncached(
+                        identity,
+                        loader_name=loader_name,
+                        capability=capability,
+                        recommendations=recommendations,
+                    ),
+                    cacheable=lambda value: not value.errors and value.complete,
+                )
+                if result.complete and not result.errors and self._snapshots.ttl > 0:
+                    self._snapshots.cache.set(key, deepcopy(result))
+            return result
+        finally:
+            logging.info(
+                "Discovery metadata stage completed",
+                extra={
+                    "event": "card_stage",
+                    "operation": loader_name,
+                    "duration_ms": round((time.monotonic() - started) * 1000, 3),
+                },
+            )
+
+    async def _load_uncached(
         self,
         identity: AnimeIdentity,
         *,
@@ -175,7 +235,18 @@ class RelatedAnimeService:
                     source_name,
                 )
 
-        await self._enrich_missing_metadata(merged)
+        if is_background_upstream():
+            result.complete = not any(
+                item.candidate.title == "Unknown anime"
+                or not item.posters
+                or item.kind == "music"
+                for item in merged
+            ) and not any(
+                "BackgroundQuotaUnavailable" in error
+                for error in result.errors.values()
+            )
+        else:
+            await self._enrich_missing_metadata(merged)
         _sort_items(merged, recommendations=recommendations)
         result.items = merged
 

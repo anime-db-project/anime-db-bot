@@ -69,6 +69,7 @@ class AnimeCardSession:
 
     # Only the main card can receive a delayed discovery keyboard update.
     main_view_active: bool = True
+    related_probe_task: asyncio.Task[None] | None = None
     related_loaded: bool = False
     related_items: list[AggregatedAnimeReference] = field(default_factory=list)
     related_by_source: dict[str, list[AggregatedAnimeReference]] = field(

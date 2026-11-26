@@ -238,7 +238,9 @@ class AppContext:
             mapping_resolver=MappingResolver(settings.mappings.db_path),
             shikimori_provider=search_provider_map.get(SourceKey.SHIKIMORI),
         )
-        aggregator = AnimeAggregator(sources, identity_resolver)
+        aggregator = AnimeAggregator(
+            sources, identity_resolver, cache_settings=settings.telegram
+        )
         direct_lookup = DirectIdLookupService(sources, identity_resolver)
         image_search_service = ImageSearchService(
             (
@@ -295,7 +297,9 @@ class AppContext:
                 portrait_concurrency=settings.sources.people_portrait_concurrency,
             ),
             related_anime_service=RelatedAnimeService(
-                sources, identity_resolver.mapping_resolver
+                sources,
+                identity_resolver.mapping_resolver,
+                cache_settings=settings.telegram,
             ),
             imdb_rating_service=IMDbRatingService(
                 IMDbRatingsSource(settings.sources),

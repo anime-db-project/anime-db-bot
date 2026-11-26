@@ -68,7 +68,11 @@ def image_gallery_html(urls: list[str], *, limit: int | None = None) -> str:
 
 
 def poster_html(anime: AggregatedAnime) -> str:
-    return image_gallery_html(anime.posters, limit=50)
+    from core.settings import get_settings
+
+    return image_gallery_html(
+        anime.posters, limit=get_settings().telegram.rich_media.max_images
+    )
 
 
 def rich(text_value: str) -> InputRichMessage:

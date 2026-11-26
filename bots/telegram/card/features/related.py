@@ -14,7 +14,7 @@ from aiogram.types import (
 from bots.telegram.callbacks import KeyedPageCallback
 from bots.telegram.rich_media import deliver_rich_media
 from bots.telegram.pagination import card_picker_callback
-from bots.telegram.card.runtime.service import aggregate_and_send
+from bots.telegram.card.runtime.service import aggregate_and_send, cancel_related_probe
 from bots.telegram.card.runtime.state import (
     AnimeCardSession,
     TelegramCardState,
@@ -88,6 +88,7 @@ def prefetch_related_posters(
         source_key,
         [item.posters[:1] for item in _items(session, section, source_key)],
         index=page,
+        batch_size=get_settings().telegram.related_prefetch_size,
     )
 
 
@@ -445,6 +446,10 @@ async def send_related_item(
         if progress is not None:
             people[kind] = progress
     frame = RelatedReturnFrame(session, section, source_key, int(index), people)
+    from bots.telegram.card.media_prefetch import cancel_prefetch
+
+    cancel_prefetch(message)
+    cancel_related_probe(session)
     session.main_view_active = False
     replaced = await aggregate_and_send(
         message,
@@ -477,6 +482,10 @@ async def return_from_related(
         return False
     # Fresh token invalidates every callback from the previous visit, including
     # queued clicks from the child. No aggregation of the parent is needed.
+    from bots.telegram.card.media_prefetch import cancel_prefetch
+
+    cancel_prefetch(message)
+    cancel_related_probe(session)
     restored_token = secrets.token_urlsafe(6)
     frame.parent.main_view_active = False
     try:

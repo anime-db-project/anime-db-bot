@@ -141,6 +141,10 @@ class TelegramMediaCache:
         self.stats = Counter()
         self.queue = asyncio.Queue(maxsize=settings.media_cache_queue_size)
         self.queued = set()
+        self.prefetch_owners: dict[tuple, tuple] = {}
+        self.prefetch_groups = BoundedTTLCache(
+            max_entries=1024, ttl_seconds=3600, name="media_prefetch_scopes"
+        )
         self.worker = None
         self.stage_lock = asyncio.Lock()
         self.digests = BoundedTTLCache(
@@ -387,7 +391,42 @@ class TelegramMediaCache:
         self.stats["errors"] += 1
         return None
 
-    def enqueue(self, bot, urls):
+    def _reorder_queue(self, *, drop=None, front=()):
+        kept = []
+        preferred = set(front)
+        while not self.queue.empty():
+            bot, url = self.queue.get_nowait()
+            key = (bot.id, url)
+            if drop is not None and drop(key):
+                self.queue.task_done()
+                self.queued.discard(key)
+                self.prefetch_owners.pop(key, None)
+                self.stats["queue_obsolete"] += 1
+            else:
+                kept.append((bot, url))
+        kept.sort(key=lambda item: 0 if (item[0].id, item[1]) in preferred else 1)
+        for item in kept:
+            self.queue.put_nowait(item)
+            self.queue.task_done()
+
+    def cancel_prefetch(self, scope):
+        if scope is None:
+            return
+        self.prefetch_groups.pop(scope)
+        self._reorder_queue(
+            drop=lambda key: self.prefetch_owners.get(key, (None, None))[0] == scope
+        )
+
+    def activate_prefetch(self, scope, group):
+        if scope is None:
+            return False
+        if self.prefetch_groups.get(scope) == group:
+            return False
+        self.cancel_prefetch(scope)
+        self.prefetch_groups.set(scope, group)
+        return True
+
+    def enqueue(self, bot, urls, *, scope=None, group=None):
         s = self.settings
         if (
             not s.media_cache_enabled
@@ -395,18 +434,50 @@ class TelegramMediaCache:
             or s.media_cache_chat_id >= 0
         ):
             return
+        if scope is not None and self.prefetch_groups.get(scope) != group:
+            return
+        priority = scope is None
+        front = []
         for url in urls:
             key = (bot.id, url)
-            if not valid_url(url) or key in self.queued or self.hot.get(key):
+            if not valid_url(url) or self.hot.get(key):
                 continue
-            try:
-                self.queue.put_nowait((bot, url))
-            except asyncio.QueueFull:
+            if key in self.queued:
+                old = self.prefetch_owners.get(key)
+                if priority or (old is not None and old != (scope, group)):
+                    self.prefetch_owners.pop(key, None)
+                if priority:
+                    front.append(key)
+                continue
+            if self.queue.full() and priority:
+                # Evict one oldest speculative entry, never another actual view.
+                evicted = False
+
+                def drop_one(key):
+                    nonlocal evicted
+                    if not evicted and key in self.prefetch_owners:
+                        evicted = True
+                        return True
+                    return False
+
+                self._reorder_queue(drop=drop_one)
+            if self.queue.full():
                 self.stats["queue_dropped"] += 1
                 break
+            self.queue.put_nowait((bot, url))
             self.queued.add(key)
+            if scope is not None:
+                self.prefetch_owners[key] = (scope, group)
+            if priority:
+                front.append(key)
+        if front:
+            self._reorder_queue(front=front)
         if self.queued and (self.worker is None or self.worker.done()):
             self.worker = asyncio.create_task(self._work())
+
+    def _wanted(self, bot, url):
+        owner = self.prefetch_owners.get((bot.id, url))
+        return owner is None or self.prefetch_groups.get(owner[0]) == owner[1]
 
     async def _batch(self, bot, urls, deadline):
         """Album uploads use exact locally prepared bytes; rejected albums
@@ -422,7 +493,7 @@ class TelegramMediaCache:
         async with asyncio.timeout_at(deadline):
             async with self.stage_lock:
                 for url in urls:
-                    if await self.lookup(bot.id, url):
+                    if not self._wanted(bot, url) or await self.lookup(bot.id, url):
                         continue
                     async with self.upload_slots:
                         payload = await manager._fetch(url, deadline)
@@ -451,6 +522,15 @@ class TelegramMediaCache:
                         groups[key][2].append(url)
                     else:
                         groups[key] = (payload, digest, [url])
+                groups = {
+                    key: (
+                        payload,
+                        digest,
+                        [url for url in aliases if self._wanted(bot, url)],
+                    )
+                    for key, (payload, digest, aliases) in groups.items()
+                }
+                groups = {key: value for key, value in groups.items() if value[2]}
                 if len(groups) < 2:
                     return
                 media = [
@@ -501,6 +581,12 @@ class TelegramMediaCache:
                 self.total_upload_seconds += time.monotonic() - start
 
     async def _work(self):
+        from bots.telegram.rich_media import background_media
+
+        with background_media():
+            await self._work_queue()
+
+    async def _work_queue(self):
         while not self.queue.empty():
             batch = []
             # Up to 10 images, bounded by configured local memory budget.
@@ -529,6 +615,8 @@ class TelegramMediaCache:
                         except Exception:
                             logging.debug("Media cache album fallback", exc_info=True)
                     for url in urls:
+                        if not self._wanted(bot, url):
+                            continue
                         await self.stage(
                             bot, url, asyncio.get_running_loop().time() + 35
                         )
@@ -537,6 +625,7 @@ class TelegramMediaCache:
             finally:
                 for bot, url in batch:
                     self.queued.discard((bot.id, url))
+                    self.prefetch_owners.pop((bot.id, url), None)
                     self.queue.task_done()
 
     async def close(self):
@@ -547,6 +636,8 @@ class TelegramMediaCache:
             self.queue.get_nowait()
             self.queue.task_done()
         self.queued.clear()
+        self.prefetch_owners.clear()
+        self.prefetch_groups.clear()
 
     async def summary(self, bot_id):
         rows = unique = 0

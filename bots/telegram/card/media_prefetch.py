@@ -8,7 +8,40 @@ from bots.telegram.card.runtime.state import AnimeCardSession
 from core.settings import get_settings
 
 
-def enqueue_portraits(bot, rows: Sequence[Sequence[str]]) -> bool:
+def media_scope(message):
+    bot = getattr(message, "bot", None)
+    if not isinstance(getattr(bot, "id", None), int):
+        return None
+    inline = getattr(message, "inline_message_id", None)
+    if isinstance(inline, str):
+        return (bot.id, "inline", inline)
+    chat = getattr(getattr(message, "chat", None), "id", None)
+    msg = getattr(message, "message_id", None)
+    return (
+        (bot.id, chat, msg) if isinstance(chat, int) and isinstance(msg, int) else None
+    )
+
+
+def cancel_prefetch(message):
+    scope = media_scope(message)
+    if scope is not None:
+        from bots.telegram.media_cache import get_media_cache
+
+        get_media_cache().cancel_prefetch(scope)
+
+
+def activate_prefetch(message, group):
+    scope = media_scope(message)
+    if scope is None:
+        return None, False
+    from bots.telegram.media_cache import get_media_cache
+
+    return scope, get_media_cache().activate_prefetch(scope, group)
+
+
+def enqueue_portraits(
+    bot, rows: Sequence[Sequence[str]], *, scope=None, group=None
+) -> bool:
     """Queue primary portraits before alternative images. No network wait."""
     from bots.telegram.media_cache import get_media_cache
 
@@ -31,7 +64,10 @@ def enqueue_portraits(bot, rows: Sequence[Sequence[str]]) -> bool:
         )
     )
     before = cache.stats["queue_dropped"]
-    cache.enqueue(bot, urls)
+    if scope is None:
+        cache.enqueue(bot, urls)
+    else:
+        cache.enqueue(bot, urls, scope=scope, group=group)
     return cache.stats["queue_dropped"] == before
 
 
@@ -44,6 +80,7 @@ def prefetch_gallery(
     *,
     index: int = 0,
     visible_count: int = 1,
+    batch_size: int | None = None,
 ) -> None:
     """Prefetch only the selected window, and any window the visible page crosses.
 
@@ -52,7 +89,11 @@ def prefetch_gallery(
     """
     if not rows:
         return
-    size = max(1, get_settings().sources.people_portrait_batch_size)
+    size = max(1, batch_size or get_settings().sources.people_portrait_batch_size)
+    group = (id(session), section, source)
+    scope, changed = activate_prefetch(message, group)
+    if changed:
+        session.media_prefetch_batches.clear()
     start = min(max(0, index), len(rows) - 1)
     end = min(len(rows) - 1, start + max(1, visible_count) - 1)
     for batch in range(start // size, end // size + 1):
@@ -60,6 +101,8 @@ def prefetch_gallery(
         if key in session.media_prefetch_batches:
             continue
         if enqueue_portraits(
-            getattr(message, "bot", None), rows[batch * size : (batch + 1) * size]
+            getattr(message, "bot", None),
+            rows[batch * size : (batch + 1) * size],
+            **({"scope": scope, "group": group} if scope is not None else {}),
         ):
             session.media_prefetch_batches.add(key)

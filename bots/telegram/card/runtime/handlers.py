@@ -940,7 +940,7 @@ def build_dispatcher(mode_name: str, state: TelegramCardState) -> Dispatcher:
                 callback.message, raw_session, locale=locale
             )
 
-        await edit_anime_view(
+        plain_fallback = await edit_anime_view(
             callback.message,
             token,
             anime,
@@ -950,5 +950,16 @@ def build_dispatcher(mode_name: str, state: TelegramCardState) -> Dispatcher:
             show_related=bool(raw_session.related_items),
             related_back=raw_session.related_return is not None,
         )
+        if section == "main":
+            from bots.telegram.card.runtime.service import schedule_related_probe
+
+            schedule_related_probe(
+                callback.message,
+                token,
+                raw_session,
+                state,
+                locale=locale,
+                plain_fallback=plain_fallback,
+            )
 
     return dp
