@@ -56,7 +56,7 @@ query AnimeDetails($idMal: Int!) {
     coverImage { extraLarge large medium }
     siteUrl
     nextAiringEpisode { airingAt episode }
-    studios { nodes { name } }
+    studios { nodes { name isAnimationStudio } }
   }
 }
 """
@@ -82,7 +82,7 @@ query AnimeDetailsById($id: Int!) {
     coverImage { extraLarge large medium }
     siteUrl
     nextAiringEpisode { airingAt episode }
-    studios { nodes { name } }
+    studios { nodes { name isAnimationStudio } }
   }
 }
 """
@@ -710,6 +710,7 @@ def _record(raw: dict[str, Any]) -> AnimeRecord:
             [
                 node.get("name", "")
                 for node in ((raw.get("studios") or {}).get("nodes") or [])
+                if node.get("isAnimationStudio") is not False
             ]
         ),
         posters=[poster] if poster else [],

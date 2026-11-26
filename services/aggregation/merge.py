@@ -10,8 +10,8 @@ from core.canonicalization import (
     normalize_key,
     person_identity_keys,
     preferred_person_name,
-    studio_identity_key,
 )
+from core.company_names import dedupe_company_names
 from core.contracts import AnimeSource
 from core.credit_identity import ambiguous_name_keys, matching_credit_index
 from core.media_urls import usable_image_url
@@ -164,18 +164,9 @@ def _merge_people(
 
 
 def _merge_studios(records: list[AnimeRecord]) -> list[str]:
-    merged: dict[str, str] = {}
-    order: list[str] = []
-    for record in records:
-        for raw_value in record.studios:
-            value = _clean(raw_value)
-            key = studio_identity_key(value)
-            if not value or not key:
-                continue
-            if key not in merged:
-                merged[key] = value
-                order.append(key)
-    return [merged[key] for key in order]
+    return dedupe_company_names(
+        [value for record in records for value in record.studios]
+    )
 
 
 def _consensus_values(values: list[str]) -> str | None:

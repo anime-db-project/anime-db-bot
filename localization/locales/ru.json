@@ -550,7 +550,12 @@
     "other_planet": "Другая планета",
     "shipboard": "На борту корабля",
     "bounty_hunter": "Охотники за головами",
-    "crime_fiction": "Криминальные истории"
+    "crime_fiction": "Криминальные истории",
+    "japan": "Япония",
+    "asia": "Азия",
+    "earth": "Земля",
+    "stereotypes": "Стереотипы",
+    "plot_continuity": "Непрерывность сюжета"
   },
   "roles": {
     "director": "Режиссёр",

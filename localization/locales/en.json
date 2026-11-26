@@ -550,7 +550,12 @@
     "other_planet": "Other Planet",
     "shipboard": "Shipboard",
     "bounty_hunter": "Bounty Hunter",
-    "crime_fiction": "Crime Fiction"
+    "crime_fiction": "Crime Fiction",
+    "japan": "Japan",
+    "asia": "Asia",
+    "earth": "Earth",
+    "stereotypes": "Stereotypes",
+    "plot_continuity": "Plot Continuity"
   },
   "roles": {
     "director": "Director",

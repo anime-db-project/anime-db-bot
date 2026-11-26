@@ -550,7 +550,12 @@
     "other_planet": "Altro pianeta",
     "shipboard": "A bordo di una nave",
     "bounty_hunter": "Cacciatori di taglie",
-    "crime_fiction": "Narrativa criminale"
+    "crime_fiction": "Narrativa criminale",
+    "japan": "Giappone",
+    "asia": "Asia",
+    "earth": "Terra",
+    "stereotypes": "Stereotipi",
+    "plot_continuity": "Continuità narrativa"
   },
   "roles": {
     "director": "Direttore",

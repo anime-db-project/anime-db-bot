@@ -550,7 +550,12 @@
     "other_planet": "Fremder Planet",
     "shipboard": "An Bord eines Schiffes",
     "bounty_hunter": "Kopfgeldjäger",
-    "crime_fiction": "Kriminalgeschichten"
+    "crime_fiction": "Kriminalgeschichten",
+    "japan": "Japan",
+    "asia": "Asien",
+    "earth": "Erde",
+    "stereotypes": "Stereotype",
+    "plot_continuity": "Handlungskontinuität"
   },
   "roles": {
     "director": "Regisseur",

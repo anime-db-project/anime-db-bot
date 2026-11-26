@@ -550,7 +550,12 @@
     "other_planet": "Otro planeta",
     "shipboard": "A bordo de un barco",
     "bounty_hunter": "Cazarrecompensas",
-    "crime_fiction": "Ficción criminal"
+    "crime_fiction": "Ficción criminal",
+    "japan": "Japón",
+    "asia": "Asia",
+    "earth": "Tierra",
+    "stereotypes": "Estereotipos",
+    "plot_continuity": "Continuidad argumental"
   },
   "roles": {
     "director": "Director",

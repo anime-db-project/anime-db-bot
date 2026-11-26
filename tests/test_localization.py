@@ -196,6 +196,17 @@ class LocalizationCatalogTests(unittest.TestCase):
         ):
             self.assertEqual(canonical_genre_key(alias), key)
 
+    def test_location_and_plot_tags_across_all_locales(self) -> None:
+        expected = {'en': ['Japan', 'Asia', 'Earth', 'Stereotypes', 'Plot Continuity'], 'ru': ['Япония', 'Азия', 'Земля', 'Стереотипы', 'Непрерывность сюжета'], 'ja': ['日本', 'アジア', '地球', 'ステレオタイプ', '物語の連続性'], 'de': ['Japan', 'Asien', 'Erde', 'Stereotype', 'Handlungskontinuität'], 'es': ['Japón', 'Asia', 'Tierra', 'Estereotipos', 'Continuidad argumental'], 'fr': ['Japon', 'Asie', 'Terre', 'Stéréotypes', 'Continuité narrative'], 'it': ['Giappone', 'Asia', 'Terra', 'Stereotipi', 'Continuità narrativa']}
+        keys = ("japan", "asia", "earth", "stereotypes", "plot_continuity")
+        for locale, values in expected.items():
+            for key, value in zip(keys, values):
+                with self.subTest(locale=locale, key=key):
+                    self.assertEqual(canonical_genre_key(key.replace("_", " ")), key)
+                    self.assertEqual(canonical_genre_key(value), key)
+                    self.assertEqual(canonical_genre(key, locale=locale), value)
+        self.assertEqual(canonical_genre_key("Plot-Continuity"), "plot_continuity")
+
     def test_kitsu_category_aliases_are_localized(self) -> None:
         expected = {
             "Fantasy World": ("fantasy_world", "Фэнтезийный мир", "ファンタジー世界"),

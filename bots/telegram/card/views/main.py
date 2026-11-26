@@ -241,7 +241,12 @@ def _main_blocks(anime: AggregatedAnime, *, locale: str) -> list[tuple[str, list
         production.append(text("card", "genres", locale=locale, value=values))
     if anime.studios:
         production.append(
-            text("card", "studios", locale=locale, value=", ".join(anime.studios))
+            text(
+                "card",
+                "studios",
+                locale=locale,
+                value=", ".join(dedupe_company_names(anime.studios)),
+            )
         )
     if anime.licensors:
         production.append(

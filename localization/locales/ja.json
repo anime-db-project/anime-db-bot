@@ -550,7 +550,12 @@
     "other_planet": "異星",
     "shipboard": "船上",
     "bounty_hunter": "賞金稼ぎ",
-    "crime_fiction": "犯罪フィクション"
+    "crime_fiction": "犯罪フィクション",
+    "japan": "日本",
+    "asia": "アジア",
+    "earth": "地球",
+    "stereotypes": "ステレオタイプ",
+    "plot_continuity": "物語の連続性"
   },
   "roles": {
     "director": "監督",

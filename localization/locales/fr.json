@@ -550,7 +550,12 @@
     "other_planet": "Autre planète",
     "shipboard": "À bord d'un navire",
     "bounty_hunter": "Chasseurs de primes",
-    "crime_fiction": "Fiction criminelle"
+    "crime_fiction": "Fiction criminelle",
+    "japan": "Japon",
+    "asia": "Asie",
+    "earth": "Terre",
+    "stereotypes": "Stéréotypes",
+    "plot_continuity": "Continuité narrative"
   },
   "roles": {
     "director": "Réalisateur",

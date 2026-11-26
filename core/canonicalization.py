@@ -4,6 +4,7 @@ import re
 import unicodedata
 from functools import lru_cache
 
+from core.company_names import company_identity_key
 from localization.catalog import DEFAULT_LOCALE, aliases, normalize_locale, text
 
 
@@ -107,6 +108,8 @@ def canonical_genre_key(value: str) -> str | None:
         return None
     normalized = normalize_key(cleaned)
     direct = _normalized_aliases("genres").get(normalized)
+    if direct is None and not normalized:
+        direct = aliases("genres").get(cleaned.casefold())
     if direct:
         return direct
     if cleaned in _canonical_values("genres"):
@@ -219,7 +222,7 @@ def canonical_role(value: str, *, locale: str = DEFAULT_LOCALE) -> str:
 
 
 def studio_identity_key(value: str) -> str:
-    return normalize_key(value).replace(" ", "")
+    return company_identity_key(value)
 
 
 @lru_cache(maxsize=1)

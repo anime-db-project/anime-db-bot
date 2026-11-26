@@ -16,7 +16,6 @@ class AniListLazyPeopleTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(DEFAULT_PEOPLE_MAX_PAGES, 12)
         self.assertEqual(AppSettings.from_env({}).sources.anilist_people_max_pages, 12)
 
-
     async def test_main_metadata_query_does_not_request_people(self) -> None:
         self.assertNotIn("staff(page:", DETAIL_QUERY)
         self.assertNotIn("characters(page:", DETAIL_QUERY)
@@ -46,12 +45,19 @@ class AniListLazyPeopleTests(unittest.IsolatedAsyncioTestCase):
                 "coverImage": {"extraLarge": "https://example.invalid/poster.jpg"},
                 "siteUrl": "https://anilist.co/anime/101280",
                 "nextAiringEpisode": None,
-                "studios": {"nodes": [{"name": "8bit"}]},
+                "studios": {
+                    "nodes": [
+                        {"name": "8bit", "isAnimationStudio": True},
+                        {"name": "TV Tokyo", "isAnimationStudio": False},
+                        {"name": "Animation Studio B", "isAnimationStudio": True},
+                    ]
+                },
             }
         }
 
         with patch(
-            "sources.providers.anilist.graphql_request", new=AsyncMock(return_value=payload)
+            "sources.providers.anilist.graphql_request",
+            new=AsyncMock(return_value=payload),
         ) as graphql:
             record = await AniListSource().get_details(AnimeIdentity({"mal": "37430"}))
 
@@ -60,6 +66,8 @@ class AniListLazyPeopleTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(record.staff, [])
         self.assertEqual(record.voices, [])
         self.assertEqual(record.external_ids["anilist"], "101280")
+        self.assertEqual(record.studios, ["8bit", "Animation Studio B"])
+        self.assertIn("isAnimationStudio", DETAIL_QUERY)
         graphql.assert_awaited_once()
 
     async def test_people_cache_is_owned_by_source_instance(self) -> None:
@@ -107,7 +115,8 @@ class AniListLazyPeopleTests(unittest.IsolatedAsyncioTestCase):
             }
         }
         with patch(
-            "sources.providers.anilist.graphql_request", new=AsyncMock(return_value=payload)
+            "sources.providers.anilist.graphql_request",
+            new=AsyncMock(return_value=payload),
         ) as graphql:
             record = await AniListSource().get_details(
                 AnimeIdentity({"anilist": "101280"})
