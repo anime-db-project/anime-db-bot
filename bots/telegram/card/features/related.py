@@ -446,9 +446,9 @@ async def send_related_item(
         if progress is not None:
             people[kind] = progress
     frame = RelatedReturnFrame(session, section, source_key, int(index), people)
-    from bots.telegram.card.media_prefetch import cancel_prefetch
+    from bots.telegram.card.media_prefetch import defer_prefetch
 
-    cancel_prefetch(message)
+    defer_prefetch(message)
     cancel_related_probe(session)
     session.main_view_active = False
     replaced = await aggregate_and_send(
@@ -482,9 +482,9 @@ async def return_from_related(
         return False
     # Fresh token invalidates every callback from the previous visit, including
     # queued clicks from the child. No aggregation of the parent is needed.
-    from bots.telegram.card.media_prefetch import cancel_prefetch
+    from bots.telegram.card.media_prefetch import defer_prefetch
 
-    cancel_prefetch(message)
+    defer_prefetch(message)
     cancel_related_probe(session)
     restored_token = secrets.token_urlsafe(6)
     frame.parent.main_view_active = False

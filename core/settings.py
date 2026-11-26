@@ -437,6 +437,7 @@ class TelegramSettings:
     media_cache_ttl_seconds: int = 0
     media_cache_batch_size: int = 10
     media_cache_queue_size: int = 256
+    media_cache_idle_seconds: float = 2.0
     media_cache_max_entries: int = 100000
     media_cache_interval_seconds: float = 3.1
     watchlist_custom_defaults: Mapping[str, str] = field(default_factory=dict)
@@ -865,6 +866,9 @@ class AppSettings:
                 ),
                 media_cache_queue_size=_strict_int(
                     values, "TELEGRAM_MEDIA_CACHE_QUEUE_SIZE", 256, 1, 4096
+                ),
+                media_cache_idle_seconds=_strict_float(
+                    values, "TELEGRAM_MEDIA_CACHE_IDLE_SECONDS", 2.0, 0.0, 60.0
                 ),
                 media_cache_max_entries=_strict_int(
                     values, "TELEGRAM_MEDIA_CACHE_MAX_ENTRIES", 100000, 1, 1000000

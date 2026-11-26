@@ -354,7 +354,7 @@ class AppSettingsTests(unittest.TestCase):
             },
             set(DEFAULT_MAPPING_LINKS),
         )
-        self.assertEqual(len(values), 274 + len(DEFAULT_MAPPING_LINKS))
+        self.assertEqual(len(values), 275 + len(DEFAULT_MAPPING_LINKS))
         for key in (
             "BOT_ON_FAILURE",
             "BOT_ON_CLEAN_EXIT",

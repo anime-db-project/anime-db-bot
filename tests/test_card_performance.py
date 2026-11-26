@@ -127,40 +127,94 @@ class CardPerformanceTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(await asyncio.gather(a, b), [b"image", b"image"])
             inner.assert_awaited_once()
 
-    async def test_foreground_priority_and_stale_prefetch_cleanup(self):
-        s = replace(
+    def _media_settings(self, **kwargs):
+        return replace(
             get_settings().telegram,
             media_cache_enabled=True,
             media_cache_background_upload=True,
             media_cache_chat_id=-100123,
             media_cache_persistent=False,
-            media_cache_queue_size=3,
+            **kwargs,
         )
-        cache = TelegramMediaCache(s)
+
+    async def test_foreground_priority_retains_previous_prefetch(self):
+        cache = TelegramMediaCache(
+            self._media_settings(media_cache_queue_size=8, media_cache_idle_seconds=0)
+        )
         bot = SimpleNamespace(id=1)
-        old = ("chat", 1)
-        new = ("chat", 2)
-        urls = [f"https://example.org/{i}.jpg" for i in range(5)]
-        # Suppress worker while checking deterministic queue order.
+        scope = ("chat", 1)
+        urls = [f"https://example.org/{i}.jpg" for i in range(9)]
         cache.worker = asyncio.create_task(asyncio.sleep(10))
         try:
-            cache.activate_prefetch(old, "old")
-            cache.enqueue(bot, urls[:3], scope=old, group="old")
-            cache.enqueue(bot, [urls[3]])
+            cache.activate_prefetch(scope, "old")
+            cache.enqueue(bot, urls[:3], scope=scope, group="old")
+            cache.activate_prefetch(scope, "new")
             self.assertEqual(cache.queue.qsize(), 3)
-            cache.activate_prefetch(old, "next")
-            self.assertEqual(cache.queue.qsize(), 1)
-            cache.enqueue(bot, [urls[0]], scope=old, group="old")
-            self.assertEqual(cache.queue.qsize(), 1)
-            cache.activate_prefetch(new, "new")
-            cache.enqueue(bot, [urls[1]], scope=new, group="new")
-            cache.enqueue(bot, [urls[4]])
-            first = cache.queue.get_nowait()
-            cache.queue.task_done()
-            self.assertEqual(first[1], urls[4])
-            self.assertEqual(cache.stats["queue_obsolete"], 3)
+            cache.enqueue(bot, urls[3:6], scope=scope, group="new")
+            cache.enqueue(bot, [urls[6]], scope=scope, group="new")
+            self.assertEqual(cache.queue.qsize(), 6)
+            cache.enqueue(bot, [urls[6], urls[7]])
+            cache.enqueue(bot, [urls[8]])
+            self.assertEqual(cache.queue.qsize(), 8)
+            # Even on a full queue, actual use can promote an old task.
+            cache.enqueue(bot, [urls[0]])
+            self.assertEqual(cache.queue.qsize(), 8)
+            items = []
+            while not cache.queue.empty():
+                _, url = cache.queue.get_nowait()
+                items.append(url)
+                cache.queue.task_done()
+            self.assertEqual(items[:3], [urls[0], urls[6], urls[7]])
+            self.assertEqual(items[3], urls[3])
+            self.assertEqual(set(items), set(urls[:8]))
+            self.assertEqual(cache.stats["prefetch_deferred"], 1)
         finally:
             await cache.close()
+
+    async def test_worker_waits_for_all_interactive_updates_then_drains_old_jobs(self):
+        cache = TelegramMediaCache(
+            self._media_settings(
+                media_cache_queue_size=10,
+                media_cache_batch_size=1,
+                media_cache_idle_seconds=0.02,
+            )
+        )
+        bot = SimpleNamespace(id=1)
+        urls = [f"https://example.org/{i}.jpg" for i in range(3)]
+        scope = ("chat", 1)
+        with patch.object(cache, "stage", new=AsyncMock()) as stage:
+            with cache.interactive_activity():
+                cache.activate_prefetch(scope, "old")
+                cache.enqueue(bot, urls[:1], scope=scope, group="old")
+                with cache.interactive_activity():
+                    cache.activate_prefetch(scope, "new")
+                    cache.enqueue(bot, urls[1:2], scope=scope, group="new")
+                    cache.enqueue(bot, urls[2:])
+                    await asyncio.sleep(0)
+                    stage.assert_not_awaited()
+                await asyncio.sleep(0.03)
+                stage.assert_not_awaited()
+                self.assertEqual(cache.queue.qsize(), 3)
+            stage.assert_not_awaited()
+            await asyncio.wait_for(cache.queue.join(), 1)
+            self.assertEqual(
+                [call.args[1] for call in stage.await_args_list],
+                [urls[2], urls[1], urls[0]],
+            )
+            self.assertEqual(cache.stats["idle_pauses"], 1)
+        await cache.close()
+
+    async def test_zero_idle_delay_allows_background_during_update(self):
+        cache = TelegramMediaCache(
+            self._media_settings(media_cache_idle_seconds=0, media_cache_batch_size=1)
+        )
+        bot = SimpleNamespace(id=1)
+        with patch.object(cache, "stage", new=AsyncMock()) as stage:
+            with cache.interactive_activity():
+                cache.enqueue(bot, ["https://example.org/a.jpg"])
+                await asyncio.wait_for(cache.queue.join(), 1)
+                stage.assert_awaited_once()
+        await cache.close()
 
     async def test_background_reserves_quota_for_interactive_requests(self):
         settings = replace(

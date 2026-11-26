@@ -22,12 +22,12 @@ def media_scope(message):
     )
 
 
-def cancel_prefetch(message):
+def defer_prefetch(message):
     scope = media_scope(message)
     if scope is not None:
         from bots.telegram.media_cache import get_media_cache
 
-        get_media_cache().cancel_prefetch(scope)
+        get_media_cache().defer_prefetch(scope)
 
 
 def activate_prefetch(message, group):

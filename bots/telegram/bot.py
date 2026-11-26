@@ -127,7 +127,10 @@ class _ObservabilityMiddleware(BaseMiddleware):
                 extra={"event": "telegram_update", "outcome": "started"},
             )
             try:
-                result = await handler(event, data)
+                from bots.telegram.media_cache import get_media_cache
+
+                with get_media_cache().interactive_activity():
+                    result = await handler(event, data)
             except Exception as exc:
                 metrics = get_runtime_metrics()
                 if metrics is not None:
@@ -193,13 +196,13 @@ class _CallbackRoutingMiddleware(BaseMiddleware):
         pending.add(raw)
         try:
             async with lock:
-                # A return to main leaves speculative gallery work behind.
+                # Returning to main lowers the priority of the previous gallery.
                 if event.message is not None and (
                     raw.startswith("av:") and raw.endswith(":main:0")
                 ):
-                    from bots.telegram.card.media_prefetch import cancel_prefetch
+                    from bots.telegram.card.media_prefetch import defer_prefetch
 
-                    cancel_prefetch(event.message)
+                    defer_prefetch(event.message)
                 return await self._dispatch(handler, event, data)
         finally:
             pending.discard(raw)
