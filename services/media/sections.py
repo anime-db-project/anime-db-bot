@@ -6,7 +6,7 @@ from typing import Any, Generic, TypeVar
 
 from core.capabilities import SourceCapability
 from core.identity import AnimeIdentity
-from core.models import DescriptionDetails, PopularityStats
+from core.models import DescriptionDetails, AnimeStatistics
 from sources.runtime.catalog import source_supports
 
 T = TypeVar("T")
@@ -73,12 +73,12 @@ class ScreenshotService(_LazySectionService[list[str]]):
         return bool(value)
 
 
-class PopularityService(_LazySectionService[PopularityStats]):
-    loader_name = "load_popularity"
-    capability = SourceCapability.POPULARITY
+class StatisticsService(_LazySectionService[AnimeStatistics]):
+    loader_name = "load_statistics"
+    capability = SourceCapability.STATISTICS
 
     def _has_data(self, value: Any) -> bool:
-        return isinstance(value, PopularityStats) and value.has_data()
+        return isinstance(value, AnimeStatistics) and value.has_data()
 
 
 class DescriptionService(_LazySectionService[DescriptionDetails]):

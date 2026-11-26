@@ -169,7 +169,7 @@ class EpisodePage:
 
 
 @dataclass(frozen=True, slots=True)
-class PopularityRanking:
+class StatisticsRanking:
     """One source-local leaderboard position.
 
     ``kind`` is a locale-neutral key such as ``rated`` or ``popular``.
@@ -205,8 +205,8 @@ class DescriptionDetails:
 
 
 @dataclass(slots=True)
-class PopularityStats:
-    """Audience/popularity statistics belonging to exactly one source."""
+class AnimeStatistics:
+    """Audience statistics belonging to exactly one source."""
 
     rank: int | None = None
     popularity_rank: int | None = None
@@ -215,7 +215,7 @@ class PopularityStats:
     favorites: int | None = None
     status_distribution: dict[str, int] = field(default_factory=dict)
     score_distribution: dict[int, int] = field(default_factory=dict)
-    rankings: list[PopularityRanking] = field(default_factory=list)
+    rankings: list[StatisticsRanking] = field(default_factory=list)
 
     def has_data(self) -> bool:
         return any(
@@ -309,7 +309,7 @@ class AnimeRecord:
     favorites: int | None = None
     status_distribution: dict[str, int] = field(default_factory=dict)
     score_distribution: dict[int, int] = field(default_factory=dict)
-    rankings: list[PopularityRanking] = field(default_factory=list)
+    rankings: list[StatisticsRanking] = field(default_factory=list)
 
     genres: list[str] = field(default_factory=list)
     studios: list[str] = field(default_factory=list)
@@ -387,7 +387,7 @@ class AggregatedAnime:
     list_users: int | None = None
     scoring_users: int | None = None
     favorites: int | None = None
-    popularity_by_source: dict[str, PopularityStats] = field(default_factory=dict)
+    statistics_by_source: dict[str, AnimeStatistics] = field(default_factory=dict)
 
     genres: list[str] = field(default_factory=list)
     studios: list[str] = field(default_factory=list)

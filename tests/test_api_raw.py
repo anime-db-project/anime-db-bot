@@ -14,7 +14,7 @@ from PIL import Image
 from api.http import create_app
 from api.operations import ApiOperationError, execute_operation
 from api.raw import execute_raw
-from core.models import AnimeRecord, PersonCredit, SearchCandidate, SearchPage
+from core.models import AnimeRecord, AnimeStatistics, PersonCredit, SearchCandidate, SearchPage
 from core.people_loading import PeopleManifest
 from core.settings import AppSettings
 
@@ -58,6 +58,7 @@ def _source(key: str) -> SimpleNamespace:
         ),
         load_relations=AsyncMock(return_value=[{"source": key, "relation": "sequel"}]),
         load_characters=AsyncMock(return_value=[]),
+        load_statistics=AsyncMock(return_value=AnimeStatistics(popularity_rank=25, list_users=100)),
     )
 
 
@@ -334,6 +335,27 @@ class RawHttpAndGraphQLTests(unittest.IsolatedAsyncioTestCase):
             data["rawSearch"]["sources"]["anilist"]["status"], "ok"
         )
         self.assertIn("voices", data["sourceCatalog"]["capabilities"])
+
+    async def test_statistics_routes_and_graphql(self) -> None:
+        response = await self.client.get(
+            "/api/v1/raw/statistics?source=mal&id=1", headers=self.headers,
+        )
+        self.assertEqual(response.status, 200)
+        result = (await response.json())["data"]
+        self.assertEqual(result["capability"], "statistics")
+        self.assertEqual(result["sources"]["mal"]["data"]["popularity_rank"], 25)
+        response = await self.client.post(
+            "/graphql", headers=self.headers,
+            json={"query": '{ rawStatistics(source:"mal", id:"1") sourceCatalog }'},
+        )
+        self.assertEqual(response.status, 200)
+        result = await response.json()
+        self.assertNotIn("errors", result)
+        self.assertEqual(result["data"]["rawStatistics"]["sources"]["mal"]["data"]["list_users"], 100)
+        self.assertIn("statistics", result["data"]["sourceCatalog"]["capabilities"])
+        self.assertNotIn("popularity", result["data"]["sourceCatalog"]["capabilities"])
+        old = await self.client.get("/api/v1/raw/popularity?source=mal&id=1", headers=self.headers)
+        self.assertEqual(old.status, 400)
 
     async def test_rest_rejects_unqualified_numeric_id(self) -> None:
         response = await self.client.get(

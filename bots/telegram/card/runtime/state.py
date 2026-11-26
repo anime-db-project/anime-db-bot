@@ -55,8 +55,8 @@ class AnimeCardSession:
     character_errors: dict[str, str] = field(default_factory=dict)
     screenshots_loaded: bool = False
     screenshot_errors: dict[str, str] = field(default_factory=dict)
-    popularity_loaded: bool = False
-    popularity_errors: dict[str, str] = field(default_factory=dict)
+    statistics_loaded: bool = False
+    statistics_errors: dict[str, str] = field(default_factory=dict)
     descriptions_loaded: bool = False
     description_errors: dict[str, str] = field(default_factory=dict)
     # Wikipedia is a standalone, explicitly selected encyclopedia page.

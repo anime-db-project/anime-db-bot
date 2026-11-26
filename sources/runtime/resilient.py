@@ -16,7 +16,7 @@ from core.models import (
     EpisodePage,
     EpisodeRecord,
     PersonCredit,
-    PopularityStats,
+    AnimeStatistics,
     SearchPage,
     TrailerRecord,
 )
@@ -262,11 +262,11 @@ class PeopleRetryingSourceProxy(RetryingSourceProxy):
             return []
         return await self._people_call("screenshots", lambda: loader(identity))
 
-    async def load_popularity(self, identity: AnimeIdentity) -> PopularityStats:
-        loader = getattr(self._source, "load_popularity", None)
+    async def load_statistics(self, identity: AnimeIdentity) -> AnimeStatistics:
+        loader = getattr(self._source, "load_statistics", None)
         if not callable(loader):
-            return PopularityStats()
-        return await self._people_call("popularity", lambda: loader(identity))
+            return AnimeStatistics()
+        return await self._people_call("statistics", lambda: loader(identity))
 
     async def load_description(self, identity: AnimeIdentity) -> DescriptionDetails:
         loader = getattr(self._source, "load_description", None)
@@ -492,7 +492,7 @@ def resilient_source(
         or callable(getattr(source, "load_staff", None))
         or callable(getattr(source, "load_voices", None))
         or callable(getattr(source, "load_screenshots", None))
-        or callable(getattr(source, "load_popularity", None))
+        or callable(getattr(source, "load_statistics", None))
         or callable(getattr(source, "load_description", None))
         or callable(getattr(source, "load_relations", None))
         or callable(getattr(source, "load_recommendations", None))

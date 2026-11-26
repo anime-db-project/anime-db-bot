@@ -408,7 +408,7 @@ TELEGRAM_PAGINATION_BLOCKS = (
     "trailers",
     "screenshots",
     "titles",
-    "popularity",
+    "statistics",
     "descriptions",
     "source_ids",
 )

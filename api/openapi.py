@@ -155,7 +155,7 @@ def openapi_document(public_url: str = "") -> dict:
     for capability in (
         "metadata", "wire", "voices", "seiyuu", "staff", "characters",
         "episodes", "episode", "timestamps", "themes", "trailers",
-        "screenshots", "popularity", "description", "relations",
+        "screenshots", "statistics", "description", "relations",
         "recommendations",
     ):
         paths[f"{prefix}/raw/{capability}"] = {

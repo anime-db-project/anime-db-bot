@@ -14,7 +14,7 @@ class SourceCapability(StrEnum):
     TRAILERS = "trailers"
     EPISODES = "episodes"
     SCREENSHOTS = "screenshots"
-    POPULARITY = "popularity"
+    STATISTICS = "statistics"
     DESCRIPTION = "description"
     RELATIONS = "relations"
     RECOMMENDATIONS = "recommendations"

@@ -252,7 +252,7 @@ if (preg_match('#^/anime/(\d+)/licensors$#', $path, $match)) {
     }
 }
 
-if (preg_match('#^/anime/(\d+)/popularity$#', $path, $match)) {
+if (preg_match('#^/anime/(\d+)/statistics$#', $path, $match)) {
     $malId = (int) $match[1];
     try {
         $stats = withActivity(function () use ($malId) {

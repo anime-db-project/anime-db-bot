@@ -10,7 +10,7 @@ from core.models import (
     CharacterRecord,
     DescriptionDetails,
     PersonCredit,
-    PopularityStats,
+    AnimeStatistics,
 )
 from services.runtime.rate_limits import wait_for_upstream
 
@@ -57,10 +57,10 @@ class PeopleRateLimitedSourceProxy(RateLimitedSourceProxy):
         await wait_for_upstream(self.source_key, "metadata")
         return await loader(identity)
 
-    async def load_popularity(self, identity: AnimeIdentity) -> PopularityStats:
-        loader = getattr(self._source, "load_popularity", None)
+    async def load_statistics(self, identity: AnimeIdentity) -> AnimeStatistics:
+        loader = getattr(self._source, "load_statistics", None)
         if not callable(loader):
-            return PopularityStats()
+            return AnimeStatistics()
         await wait_for_upstream(self.source_key, "metadata")
         return await loader(identity)
 
@@ -186,7 +186,7 @@ def rate_limited_source(source: Any, source_key: str) -> RateLimitedSourceProxy:
             "load_staff_batch",
             "load_voices_batch",
             "load_screenshots",
-            "load_popularity",
+            "load_statistics",
             "load_description",
             "load_relations",
             "load_recommendations",

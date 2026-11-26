@@ -13,8 +13,8 @@ from core.company_names import dedupe_company_names
 from core.models import (
     AggregatedAnime,
     BroadcastSlot,
-    PopularityRanking,
-    PopularityStats,
+    StatisticsRanking,
+    AnimeStatistics,
 )
 
 
@@ -60,8 +60,8 @@ class CardRichLayoutTests(unittest.TestCase):
             list_users=123456,
             scoring_users=98765,
             favorites=4321,
-            popularity_by_source={
-                "MyAnimeList": PopularityStats(
+            statistics_by_source={
+                "MyAnimeList": AnimeStatistics(
                     rank=120,
                     popularity_rank=35,
                     list_users=123456,
@@ -75,7 +75,7 @@ class CardRichLayoutTests(unittest.TestCase):
                         "dropped": 1000,
                     },
                 ),
-                "AniList": PopularityStats(
+                "AniList": AnimeStatistics(
                     rank=140,
                     popularity_rank=40,
                     list_users=110000,
@@ -88,12 +88,12 @@ class CardRichLayoutTests(unittest.TestCase):
                     },
                     score_distribution={10: 15000, 9: 30000, 8: 30000},
                     rankings=[
-                        PopularityRanking(
+                        StatisticsRanking(
                             rank=4, kind="popular", year=2026, season="spring"
                         ),
                     ],
                 ),
-                "Shikimori": PopularityStats(
+                "Shikimori": AnimeStatistics(
                     list_users=95000,
                     scoring_users=62000,
                     status_distribution={
@@ -167,7 +167,7 @@ class CardRichLayoutTests(unittest.TestCase):
         captions = ["Основное", "Выход", "Производство", "Оценка", "Источники"]
         for caption in captions:
             self.assertIn(f"<caption><b>{caption}</b></caption>", html)
-        self.assertNotIn("<caption><b>Популярность</b></caption>", html)
+        self.assertNotIn("<caption><b>Статистика</b></caption>", html)
         self.assertNotIn("Оценка и популярность", html)
         self.assertIn(">Средняя оценка</th>", html)
         self.assertNotIn(">Место в рейтинге</th>", html)
@@ -181,7 +181,7 @@ class CardRichLayoutTests(unittest.TestCase):
             "Основное": ("titles", "description"),
             "Выход": ("episodes", "screenshots", "trailers"),
             "Производство": ("staff", "voices", "characters"),
-            "Оценка": ("popularity",),
+            "Оценка": ("statistics",),
             "Источники": ("links",),
         }
         starts = {
@@ -193,7 +193,7 @@ class CardRichLayoutTests(unittest.TestCase):
                 starts[captions[index + 1]] if index + 1 < len(captions) else len(html)
             )
             for section in categories[caption]:
-                position = html.index(f"ci:card-token:{section}" if section in {"titles", "episodes", "screenshots", "staff", "voices", "characters", "popularity"} else f"av:card-token:{section}:0")
+                position = html.index(f"ci:card-token:{section}" if section in {"titles", "episodes", "screenshots", "staff", "voices", "characters", "statistics"} else f"av:card-token:{section}:0")
                 self.assertGreater(position, starts[caption])
                 self.assertLess(position, end)
 
@@ -218,25 +218,25 @@ class CardRichLayoutTests(unittest.TestCase):
             "staff",
             "voices",
             "characters",
-            "popularity",
+            "statistics",
             "links",
         ):
-            self.assertIn(f"ci:card-token:{section}" if section in {"titles", "episodes", "screenshots", "staff", "voices", "characters", "popularity"} else f"av:card-token:{section}:0", html)
+            self.assertIn(f"ci:card-token:{section}" if section in {"titles", "episodes", "screenshots", "staff", "voices", "characters", "statistics"} else f"av:card-token:{section}:0", html)
 
-    def test_popularity_section_is_source_scoped(self) -> None:
+    def test_statistics_section_is_source_scoped(self) -> None:
         anime = self._sample()
         self.assertEqual(
-            source_section_sources(anime, "popularity"),
+            source_section_sources(anime, "statistics"),
             ["MyAnimeList", "AniList", "Shikimori"],
         )
 
         text_value = source_section_text(
             anime,
-            "popularity",
+            "statistics",
             "AniList",
             locale="ru",
         )
-        self.assertIn("Популярность — AniList", text_value)
+        self.assertIn("Статистика — AniList", text_value)
         self.assertIn("В списках пользователей: 110 000", text_value)
         self.assertIn("Поставили оценку: 75 000", text_value)
         self.assertIn("Смотрят: 12 000", text_value)

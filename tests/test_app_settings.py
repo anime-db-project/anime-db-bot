@@ -25,6 +25,7 @@ class AppSettingsTests(unittest.TestCase):
             "TELEGRAM_PAGINATION_EPISODES_PAGE_SIZE": "3",
             "TELEGRAM_PAGINATION_WIKIPEDIA_PAGE_SIZE": "",
             "TELEGRAM_PAGINATION_SETTINGS_PAGE_SIZE": "20",
+            "TELEGRAM_PAGINATION_STATISTICS_PAGE_SIZE": "4",
         }
         settings = AppSettings.from_env(variables).telegram
         self.assertEqual(settings.pagination_page_size, 8)
@@ -33,6 +34,7 @@ class AppSettingsTests(unittest.TestCase):
             {
                 "episodes": 3,
                 "settings": 20,
+                "statistics": 4,
             },
         )
         self.assertIn("search", TELEGRAM_PAGINATION_BLOCKS)

@@ -25,12 +25,12 @@ from api.operations import ApiOperationError
 SOURCE_CAPABILITIES = (
     "search", "id", "metadata", "wire", "staff", "voices", "characters",
     "episodes", "episode", "timestamps", "themes", "trailers",
-    "screenshots", "popularity", "description", "relations",
+    "screenshots", "statistics", "description", "relations",
     "recommendations", "image",
 )
 DETAIL_CAPABILITIES = (
     "id", "metadata", "wire", "staff", "voices", "characters", "episodes", "episode",
-    "timestamps", "themes", "trailers", "screenshots", "popularity",
+    "timestamps", "themes", "trailers", "screenshots", "statistics",
     "description", "relations", "recommendations",
 )
 CAPABILITY_ALIASES = {
@@ -44,7 +44,7 @@ _ID_PATTERN = re.compile(r"^[0-9]{1,32}$")
 _SUPPORTED_KEYS = tuple(str(item.key) for item in SOURCE_CATALOG)
 _DEFAULT_ALL_CAPABILITIES = (
     "id", "metadata", "staff", "voices", "characters", "episodes",
-    "timestamps", "themes", "trailers", "screenshots", "popularity",
+    "timestamps", "themes", "trailers", "screenshots", "statistics",
     "description", "relations", "recommendations",
 )
 
@@ -279,7 +279,7 @@ async def _single(
 
     assert identity is not None
     if capability in {"id", "metadata", "wire", "staff", "voices", "characters", "screenshots",
-                      "popularity", "description", "relations", "recommendations"}:
+                      "statistics", "description", "relations", "recommendations"}:
         source = next(
             src for src in context.sources if str(src.source_key) == key
         )
@@ -302,7 +302,7 @@ async def _single(
             "voices": SourceCapability.PEOPLE,
             "characters": SourceCapability.CHARACTERS,
             "screenshots": SourceCapability.SCREENSHOTS,
-            "popularity": SourceCapability.POPULARITY,
+            "statistics": SourceCapability.STATISTICS,
             "description": SourceCapability.DESCRIPTION,
             "relations": SourceCapability.RELATIONS,
             "recommendations": SourceCapability.RECOMMENDATIONS,
@@ -364,7 +364,7 @@ async def _single(
         methods = {
             "characters": "load_characters",
             "screenshots": "load_screenshots",
-            "popularity": "load_popularity",
+            "statistics": "load_statistics",
             "description": "load_description",
             "relations": "load_relations",
             "recommendations": "load_recommendations",

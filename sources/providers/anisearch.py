@@ -24,7 +24,7 @@ from core.models import (
     EpisodePage,
     EpisodeRecord,
     PersonCredit,
-    PopularityStats,
+    AnimeStatistics,
 )
 from core.people_loading import PeopleManifest, without_portraits
 from core.related_anime import AnimeReference
@@ -475,8 +475,8 @@ def _description(raw: dict[str, Any]) -> DescriptionDetails:
     )
 
 
-def _popularity(raw: dict[str, Any]) -> PopularityStats:
-    return PopularityStats(
+def _statistics(raw: dict[str, Any]) -> AnimeStatistics:
+    return AnimeStatistics(
         rank=_int(raw.get("rank")),
         list_users=_int(raw.get("member_count")),
         scoring_users=_int(raw.get("rating_count")),
@@ -676,9 +676,9 @@ class AniSearchSource:
         raw = await self._payload(identity)
         return _relations(raw) if raw is not None else []
 
-    async def load_popularity(self, identity: AnimeIdentity) -> PopularityStats:
+    async def load_statistics(self, identity: AnimeIdentity) -> AnimeStatistics:
         raw = await self._payload(identity)
-        return _popularity(raw) if raw is not None else PopularityStats()
+        return _statistics(raw) if raw is not None else AnimeStatistics()
 
     async def load_description(self, identity: AnimeIdentity) -> DescriptionDetails:
         raw = await self._payload(identity)

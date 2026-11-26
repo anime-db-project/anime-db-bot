@@ -20,8 +20,8 @@ from core.models import (
     CharacterRecord,
     DescriptionDetails,
     PersonCredit,
-    PopularityRanking,
-    PopularityStats,
+    StatisticsRanking,
+    AnimeStatistics,
 )
 from core.people_loading import PeopleBatch
 from core.related_anime import AnimeReference, canonical_relation_kind
@@ -87,8 +87,8 @@ query AnimeDetailsById($id: Int!) {
 }
 """
 
-POPULARITY_QUERY = """
-query AnimePopularity($id: Int!) {
+STATISTICS_QUERY = """
+query AnimeStatistics($id: Int!) {
   Media(id: $id, type: ANIME) {
     id
     popularity
@@ -345,8 +345,8 @@ def _score_distribution(value: dict[str, Any] | None) -> dict[int, int]:
     return result
 
 
-def _rankings(value: list[dict[str, Any]] | None) -> list[PopularityRanking]:
-    result: list[PopularityRanking] = []
+def _rankings(value: list[dict[str, Any]] | None) -> list[StatisticsRanking]:
+    result: list[StatisticsRanking] = []
     for item in value or []:
         rank = _int(item.get("rank"))
         raw_kind = str(item.get("type") or "").upper()
@@ -358,7 +358,7 @@ def _rankings(value: list[dict[str, Any]] | None) -> list[PopularityRanking]:
             "anilist", "season", raw_season, default=raw_season.casefold() or None
         )
         result.append(
-            PopularityRanking(
+            StatisticsRanking(
                 rank=rank,
                 kind=kind,
                 year=_int(item.get("year")),
@@ -844,19 +844,19 @@ class AniListSource:
                 result.append(reference)
         return result
 
-    async def load_popularity(self, identity: AnimeIdentity) -> PopularityStats:
+    async def load_statistics(self, identity: AnimeIdentity) -> AnimeStatistics:
         media_id = str(identity.get(SourceKey.ANILIST) or "").strip()
         if not media_id.isdigit():
-            return PopularityStats()
+            return AnimeStatistics()
         data = await graphql_request(
-            POPULARITY_QUERY,
+            STATISTICS_QUERY,
             {"id": int(media_id)},
             self._settings,
-            operation="popularity",
+            operation="statistics",
         )
         raw = data.get("Media") or {}
         if str(raw.get("id") or "") != media_id:
-            return PopularityStats()
+            return AnimeStatistics()
         status_distribution = _status_distribution(raw.get("stats"))
         score_distribution = _score_distribution(raw.get("stats"))
         rankings = _rankings(raw.get("rankings"))
@@ -876,7 +876,7 @@ class AniListSource:
         if list_users is None and status_distribution:
             list_users = sum(status_distribution.values())
         scoring_users = sum(score_distribution.values()) if score_distribution else None
-        return PopularityStats(
+        return AnimeStatistics(
             rank=all_time_rank,
             popularity_rank=all_time_popularity,
             list_users=list_users,

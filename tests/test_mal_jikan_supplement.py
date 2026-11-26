@@ -43,11 +43,11 @@ class MALJikanSupplementTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(record.score_distribution, {})
         self.assertEqual(record.status_distribution, {})
 
-    async def test_jikan_score_distribution_is_loaded_only_with_popularity(
+    async def test_jikan_score_distribution_is_loaded_only_with_statistics(
         self,
     ) -> None:
         source = MALSource()
-        source._jikan.load_popularity_supplement = AsyncMock(
+        source._jikan.load_statistics_supplement = AsyncMock(
             return_value={10: 100, 9: 50}
         )
         payload = {
@@ -57,12 +57,12 @@ class MALJikanSupplementTests(unittest.IsolatedAsyncioTestCase):
         with patch(
             "sources.providers.mal._get_raw", new=AsyncMock(return_value=payload)
         ):
-            stats = await source.load_popularity(AnimeIdentity({"mal": "123"}))
+            stats = await source.load_statistics(AnimeIdentity({"mal": "123"}))
 
         self.assertEqual(stats.rank, 1)
         self.assertEqual(stats.status_distribution, {"watching": 10, "completed": 20})
         self.assertEqual(stats.score_distribution, {10: 100, 9: 50})
-        source._jikan.load_popularity_supplement.assert_awaited_once()
+        source._jikan.load_statistics_supplement.assert_awaited_once()
 
     async def test_jikan_failure_does_not_break_official_mal_metadata(self) -> None:
         source = MALSource()

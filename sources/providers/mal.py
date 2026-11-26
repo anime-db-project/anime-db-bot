@@ -11,7 +11,7 @@ from core.models import (
     CharacterRecord,
     DescriptionDetails,
     PersonCredit,
-    PopularityStats,
+    AnimeStatistics,
 )
 from core.people_loading import PeopleBatch
 from core.related_anime import AnimeReference, canonical_relation_kind
@@ -45,7 +45,7 @@ DETAIL_FIELDS = ",".join(
     )
 )
 
-POPULARITY_FIELDS = ",".join(
+STATISTICS_FIELDS = ",".join(
     (
         "rank",
         "popularity",
@@ -357,30 +357,30 @@ class MALSource:
             record.licensors = list(supplement["licensors"])
         return record
 
-    async def load_popularity(self, identity: AnimeIdentity) -> PopularityStats:
+    async def load_statistics(self, identity: AnimeIdentity) -> AnimeStatistics:
         mal_id = str(identity.get("mal") or "").strip()
         if not mal_id.isdigit():
-            return PopularityStats()
+            return AnimeStatistics()
         raw = await _get_raw(
             mal_id,
             self.settings,
-            fields=POPULARITY_FIELDS,
-            operation="popularity",
+            fields=STATISTICS_FIELDS,
+            operation="statistics",
         )
         if not raw:
-            return PopularityStats()
+            return AnimeStatistics()
         distribution = _status_distribution(raw.get("statistics"))
         score_distribution: dict[int, int] = {}
         try:
-            score_distribution = await self._jikan.load_popularity_supplement(identity)
+            score_distribution = await self._jikan.load_statistics_supplement(identity)
         except Exception as exc:
             logging.warning(
-                "Jikan MAL popularity supplement unavailable for %s: %s: %s",
+                "Jikan MAL statistics supplement unavailable for %s: %s: %s",
                 mal_id,
                 type(exc).__name__,
                 exc,
             )
-        return PopularityStats(
+        return AnimeStatistics(
             rank=_int(raw.get("rank")),
             popularity_rank=_int(raw.get("popularity")),
             list_users=_int(raw.get("num_list_users")),

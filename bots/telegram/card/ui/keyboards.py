@@ -79,7 +79,7 @@ def source_section_selection_rows(
                 f"ci:{token}:as~{section}~{source_key}"
                 if section == "screenshots"
                 or (
-                    section in {"titles", "popularity"}
+                    section in {"titles", "statistics"}
                     and len(
                         source_section_pages(anime, section, source_name, locale=locale)
                     )
@@ -394,8 +394,8 @@ def fallback_main_keyboard(
         ],
         [
             InlineKeyboardButton(
-                text=text("card", "popularity_button", locale=locale),
-                callback_data=f"ci:{token}:popularity",
+                text=text("card", "statistics_button", locale=locale),
+                callback_data=f"ci:{token}:statistics",
             ),
             InlineKeyboardButton(
                 text=text("card", "episodes_button", locale=locale),

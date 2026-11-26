@@ -12,7 +12,7 @@ from core.models import (
     DescriptionDetails,
     EpisodePage,
     EpisodeRecord,
-    PopularityStats,
+    AnimeStatistics,
     TrailerRecord,
 )
 from core.related_anime import AnimeReference
@@ -468,16 +468,16 @@ class KitsuSource:
             )
         return result
 
-    async def load_popularity(self, identity: AnimeIdentity) -> PopularityStats:
+    async def load_statistics(self, identity: AnimeIdentity) -> AnimeStatistics:
         kitsu_id = self._kitsu_id(identity)
         if not kitsu_id:
-            return PopularityStats()
+            return AnimeStatistics()
         body = await _load_detail(kitsu_id, self._settings)
         item = body.get("data") if body else None
         if not isinstance(item, dict):
-            return PopularityStats()
+            return AnimeStatistics()
         attrs = item.get("attributes") or {}
-        return PopularityStats(
+        return AnimeStatistics(
             rank=_int(attrs.get("ratingRank")),
             popularity_rank=_int(attrs.get("popularityRank")),
             list_users=_int(attrs.get("userCount")),

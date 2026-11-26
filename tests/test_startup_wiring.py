@@ -35,7 +35,7 @@ from core.models import (
     AggregatedAnime,
     AnimeRecord,
     PersonCredit,
-    PopularityStats,
+    AnimeStatistics,
     SearchCandidate,
     SearchPage,
 )
@@ -155,15 +155,15 @@ class StartupWiringTests(unittest.TestCase):
     def test_source_selectable_sections_and_portraits(self) -> None:
         self.assertEqual(
             SOURCE_SELECTABLE_SECTIONS,
-            {"titles", "staff", "voices", "popularity", "screenshots"},
+            {"titles", "staff", "voices", "statistics", "screenshots"},
         )
 
         sample = AggregatedAnime(
             title="Smoke test",
             sources=["AniList"],
             titles_by_source={"AniList": {"english": "Smoke test"}},
-            popularity_by_source={
-                "AniList": PopularityStats(list_users=100, scoring_users=80)
+            statistics_by_source={
+                "AniList": AnimeStatistics(list_users=100, scoring_users=80)
             },
             staff=[
                 PersonCredit(
@@ -196,7 +196,7 @@ class StartupWiringTests(unittest.TestCase):
         )
 
         self.assertEqual(source_section_sources(sample, "titles"), ["AniList"])
-        self.assertEqual(source_section_sources(sample, "popularity"), ["AniList"])
+        self.assertEqual(source_section_sources(sample, "statistics"), ["AniList"])
         self.assertEqual(_sources_with_portraits(sample, "staff"), ["AniList"])
         self.assertEqual(_sources_with_portraits(sample, "voices"), ["AniList"])
 

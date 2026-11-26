@@ -69,7 +69,7 @@ The existing `/api/v1/anime`, `/api/v1/search` and ordinary GraphQL
 | Skip timestamps | `GET /api/v1/raw/timestamps` | `rawTimestamps` |
 | OP / ED themes | `GET /api/v1/raw/themes` | `rawThemes` |
 | Trailers / screenshots | `GET /api/v1/raw/trailers`, `/screenshots` | `rawTrailers`, `rawScreenshots` |
-| Popularity / descriptions | `GET /api/v1/raw/popularity`, `/description` | `rawPopularity`, `rawDescription` |
+| Statistics / descriptions | `GET /api/v1/raw/statistics`, `/description` | `rawStatistics`, `rawDescription` |
 | Related works / recommendations | `GET /api/v1/raw/relations`, `/recommendations` | `rawRelations`, `rawRecommendations` |
 | Recognition by photo | `POST /api/v1/raw/image` | `rawImage` |
 | Chosen sections / all sections | `POST /api/v1/raw/query` | `rawBundle`, `rawAll` |

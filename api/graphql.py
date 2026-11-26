@@ -96,7 +96,7 @@ type Query {
   rawThemes(source: String = "all", id: String, ids: JSON, resolve: Boolean = false, episode: Int = 1): JSON
   rawTrailers(source: String = "all", id: String, ids: JSON, resolve: Boolean = false): JSON
   rawScreenshots(source: String = "all", id: String, ids: JSON, resolve: Boolean = false): JSON
-  rawPopularity(source: String = "all", id: String, ids: JSON, resolve: Boolean = false): JSON
+  rawStatistics(source: String = "all", id: String, ids: JSON, resolve: Boolean = false): JSON
   rawDescription(source: String = "all", id: String, ids: JSON, resolve: Boolean = false): JSON
   rawRelations(source: String = "all", id: String, ids: JSON, resolve: Boolean = false): JSON
   rawRecommendations(source: String = "all", id: String, ids: JSON, resolve: Boolean = false): JSON
@@ -326,7 +326,7 @@ _bind("Query", "rawTimestamps", "raw.timestamps")
 _bind("Query", "rawThemes", "raw.themes")
 _bind("Query", "rawTrailers", "raw.trailers")
 _bind("Query", "rawScreenshots", "raw.screenshots")
-_bind("Query", "rawPopularity", "raw.popularity")
+_bind("Query", "rawStatistics", "raw.statistics")
 _bind("Query", "rawDescription", "raw.description")
 _bind("Query", "rawRelations", "raw.relations")
 _bind("Query", "rawRecommendations", "raw.recommendations")

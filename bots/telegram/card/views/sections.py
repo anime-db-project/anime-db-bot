@@ -8,7 +8,7 @@ from bots.telegram.card.text_expansion import long_text_parts
 from bots.telegram.card.ui.constants import RICH_MESSAGE_LIMIT
 from bots.telegram.card.ui.selectors import ordered_mapping_items
 from bots.telegram.card.views.main import _main_text, main_rich
-from bots.telegram.card.views.popularity import format_popularity
+from bots.telegram.card.views.statistics import format_statistics
 from bots.telegram.card.views.rendering import (
     dedupe_strings,
     image_gallery_html,
@@ -106,10 +106,10 @@ def source_section_text(
             anime.voices_by_source.get(source, []),
             locale=locale,
         )
-    if section == "popularity":
-        stats = anime.popularity_by_source.get(source)
+    if section == "statistics":
+        stats = anime.statistics_by_source.get(source)
         if stats is not None and stats.has_data():
-            return format_popularity(source, stats, locale=locale)
+            return format_statistics(source, stats, locale=locale)
     if section == "screenshots":
         return format_screenshots(anime, source=source, locale=locale)
     return text("common", "no_data", locale=locale)
@@ -130,9 +130,9 @@ def anime_sections(
         "links_choose" if anime.urls else "links_empty",
         locale=locale,
     )
-    popularity_text = text(
+    statistics_text = text(
         "card",
-        "popularity_choose" if anime.popularity_by_source else "popularity_empty",
+        "statistics_choose" if anime.statistics_by_source else "statistics_empty",
         locale=locale,
     )
 
@@ -140,7 +140,7 @@ def anime_sections(
         "main": _main_text(anime, locale=locale),
         "titles": format_titles(anime.titles, anime.synonyms, locale=locale),
         "description": description_text,
-        "popularity": popularity_text,
+        "statistics": statistics_text,
         "links": links_text,
         "staff": format_people(
             text("card", "staff", locale=locale), anime.staff, locale=locale

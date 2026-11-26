@@ -22,7 +22,7 @@ from core.models import (
     CharacterRecord,
     DescriptionDetails,
     PersonCredit,
-    PopularityStats,
+    AnimeStatistics,
 )
 from core.people_loading import PeopleBatch, PeopleManifest
 from core.related_anime import AnimeReference, canonical_relation_kind
@@ -128,8 +128,8 @@ query AnimeScreenshots($ids: String!) {
 }
 """
 
-POPULARITY_QUERY = """
-query AnimePopularity($ids: String!) {
+STATISTICS_QUERY = """
+query AnimeStatistics($ids: String!) {
   animes(ids: $ids, limit: 1) {
     id
     statusesStats { status count }
@@ -708,23 +708,23 @@ class ShikimoriSource:
             return []
         return _screenshot_urls(raw.get("screenshots"), self._settings)
 
-    async def load_popularity(self, identity: AnimeIdentity) -> PopularityStats:
+    async def load_statistics(self, identity: AnimeIdentity) -> AnimeStatistics:
         anime_id = self._anime_id(identity)
         if not anime_id.isdigit():
-            return PopularityStats()
+            return AnimeStatistics()
         data = await _graphql(
-            POPULARITY_QUERY,
+            STATISTICS_QUERY,
             {"ids": anime_id},
             self._settings,
-            operation="popularity",
+            operation="statistics",
         )
         animes = data.get("animes") or []
         raw = animes[0] if animes else None
         if not raw or str(raw.get("id") or "") != anime_id:
-            return PopularityStats()
+            return AnimeStatistics()
         statuses = _status_distribution(raw.get("statusesStats"))
         scores = _score_distribution(raw.get("scoresStats"))
-        return PopularityStats(
+        return AnimeStatistics(
             list_users=sum(statuses.values()) if statuses else None,
             scoring_users=sum(scores.values()) if scores else None,
             status_distribution=statuses,

@@ -80,7 +80,7 @@ OPERATIONS: dict[str, OperationSpec] = {
     "raw.themes": OperationSpec("read", "Unmerged, source-separated themes data"),
     "raw.trailers": OperationSpec("read", "Unmerged, source-separated trailers data"),
     "raw.screenshots": OperationSpec("read", "Unmerged, source-separated screenshots data"),
-    "raw.popularity": OperationSpec("read", "Unmerged, source-separated popularity data"),
+    "raw.statistics": OperationSpec("read", "Unmerged, source-separated statistics data"),
     "raw.description": OperationSpec("read", "Unmerged, source-separated description data"),
     "raw.relations": OperationSpec("read", "Unmerged, source-separated relations data"),
     "raw.recommendations": OperationSpec("read", "Unmerged, source-separated recommendations data"),
@@ -90,7 +90,7 @@ OPERATIONS: dict[str, OperationSpec] = {
 }
 SECTIONS = frozenset(
     ("main", "titles", "ratings", "description", "links", "staff", "voices",
-     "characters", "popularity", "screenshots", "trailers", "episodes",
+     "characters", "statistics", "screenshots", "trailers", "episodes",
      "episode", "timestamps", "themes", "related", "recommendations")
 )
 LOCALES = frozenset(("en", "ru", "ja", "de", "es", "fr", "it"))
@@ -322,7 +322,7 @@ def _main_metadata(anime: Any) -> dict[str, Any]:
     omit = {
         "staff", "voices", "characters",
         "staff_by_source", "voices_by_source", "characters_by_source",
-        "screenshots_by_source", "popularity_by_source", "descriptions",
+        "screenshots_by_source", "statistics_by_source", "descriptions",
         "backgrounds_by_source", "background",
     }
     return {key: value for key, value in data.items() if key not in omit}

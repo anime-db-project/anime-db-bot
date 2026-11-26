@@ -60,7 +60,7 @@ _BLOCK_ACTIONS: tuple[tuple[tuple[str, str], ...], ...] = (
         ("voices_button", "voices"),
         ("characters_button", "characters"),
     ),
-    (("popularity_button", "popularity"),),
+    (("statistics_button", "statistics"),),
     (("links_button", "links"),),
 )
 

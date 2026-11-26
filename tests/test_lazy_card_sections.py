@@ -5,10 +5,10 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
 
 from bots.telegram.card.features.descriptions import ensure_descriptions_loaded
-from bots.telegram.card.features.popularity import ensure_popularity_loaded
+from bots.telegram.card.features.statistics import ensure_statistics_loaded
 from bots.telegram.card.features.screenshots import ensure_screenshots_loaded
 from bots.telegram.card.runtime.state import AnimeCardSession
-from core.models import AggregatedAnime, DescriptionDetails, PopularityStats
+from core.models import AggregatedAnime, DescriptionDetails, AnimeStatistics
 from services.media.sections import LazySectionLoadResult
 
 
@@ -49,26 +49,26 @@ class LazyCardSectionTests(unittest.IsolatedAsyncioTestCase):
         )
         service.load.assert_awaited_once()
 
-    async def test_popularity_load_once_into_source_scoped_mapping(self) -> None:
+    async def test_statistics_load_once_into_source_scoped_mapping(self) -> None:
         session = self._session()
         service = SimpleNamespace(
             load=AsyncMock(
                 return_value=LazySectionLoadResult(
-                    by_source={"AniList": PopularityStats(list_users=50)}
+                    by_source={"AniList": AnimeStatistics(list_users=50)}
                 )
             )
         )
-        context = SimpleNamespace(popularity_service=service)
+        context = SimpleNamespace(statistics_service=service)
         message = AsyncMock()
         with patch(
-            "bots.telegram.card.features.popularity.get_app_context",
+            "bots.telegram.card.features.statistics.get_app_context",
             return_value=context,
         ):
-            await ensure_popularity_loaded(message, session, locale="en")
-            await ensure_popularity_loaded(message, session, locale="en")
+            await ensure_statistics_loaded(message, session, locale="en")
+            await ensure_statistics_loaded(message, session, locale="en")
 
-        self.assertTrue(session.popularity_loaded)
-        self.assertEqual(session.anime.popularity_by_source["AniList"].list_users, 50)
+        self.assertTrue(session.statistics_loaded)
+        self.assertEqual(session.anime.statistics_by_source["AniList"].list_users, 50)
         service.load.assert_awaited_once()
 
     async def test_descriptions_keep_background_provenance(self) -> None:

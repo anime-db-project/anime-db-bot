@@ -124,7 +124,7 @@ def build_parser() -> argparse.ArgumentParser:
     view.add_argument(
         "section", choices=(
             "main", "titles", "ratings", "description", "links", "staff",
-            "voices", "characters", "popularity", "screenshots", "trailers",
+            "voices", "characters", "statistics", "screenshots", "trailers",
             "episodes", "episode", "timestamps", "themes", "related",
             "recommendations",
         )
@@ -422,11 +422,11 @@ class OperatorConsole:
                 "page": page, "items": items[begin:begin + limit],
                 "by_source": result.source_names, "errors": result.errors,
             }
-        if section in {"description", "screenshots", "popularity", "characters", "trailers"}:
+        if section in {"description", "screenshots", "statistics", "characters", "trailers"}:
             services = {
                 "description": self.context.description_service,
                 "screenshots": self.context.screenshot_service,
-                "popularity": self.context.popularity_service,
+                "statistics": self.context.statistics_service,
                 "characters": self.context.character_service,
                 "trailers": self.context.trailer_service,
             }

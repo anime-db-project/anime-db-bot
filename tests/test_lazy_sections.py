@@ -4,10 +4,10 @@ import unittest
 from unittest.mock import AsyncMock
 
 from core.identity import AnimeIdentity
-from core.models import DescriptionDetails, PopularityStats
+from core.models import DescriptionDetails, AnimeStatistics
 from services.media.sections import (
     DescriptionService,
-    PopularityService,
+    StatisticsService,
     ScreenshotService,
 )
 from sources.providers.anilist import BY_ID_QUERY as ANILIST_BY_ID_QUERY
@@ -22,7 +22,7 @@ class _LazySource:
 
     def __init__(self) -> None:
         self.load_screenshots = AsyncMock(return_value=["a", "b"])
-        self.load_popularity = AsyncMock(return_value=PopularityStats(list_users=10))
+        self.load_statistics = AsyncMock(return_value=AnimeStatistics(list_users=10))
         self.load_description = AsyncMock(
             return_value=DescriptionDetails(description="Long text", background="Extra")
         )
@@ -36,15 +36,15 @@ class LazySectionServiceTests(unittest.IsolatedAsyncioTestCase):
         identity = AnimeIdentity({"shikimori": "10"})
 
         screenshots = await ScreenshotService([source]).load(identity)
-        popularity = await PopularityService([source]).load(identity)
+        statistics = await StatisticsService([source]).load(identity)
         descriptions = await DescriptionService([source]).load(identity)
 
         self.assertEqual(screenshots.by_source, {"LazyDB": ["a", "b"]})
-        self.assertEqual(popularity.by_source["LazyDB"].list_users, 10)
+        self.assertEqual(statistics.by_source["LazyDB"].list_users, 10)
         self.assertEqual(descriptions.by_source["LazyDB"].description, "Long text")
         self.assertEqual(screenshots.key_by_source, {"LazyDB": "shikimori"})
         source.load_screenshots.assert_awaited_once()
-        source.load_popularity.assert_awaited_once()
+        source.load_statistics.assert_awaited_once()
         source.load_description.assert_awaited_once()
 
     async def test_missing_identity_edge_skips_lazy_source(self) -> None:

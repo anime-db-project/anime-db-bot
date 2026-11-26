@@ -149,7 +149,7 @@ class _ScreenshotSource:
         )
 
 
-class _PopularitySource:
+class _StatisticsSource:
     def __init__(self, name: str, *, list_users: int, scoring_users: int) -> None:
         self.name = name
         self.list_users = list_users
@@ -162,7 +162,7 @@ class _PopularitySource:
         return AnimeRecord(
             source=self.name,
             source_id=mal_id,
-            titles={"english": "Popularity Test"},
+            titles={"english": "Statistics Test"},
             external_ids={"mal": mal_id},
             list_users=self.list_users,
             scoring_users=self.scoring_users,
@@ -233,9 +233,9 @@ class AggregatorIdentityTests(unittest.IsolatedAsyncioTestCase):
 
         self.assertEqual(anime.screenshots_by_source, {})
 
-    async def test_initial_aggregation_defers_popularity_statistics(self) -> None:
-        first = _PopularitySource("FirstDB", list_users=1000, scoring_users=700)
-        second = _PopularitySource("SecondDB", list_users=250, scoring_users=120)
+    async def test_initial_aggregation_defers_statistics_statistics(self) -> None:
+        first = _StatisticsSource("FirstDB", list_users=1000, scoring_users=700)
+        second = _StatisticsSource("SecondDB", list_users=250, scoring_users=120)
 
         async def no_external_enrichment(
             identity: AnimeIdentity, titles: list[str]
@@ -247,13 +247,13 @@ class AggregatorIdentityTests(unittest.IsolatedAsyncioTestCase):
         resolver.enrich = AsyncMock(side_effect=no_external_enrichment)
         aggregator = AnimeAggregator((first, second), identity_resolver=resolver)
         candidate = SearchCandidate(
-            title="Popularity Test",
+            title="Statistics Test",
             external_ids={"mal": "20"},
         )
 
         anime = await aggregator.aggregate(candidate)
 
-        self.assertEqual(anime.popularity_by_source, {})
+        self.assertEqual(anime.statistics_by_source, {})
 
     async def test_new_id_from_first_source_enables_second_pass_source(self) -> None:
         bridge = _AniListBridgeSource()

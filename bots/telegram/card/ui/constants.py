@@ -8,7 +8,7 @@ SECTION_LABELS = {
     "main": "section_main",
     "titles": "section_titles",
     "description": "section_description",
-    "popularity": "section_popularity",
+    "statistics": "section_statistics",
     "episodes": "section_episodes",
     "trailers": "section_trailers",
     "links": "section_links",
@@ -22,7 +22,7 @@ SECTION_LABELS = {
     "wikipedia": "section_wikipedia",
 }
 
-SOURCE_SELECTABLE_SECTIONS = {"titles", "staff", "voices", "popularity", "screenshots"}
+SOURCE_SELECTABLE_SECTIONS = {"titles", "staff", "voices", "statistics", "screenshots"}
 
 ALL_SOURCE_LABELS = {
     "titles": "all_titles",
@@ -33,7 +33,7 @@ ALL_SOURCE_LABELS = {
 
 PAGED_ENTRY_SECTIONS = frozenset({
     "titles",
-    "popularity",
+    "statistics",
     "staff",
     "voices",
     "characters",

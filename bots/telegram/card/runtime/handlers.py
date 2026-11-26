@@ -24,7 +24,7 @@ from bots.telegram.card.features.characters import edit_characters_view
 from bots.telegram.card.features.descriptions import ensure_descriptions_loaded
 from bots.telegram.card.features.episodes import edit_episode_detail, edit_episodes_view
 from bots.telegram.card.features.mapping_ids import edit_mapping_ids_view
-from bots.telegram.card.features.popularity import ensure_popularity_loaded
+from bots.telegram.card.features.statistics import ensure_statistics_loaded
 from bots.telegram.card.features.related import (
     edit_related_view,
     parse_related_route,
@@ -236,7 +236,7 @@ def build_dispatcher(mode_name: str, state: TelegramCardState) -> Dispatcher:
                     "ad~",
                     "as~screenshots~",
                     "as~titles~",
-                    "as~popularity~",
+                    "as~statistics~",
                     "ps~",
                 )
             )
@@ -539,8 +539,8 @@ def build_dispatcher(mode_name: str, state: TelegramCardState) -> Dispatcher:
             await callback.answer()
             return
 
-        if section == "popularity":
-            await ensure_popularity_loaded(callback.message, raw_session, locale=locale)
+        if section == "statistics":
+            await ensure_statistics_loaded(callback.message, raw_session, locale=locale)
         elif section == "screenshots":
             await ensure_screenshots_loaded(
                 callback.message, raw_session, locale=locale
@@ -933,8 +933,8 @@ def build_dispatcher(mode_name: str, state: TelegramCardState) -> Dispatcher:
                 locale=locale,
             )
             return
-        if section == "popularity":
-            await ensure_popularity_loaded(callback.message, raw_session, locale=locale)
+        if section == "statistics":
+            await ensure_statistics_loaded(callback.message, raw_session, locale=locale)
         elif section == "description":
             await ensure_descriptions_loaded(
                 callback.message, raw_session, locale=locale

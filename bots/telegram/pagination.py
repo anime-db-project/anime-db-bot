@@ -58,7 +58,7 @@ def picker_block_for_route(route: str) -> str | None:
         section = parts[1]
         if section == "all_ids":
             return "source_ids"
-        if section in {"titles", "popularity", "screenshots", "staff", "voices"}:
+        if section in {"titles", "statistics", "screenshots", "staff", "voices"}:
             return section
     return None
 

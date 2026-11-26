@@ -30,7 +30,7 @@ from services.media.people import PeopleProgressService
 from services.media.related import RelatedAnimeService
 from services.media.sections import (
     DescriptionService,
-    PopularityService,
+    StatisticsService,
     ScreenshotService,
 )
 from services.media.trailers import TrailerService
@@ -97,7 +97,7 @@ class AppContext:
     anime_theme_service: AnimeThemeService
     trailer_service: TrailerService
     screenshot_service: ScreenshotService
-    popularity_service: PopularityService
+    statistics_service: StatisticsService
     description_service: DescriptionService
     people_progress_service: PeopleProgressService
     related_anime_service: RelatedAnimeService
@@ -287,7 +287,7 @@ class AppContext:
                 get_trailer_sources(settings.sources, source_health)
             ),
             screenshot_service=ScreenshotService(sources),
-            popularity_service=PopularityService(sources),
+            statistics_service=StatisticsService(sources),
             description_service=DescriptionService(sources),
             people_progress_service=PeopleProgressService(
                 sources,

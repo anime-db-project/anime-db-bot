@@ -41,10 +41,10 @@ def source_section_sources(anime: AggregatedAnime, section: str) -> list[str]:
         available = {
             source for source, people in anime.voices_by_source.items() if people
         }
-    elif section == "popularity":
+    elif section == "statistics":
         available = {
             source
-            for source, stats in anime.popularity_by_source.items()
+            for source, stats in anime.statistics_by_source.items()
             if stats.has_data()
         }
     elif section == "screenshots":

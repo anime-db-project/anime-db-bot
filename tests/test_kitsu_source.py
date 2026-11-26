@@ -150,7 +150,7 @@ class KitsuSourceTests(unittest.IsolatedAsyncioTestCase):
             record.urls["Kitsu"], "https://kitsu.app/anime/bocchi-the-rock"
         )
 
-    async def test_cached_detail_serves_metadata_popularity_and_description(
+    async def test_cached_detail_serves_metadata_statistics_and_description(
         self,
     ) -> None:
         response = Mock()
@@ -159,15 +159,15 @@ class KitsuSourceTests(unittest.IsolatedAsyncioTestCase):
         identity = AnimeIdentity({"kitsu": "44196"})
         with patch("sources.providers.kitsu.http_request", request):
             record = await self.source.get_details(identity)
-            popularity = await self.source.load_popularity(identity)
+            statistics = await self.source.load_statistics(identity)
             description = await self.source.load_description(identity)
 
         self.assertIsNotNone(record)
-        self.assertEqual(popularity.rank, 79)
-        self.assertEqual(popularity.popularity_rank, 1143)
-        self.assertEqual(popularity.list_users, 15106)
-        self.assertEqual(popularity.scoring_users, 50)
-        self.assertEqual(popularity.favorites, 357)
+        self.assertEqual(statistics.rank, 79)
+        self.assertEqual(statistics.popularity_rank, 1143)
+        self.assertEqual(statistics.list_users, 15106)
+        self.assertEqual(statistics.scoring_users, 50)
+        self.assertEqual(statistics.favorites, 357)
         self.assertEqual(description.description, "A shy guitarist joins a band.")
         request.assert_awaited_once()
 

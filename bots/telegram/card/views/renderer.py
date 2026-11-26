@@ -18,9 +18,9 @@ from bots.telegram.card.ui.selectors import (
     source_section_options,
 )
 from bots.telegram.card.views.main import display_anime_title, main_rich
-from bots.telegram.card.views.popularity import (
-    _popularity_tables_html,
-    format_popularity,
+from bots.telegram.card.views.statistics import (
+    _statistics_tables_html,
+    format_statistics,
 )
 from bots.telegram.card.views.rendering import (
     append_block,
@@ -62,7 +62,7 @@ __all__ = [
     "edit_standard_text",
     "format_number",
     "format_people",
-    "format_popularity",
+    "format_statistics",
     "format_screenshots",
     "format_titles",
     "image_gallery_html",
@@ -350,11 +350,11 @@ async def edit_source_section_view(
                 locale=locale,
             )
         )
-    elif section == "popularity" and len(pages) == 1:
-        stats = anime.popularity_by_source.get(source)
+    elif section == "statistics" and len(pages) == 1:
+        stats = anime.statistics_by_source.get(source)
         rich_message = InputRichMessage(
             html=(
-                _popularity_tables_html(source, stats, locale=locale)
+                _statistics_tables_html(source, stats, locale=locale)
                 if stats is not None
                 else plain_text_to_rich_html(pages[page])
             )

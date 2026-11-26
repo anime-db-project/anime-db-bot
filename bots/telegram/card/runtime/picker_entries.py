@@ -76,7 +76,7 @@ def picker_parent_callback(token: str, route: str) -> str:
     if (
         kind == "as"
         and len(parts) == 3
-        and parts[1] in {"screenshots", "titles", "popularity"}
+        and parts[1] in {"screenshots", "titles", "statistics"}
     ):
         return f"ci:{token}:{parts[1]}"
     if kind == "ad":
@@ -239,7 +239,7 @@ def labels_for_route(
             )
         ]
 
-    if kind == "as" and len(parts) == 3 and parts[1] in {"titles", "popularity"}:
+    if kind == "as" and len(parts) == 3 and parts[1] in {"titles", "statistics"}:
         from bots.telegram.card.ui.selectors import source_section_options
         from bots.telegram.card.views.sections import source_section_pages
 
@@ -578,13 +578,13 @@ async def prepare_initial_picker(
         labels = labels_for_route(session, "av~all_ids", locale=locale)
         return ("av~all_ids", labels) if len(labels) > 1 else None
 
-    if section in {"titles", "popularity"}:
+    if section in {"titles", "statistics"}:
         from bots.telegram.card.views.sections import view_pages
 
-        if section == "popularity":
-            from bots.telegram.card.features.popularity import ensure_popularity_loaded
+        if section == "statistics":
+            from bots.telegram.card.features.statistics import ensure_statistics_loaded
 
-            await ensure_popularity_loaded(message, session, locale=locale)
+            await ensure_statistics_loaded(message, session, locale=locale)
         pages = view_pages(session.anime, section, locale=locale)
         if len(pages) <= 1:
             return None

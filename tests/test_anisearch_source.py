@@ -349,8 +349,8 @@ class AniSearchParserTests(unittest.TestCase):
             else:
                 self.assertTrue(all("[" not in role for role in person.roles))
 
-    def test_popularity_uses_cached_title_rating_fields(self) -> None:
-        stats = anisearch._popularity(_payload())
+    def test_statistics_uses_cached_title_rating_fields(self) -> None:
+        stats = anisearch._statistics(_payload())
         self.assertEqual(stats.rank, 2)
         self.assertEqual(stats.list_users, 8400)
         self.assertEqual(stats.scoring_users, 7385)

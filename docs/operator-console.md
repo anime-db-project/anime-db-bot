@@ -82,7 +82,7 @@ anime-db-bot> view timestamps --episode 1
 anime-db-bot> view themes --episode 1
 anime-db-bot> view screenshots
 anime-db-bot> view trailers
-anime-db-bot> view popularity
+anime-db-bot> view statistics
 anime-db-bot> view links
 ```
 

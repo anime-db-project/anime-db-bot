@@ -9,8 +9,8 @@ from sources.providers.mal import MALSource, _record as mal_record
 from sources.providers.shikimori import ShikimoriSource, _record as shikimori_record
 
 
-class PopularitySourceParsingTests(unittest.IsolatedAsyncioTestCase):
-    def test_initial_records_defer_detailed_popularity(self) -> None:
+class StatisticsSourceParsingTests(unittest.IsolatedAsyncioTestCase):
+    def test_initial_records_defer_detailed_statistics(self) -> None:
         mal = mal_record(
             {
                 "id": 1,
@@ -51,11 +51,11 @@ class PopularitySourceParsingTests(unittest.IsolatedAsyncioTestCase):
         self.assertIsNone(shikimori.list_users)
         self.assertEqual(shikimori.status_distribution, {})
 
-    async def test_mal_lazy_popularity_merges_official_and_jikan_statistics(
+    async def test_mal_lazy_statistics_merges_official_and_jikan_statistics(
         self,
     ) -> None:
         source = MALSource()
-        source._jikan.load_popularity_supplement = AsyncMock(
+        source._jikan.load_statistics_supplement = AsyncMock(
             return_value={10: 100, 9: 50}
         )
         payload = {
@@ -77,7 +77,7 @@ class PopularitySourceParsingTests(unittest.IsolatedAsyncioTestCase):
         with patch(
             "sources.providers.mal._get_raw", new=AsyncMock(return_value=payload)
         ) as getter:
-            stats = await source.load_popularity(AnimeIdentity({"mal": "1"}))
+            stats = await source.load_statistics(AnimeIdentity({"mal": "1"}))
 
         self.assertEqual(stats.rank, 123)
         self.assertEqual(stats.popularity_rank, 45)
@@ -86,10 +86,10 @@ class PopularitySourceParsingTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(stats.favorites, 80)
         self.assertEqual(stats.status_distribution["planned"], 230)
         self.assertEqual(stats.score_distribution, {10: 100, 9: 50})
-        self.assertEqual(getter.await_args.kwargs["operation"], "popularity")
-        source._jikan.load_popularity_supplement.assert_awaited_once()
+        self.assertEqual(getter.await_args.kwargs["operation"], "statistics")
+        source._jikan.load_statistics_supplement.assert_awaited_once()
 
-    async def test_anilist_lazy_popularity_normalizes_histograms_and_rankings(
+    async def test_anilist_lazy_statistics_normalizes_histograms_and_rankings(
         self,
     ) -> None:
         source = AniListSource()
@@ -127,7 +127,7 @@ class PopularitySourceParsingTests(unittest.IsolatedAsyncioTestCase):
             "sources.providers.anilist.graphql_request",
             new=AsyncMock(return_value=payload),
         ) as graphql:
-            stats = await source.load_popularity(AnimeIdentity({"anilist": "10"}))
+            stats = await source.load_statistics(AnimeIdentity({"anilist": "10"}))
 
         self.assertEqual(stats.rank, 100)
         self.assertEqual(stats.popularity_rank, 50)
@@ -140,9 +140,9 @@ class PopularitySourceParsingTests(unittest.IsolatedAsyncioTestCase):
         )
         self.assertEqual(stats.score_distribution, {8: 400, 9: 300, 10: 200})
         self.assertEqual(stats.rankings[2].season, "spring")
-        self.assertEqual(graphql.await_args.kwargs["operation"], "popularity")
+        self.assertEqual(graphql.await_args.kwargs["operation"], "statistics")
 
-    async def test_shikimori_lazy_popularity_derives_totals(self) -> None:
+    async def test_shikimori_lazy_statistics_derives_totals(self) -> None:
         source = ShikimoriSource()
         payload = {
             "animes": [
@@ -167,13 +167,13 @@ class PopularitySourceParsingTests(unittest.IsolatedAsyncioTestCase):
             "sources.providers.shikimori._graphql",
             new=AsyncMock(return_value=payload),
         ) as graphql:
-            stats = await source.load_popularity(AnimeIdentity({"shikimori": "30"}))
+            stats = await source.load_statistics(AnimeIdentity({"shikimori": "30"}))
 
         self.assertEqual(stats.list_users, 950)
         self.assertEqual(stats.scoring_users, 750)
         self.assertEqual(stats.status_distribution["planned"], 300)
         self.assertEqual(stats.score_distribution, {10: 200, 9: 300, 8: 250})
-        self.assertEqual(graphql.await_args.kwargs["operation"], "popularity")
+        self.assertEqual(graphql.await_args.kwargs["operation"], "statistics")
 
 
 if __name__ == "__main__":

@@ -199,8 +199,8 @@ class JikanSource:
         self._licensors_cache = BoundedTTLCache[str, dict[str, Any]](
             max_entries=self._settings.jikan_cache_max_entries, name="jikan_licensors"
         )
-        self._popularity_cache = BoundedTTLCache[str, dict[str, Any]](
-            max_entries=self._settings.jikan_cache_max_entries, name="jikan_popularity"
+        self._statistics_cache = BoundedTTLCache[str, dict[str, Any]](
+            max_entries=self._settings.jikan_cache_max_entries, name="jikan_statistics"
         )
         self._people_cache = BoundedTTLCache[str, dict[str, Any]](
             max_entries=self._settings.jikan_cache_max_entries, name="jikan_people"
@@ -248,18 +248,18 @@ class JikanSource:
         )
         return {"licensors": licensors}
 
-    async def load_popularity_supplement(
+    async def load_statistics_supplement(
         self, identity: AnimeIdentity
     ) -> dict[int, int]:
-        """Load score distribution only when the popularity section is opened."""
+        """Load score distribution only when the statistics section is opened."""
         mal_id = self._mal_id(identity)
         if not mal_id:
             return {}
         raw = await self._cached_payload(
-            self._popularity_cache,
+            self._statistics_cache,
             mal_id,
-            path=f"/anime/{mal_id}/popularity",
-            operation="popularity",
+            path=f"/anime/{mal_id}/statistics",
+            operation="statistics",
             ttl_env="JIKAN_SUPPLEMENT_CACHE_TTL_SECONDS",
         )
         distribution: dict[int, int] = {}

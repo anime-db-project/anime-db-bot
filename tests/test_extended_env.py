@@ -127,7 +127,7 @@ class ExtendedEnvironmentTests(unittest.TestCase):
         self.assertEqual(service._remote_portrait_slots._value, 3)
         jikan = JikanSource(sources)
         self.assertEqual(jikan._people_cache.max_entries, 11)
-        self.assertEqual(jikan._popularity_cache.max_entries, 11)
+        self.assertEqual(jikan._statistics_cache.max_entries, 11)
 
     def test_user_store_cache_and_default_locale(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

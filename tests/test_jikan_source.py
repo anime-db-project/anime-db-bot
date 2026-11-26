@@ -127,7 +127,7 @@ class JikanSourceTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result["licensors"], ["Sentai Filmworks", "Muse"])
         self.assertNotIn("score_distribution", result)
 
-    async def test_popularity_supplement_uses_separate_lazy_endpoint(self) -> None:
+    async def test_statistics_supplement_uses_separate_lazy_endpoint(self) -> None:
         source = JikanSource()
         payload = {
             "data": {
@@ -137,13 +137,13 @@ class JikanSourceTests(unittest.IsolatedAsyncioTestCase):
         with patch(
             "sources.providers.jikan._get", new=AsyncMock(return_value=payload)
         ) as getter:
-            result = await source.load_popularity_supplement(
+            result = await source.load_statistics_supplement(
                 AnimeIdentity({"mal": "123"})
             )
 
         args, kwargs = getter.await_args
-        self.assertEqual(args, ("/anime/123/popularity",))
-        self.assertEqual(kwargs["operation"], "popularity")
+        self.assertEqual(args, ("/anime/123/statistics",))
+        self.assertEqual(kwargs["operation"], "statistics")
         self.assertEqual(result, {10: 120, 9: 80})
 
     async def test_people_payload_maps_staff_and_japanese_voice_roles(self) -> None:
