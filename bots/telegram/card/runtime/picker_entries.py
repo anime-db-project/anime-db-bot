@@ -12,7 +12,7 @@ from aiogram.types import Message
 from bots.telegram.card.runtime.state import AnimeCardSession, TelegramCardState
 from core.canonicalization import display_person_name
 from bots.telegram.card.text_expansion import record_pages
-from core.people import people_state, people_for_scope
+from core.people import people_state
 from localization import text
 from services.runtime.app_context import get_app_context
 
@@ -270,9 +270,27 @@ def labels_for_route(
                     parts[3]
                 )
             if parts[2] == "staff":
-                return [
+                from bots.telegram.people.views import staff_gallery
+
+                groups, portrait_entries = staff_gallery(
+                    session.anime, source, locale, session.staff_gallery_indices
+                )
+                labels = []
+                offset = 0
+                for group in groups:
+                    labels.append(
+                        text(
+                            "card",
+                            "record_range",
+                            locale=locale,
+                            start=offset + 1,
+                            end=offset + len(group),
+                        )
+                    )
+                    offset += len(group)
+                return labels + [
                     display_person_name(person.name, person.aliases, locale=locale)
-                    for person in people_for_scope(session.anime, "staff", source)
+                    for _, person in portrait_entries
                 ]
             without, portraits = people_state(
                 session.anime, parts[2], source, locale=locale
@@ -407,7 +425,16 @@ async def prepare_initial_picker(
         without, _ = people_state(
             session.anime, people_section, source_name, locale=locale
         )
-        route = f"gx~as~{people_section}~{source_key}~{0 if people_section == 'staff' else _group_count(without, people_section, locale, source_name)}"
+        if people_section == "staff":
+            from bots.telegram.people.views import staff_gallery
+
+            groups, _ = staff_gallery(
+                session.anime, source_name, locale, session.staff_gallery_indices
+            )
+            group_count = len(groups)
+        else:
+            group_count = _group_count(without, people_section, locale, source_name)
+        route = f"gx~as~{people_section}~{source_key}~{group_count}"
         labels = labels_for_route(session, route, locale=locale)
         return (route, labels) if labels else None
 
@@ -480,7 +507,16 @@ async def prepare_initial_picker(
             requested_page=0,
         )
         without, portraits = people_state(session.anime, section, None, locale=locale)
-        route = f"gx~av~{section}~{0 if section == 'staff' else _group_count(without, section, locale)}"
+        if section == "staff":
+            from bots.telegram.people.views import staff_gallery
+
+            groups, _ = staff_gallery(
+                session.anime, None, locale, session.staff_gallery_indices
+            )
+            group_count = len(groups)
+        else:
+            group_count = _group_count(without, section, locale)
+        route = f"gx~av~{section}~{group_count}"
         labels = labels_for_route(session, route, locale=locale)
         return (route, labels) if labels else None
 

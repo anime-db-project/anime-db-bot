@@ -178,26 +178,54 @@ class PeopleProgressServiceTests(unittest.IsolatedAsyncioTestCase):
         await service.settle_manifests(anime, "staff", progress)
         self.assertEqual(len(anime.staff), 141)
         self.assertEqual(sum(bool(p.portraits) for p in anime.staff), 0)
-        session = AnimeCardSession(anime=anime, owner_user_id=7)
-        route = "gx~av~staff~0"
-        before = labels_for_route(session, route, locale="en")
-        self.assertEqual(len(before), 141)
-        self.assertEqual(card_route_callback("token", route, 140), "av:token:staff:141")
+        from bots.telegram.people.views import staff_gallery, staff_gallery_ordinal
 
+        session = AnimeCardSession(
+            anime=anime,
+            owner_user_id=7,
+            staff_gallery_indices=progress.staff_source_portrait_indices,
+        )
+        route = "gx~av~staff~1"
+        before = labels_for_route(session, route, locale="en")
+        self.assertEqual(len(before), 122)
+        groups, portraits = staff_gallery(
+            anime, None, "en", session.staff_gallery_indices
+        )
+        self.assertEqual(sum(map(len, groups)), 20)
+        self.assertEqual(staff_gallery_ordinal(groups, portraits, 51), 71)
+        self.assertEqual(card_route_callback("token", route, 121), "av:token:staff:121")
         await service.ensure(anime, "staff", progress, requested_page=0)
         self.assertEqual(len(anime.staff), 141)
         self.assertEqual(progress.portrait_cursor, 70)
         self.assertEqual(sum(bool(p.portraits) for p in anime.staff), 50)
         self.assertEqual(labels_for_route(session, route, locale="en"), before)
-        self.assertEqual(_page_text(anime, "staff", None, 1, locale="en")[1], [])
-        self.assertTrue(_page_text(anime, "staff", None, 70, locale="en")[1])
-        self.assertEqual(_page_text(anime, "staff", None, 71, locale="en")[1], [])
+
+        def view(page):
+            return _page_text(
+                anime,
+                "staff",
+                None,
+                page,
+                locale="en",
+                staff_indices=session.staff_gallery_indices,
+            )
+
+        self.assertIn("Person 1", view(0)[0])
+        self.assertIn("Person 20", view(0)[0])
+        self.assertEqual(view(0)[1], [])
+        self.assertTrue(view(50)[1])
+        self.assertEqual(view(51)[1], [])
         await service.ensure(anime, "staff", progress, requested_page=70)
         self.assertEqual(progress.portrait_cursor, 70)
-        await service.ensure(anime, "staff", progress, requested_page=71)
+        await service.ensure(
+            anime,
+            "staff",
+            progress,
+            requested_page=staff_gallery_ordinal(groups, portraits, 51),
+        )
         self.assertEqual(progress.portrait_cursor, 120)
         self.assertEqual(sum(bool(p.portraits) for p in anime.staff), 100)
-        self.assertTrue(_page_text(anime, "staff", None, 71, locale="en")[1])
+        self.assertTrue(view(51)[1])
         await service.ensure(
             anime, "staff", progress, source="AniList", requested_page=141
         )
@@ -205,11 +233,9 @@ class PeopleProgressServiceTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(sum(bool(p.portraits) for p in anime.staff), 121)
         self.assertEqual(labels_for_route(session, route, locale="en"), before)
         self.assertEqual(
-            labels_for_route(session, "gx~as~staff~anilist~0", locale="en"), before
+            labels_for_route(session, "gx~as~staff~anilist~1", locale="en"), before
         )
-        self.assertEqual(
-            _page_text(anime, "staff", None, 141, locale="en")[2:], (141, 141, 141)
-        )
+        self.assertEqual(view(121)[2:], (141, 141, 121))
         self.assertEqual(source.manifest_calls, 1)
 
     async def test_preview_people_do_not_mark_manifest_as_complete(self) -> None:

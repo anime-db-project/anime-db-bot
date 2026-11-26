@@ -40,6 +40,9 @@ class PeopleLoadProgress:
     view_revision: int = 0
     staff_portrait_indices: list[int] | None = None
     staff_prefetched_cursor: int = 0
+    staff_source_portrait_indices: dict[str | None, list[int]] = field(
+        default_factory=dict
+    )
 
 
 class PeopleProgressService:
@@ -364,16 +367,35 @@ class PeopleProgressService:
                 # Reconcile the canonical manifest with the actual published
                 # merged roster (including existing non-provider metadata).
                 progress.manifest_people = without_portraits(anime.staff)
-                progress.staff_portrait_indices = [
+                available: dict[str | None, list[int]] = {}
+                for name, people in anime.staff_by_source.items():
+                    source_progress = progress.sources.get(name)
+                    pool = source_progress.portrait_pool if source_progress else []
+                    key = self._source_key(source_progress) if source_progress else ""
+                    available[name] = [
+                        i
+                        for i, person in enumerate(people)
+                        if any(
+                            portrait_urls(p, source=name)
+                            and self._same_person(p, person, key)
+                            for p in pool
+                        )
+                    ]
+                available[None] = [
                     i
-                    for i, person in enumerate(progress.manifest_people)
+                    for i, person in enumerate(anime.staff)
                     if any(
-                        bool(portrait_urls(p))
-                        and self._same_person(p, person, self._source_key(item))
-                        for item in progress.sources.values()
-                        for p in item.portrait_pool
+                        self._same_person(
+                            person,
+                            anime.staff_by_source[name][j],
+                            self._source_key(item),
+                        )
+                        for name, item in progress.sources.items()
+                        for j in available.get(name, [])
                     )
                 ]
+                progress.staff_source_portrait_indices = available
+                progress.staff_portrait_indices = available[None]
                 progress.portraits_complete = not progress.staff_portrait_indices
 
     @classmethod

@@ -50,9 +50,10 @@ from bots.telegram.people.views import (
     _people_state,
     _rich,
     _sources_with_portraits,
+    staff_gallery,
+    staff_gallery_ordinal,
 )
 from core.models import AggregatedAnime
-from core.people import people_for_scope
 from localization import text
 from services.users.settings import get_user_locale
 
@@ -79,10 +80,17 @@ async def _render_people_view(
         source = dict(options)[source_key]
 
     if section == "staff":
-        max_page = len(people_for_scope(anime, section, source))
-        first_page = 1 if max_page else 0
+        groups, portraits = staff_gallery(
+            anime,
+            source,
+            locale,
+            progress.staff_source_portrait_indices
+            if progress.staff_portrait_indices is not None
+            else None,
+        )
+        max_page = len(portraits) + max(0, len(groups) - 1)
+        first_page = 0 if groups or not portraits else 1
         page = max(first_page, min(int(page), max_page))
-        groups = []
     else:
         without, with_portraits = _people_state(anime, section, source, locale=locale)
         groups = record_pages(
@@ -102,6 +110,9 @@ async def _render_people_view(
         page,
         locale=locale,
         total_hint=total_hint,
+        staff_indices=progress.staff_source_portrait_indices
+        if progress.staff_portrait_indices is not None
+        else None,
     )
     keyboard = _keyboard(
         token,
@@ -126,6 +137,7 @@ async def _render_people_view(
             ),
             _rich(text_value, urls),
             bot=getattr(message, "bot", None),
+            verify_photo=section == "staff",
         )
     except Exception:
         logging.exception(
@@ -171,8 +183,33 @@ async def _edit_people_view(
         section,
         locale=locale,
         source=source,
-        requested_page=int(page),
+        requested_page=0 if section == "staff" else int(page),
     )
+    if section == "staff":
+        groups, portraits = staff_gallery(
+            anime,
+            source,
+            locale,
+            progress.staff_source_portrait_indices
+            if progress.staff_portrait_indices is not None
+            else None,
+        )
+        first = 0 if groups or not portraits else 1
+        maximum = len(portraits) + max(0, len(groups) - 1)
+        ordinal = staff_gallery_ordinal(
+            groups, portraits, max(first, min(int(page), maximum))
+        )
+        if ordinal:
+            progress = await _ensure_lazy_people(
+                state,
+                token,
+                anime,
+                message,
+                section,
+                locale=locale,
+                source=source,
+                requested_page=ordinal,
+            )
     await _render_people_view(
         state,
         message,

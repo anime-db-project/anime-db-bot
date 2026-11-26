@@ -25,6 +25,7 @@ from aiogram.types import (
     InputMediaPhoto,
     InputRichMessage,
     InputRichMessageMedia,
+    Message,
 )
 
 from core.cache import BoundedTTLCache
@@ -47,7 +48,39 @@ _MEDIA_FAILURES = (
     "photo_content_type_invalid",
     "image_process_failed",
     "failed to get url content",
+    "wrong file identifier",
+    "file reference expired",
+    "file_reference_expired",
+    "wrong remote file identifier",
 )
+
+
+class MissingRichPhoto(RuntimeError):
+    """Telegram accepted the message but omitted all requested photos."""
+
+
+def _photo_groups(result: object) -> list:
+    rich = getattr(result, "rich_message", None)
+    groups = []
+    pending = list(getattr(rich, "blocks", None) or [])
+    while pending:
+        block = pending.pop()
+        photos = getattr(block, "photo", None)
+        if photos:
+            groups.append(photos)
+        pending.extend(getattr(block, "blocks", None) or [])
+    return groups
+
+
+def _verify_photo_result(result: object, content: InputRichMessage) -> None:
+    # Inline edits may return True rather than a Message. Only assert on
+    # actual messages whose media structure is available to the bot.
+    if (
+        isinstance(result, Message)
+        and ("<img" in (content.html or "").lower())
+        and not _photo_groups(result)
+    ):
+        raise MissingRichPhoto("Telegram accepted rich content without a photo")
 
 
 def media_error(error: BaseException) -> bool:
@@ -105,7 +138,7 @@ def bind_remote_photos(message: InputRichMessage) -> InputRichMessage:
 
 def _with_media(
     message: InputRichMessage,
-    files: dict[str, BufferedInputFile | FSInputFile],
+    files: dict[str, BufferedInputFile | FSInputFile | str],
 ) -> InputRichMessage | None:
     existing = list(message.media or ())
     photos: list[InputRichMessageMedia] = []
@@ -449,8 +482,8 @@ class RichMediaDelivery:
                     continue
                 await send(variant)
                 return
-            except TelegramBadRequest as exc:
-                if not media_error(exc):
+            except (TelegramBadRequest, MissingRichPhoto) as exc:
+                if not isinstance(exc, MissingRichPhoto) and not media_error(exc):
                     raise
                 self._bad_strategies.set(cache_key, True)
                 logging.warning(
@@ -498,11 +531,21 @@ async def deliver_rich_media(
     message: InputRichMessage,
     *,
     bot=None,
+    verify_photo: bool = False,
 ) -> None:
     if _inline_delivery.get():
         await send(message)
         return
     manager = get_rich_media_delivery()
+    if verify_photo:
+        original_send = send
+
+        async def checked(content: InputRichMessage) -> object:
+            result = await original_send(content)
+            _verify_photo_result(result, content)
+            return result
+
+        send = checked
     if bot is None or not isinstance(getattr(bot, "id", None), int):
         await manager.deliver(send, message)
         return
@@ -556,10 +599,58 @@ async def deliver_rich_media(
             await send(bound.model_copy(update={"media": media}))
             cache.enqueue(bot, [url for url in urls if not ids[url]])
             return
-        except TelegramBadRequest:
-            for url in urls:
-                if ids[url]:
-                    await cache.forget(bot.id, url)
+        except (TelegramBadRequest, MissingRichPhoto) as exc:
+            if not isinstance(exc, MissingRichPhoto) and not media_error(exc):
+                raise
+            # A single broken URL must not discard other valid file IDs.
+            if verify_photo:
+                cached_only = {url: fid for url, fid in ids.items() if fid}
+                for subset in (
+                    [cached_only]
+                    if len(cached_only) == 1
+                    else [
+                        cached_only,
+                        *({url: fid} for url, fid in cached_only.items()),
+                    ]
+                ):
+                    variant = _with_media(message, subset)
+                    if variant is None:
+                        continue
+                    try:
+                        await send(variant)
+                        cache.enqueue(bot, [url for url in urls if not ids[url]])
+                        return
+                    except (TelegramBadRequest, MissingRichPhoto) as cached_error:
+                        if not isinstance(
+                            cached_error, MissingRichPhoto
+                        ) and not media_error(cached_error):
+                            raise
+                        if (
+                            isinstance(cached_error, TelegramBadRequest)
+                            and len(subset) == 1
+                            and any(
+                                value in str(cached_error).casefold()
+                                for value in (
+                                    "wrong file identifier",
+                                    "wrong remote file identifier",
+                                    "file_reference_expired",
+                                    "file reference expired",
+                                )
+                            )
+                        ):
+                            await cache.forget(bot.id, next(iter(subset)))
+            elif isinstance(exc, TelegramBadRequest) and any(
+                value in str(exc).casefold()
+                for value in (
+                    "wrong file identifier",
+                    "wrong remote file identifier",
+                    "file_reference_expired",
+                    "file reference expired",
+                )
+            ):
+                for url in urls:
+                    if ids[url]:
+                        await cache.forget(bot.id, url)
             # Preserve the original content and its native fallback.
 
     async def capture(content):
@@ -567,14 +658,7 @@ async def deliver_rich_media(
         # Only associate when there is exactly one source and one returned
         # photo block. Do not guess ordering of multiple Telegram photo blocks.
         if len(urls) == 1:
-            blocks = (
-                getattr(getattr(result, "rich_message", None), "blocks", None) or []
-            )
-            photo_groups = [
-                getattr(block, "photo", None)
-                for block in blocks
-                if getattr(block, "photo", None)
-            ]
+            photo_groups = _photo_groups(result)
             if len(photo_groups) == 1:
                 best = max(photo_groups[0], key=lambda p: p.width * p.height)
                 if best.file_id:
@@ -582,5 +666,24 @@ async def deliver_rich_media(
                     await cache.remember(bot.id, urls[0], best.file_id)
         return result
 
-    await manager.deliver(capture, message)
+    if verify_photo:
+
+        async def preserve_one(content: InputRichMessage) -> object:
+            if "<img" not in (content.html or "").lower() and len(urls) > 1:
+                for url in urls:
+                    variant = _with_media(message, {url: url})
+                    if variant is None:
+                        continue
+                    try:
+                        return await capture(variant)
+                    except (TelegramBadRequest, MissingRichPhoto) as exc:
+                        if not isinstance(exc, MissingRichPhoto) and not media_error(
+                            exc
+                        ):
+                            raise
+            return await capture(content)
+
+        await manager.deliver(preserve_one, message)
+    else:
+        await manager.deliver(capture, message)
     cache.enqueue(bot, urls)

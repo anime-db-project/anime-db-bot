@@ -42,6 +42,42 @@ def _person_line(person: PersonCredit, locale: str) -> str:
     )
 
 
+def staff_gallery(
+    anime: AggregatedAnime,
+    source: str | None,
+    locale: str,
+    indices: dict[str | None, list[int]] | None = None,
+) -> tuple[list[list[str]], list[tuple[int, PersonCredit]]]:
+    """Classify by known photo availability, not current batch state."""
+    people = _people_for_scope(anime, "staff", source)
+    available = (
+        set(indices.get(source, []))
+        if indices is not None
+        else {
+            i
+            for i, p in enumerate(people)
+            if _portrait_urls(p, source=source, source_order=anime.sources)
+        }
+    )
+    heading = (
+        text("people", "staff", locale=locale)
+        + (f" — {source}" if source else "")
+        + ":"
+    )
+    groups = record_pages(
+        [_person_line(p, locale) for i, p in enumerate(people) if i not in available],
+        heading=heading,
+    )
+    return groups, [(i + 1, p) for i, p in enumerate(people) if i in available]
+
+
+def staff_gallery_ordinal(
+    groups: list[list[str]], portraits: list[tuple[int, PersonCredit]], page: int
+) -> int:
+    index = page - len(groups) if groups else page - 1
+    return portraits[index][0] if 0 <= index < len(portraits) else 0
+
+
 def _page_text(
     anime: AggregatedAnime,
     section: str,
@@ -50,13 +86,15 @@ def _page_text(
     *,
     locale: str,
     total_hint: int | None = None,
+    staff_indices: dict[str | None, list[int]] | None = None,
 ) -> tuple[str, list[str], int, int, int]:
     if section == "staff":
-        people = _people_for_scope(anime, section, source)
+        groups, portraits = staff_gallery(anime, source, locale, staff_indices)
+        total = len(_people_for_scope(anime, section, source))
         title_value = text("people", section, locale=locale) + (
             f" — {source}" if source else ""
         )
-        if not people:
+        if not groups and not portraits:
             return (
                 title_value + ":\n\n" + text("people", "none", locale=locale),
                 [],
@@ -64,8 +102,19 @@ def _page_text(
                 0,
                 0,
             )
-        page = max(1, min(int(page), len(people)))
-        person = people[page - 1]
+        first = 0 if groups else 1
+        maximum = len(portraits) + max(0, len(groups) - 1)
+        page = max(first, min(int(page), maximum))
+        if page < len(groups):
+            return (
+                "\n".join([title_value + ":", "", *groups[page]]),
+                [],
+                sum(len(g) for g in groups[: page + 1]),
+                total,
+                page,
+            )
+        portrait_index = page - len(groups) if groups else page - 1
+        person = portraits[portrait_index][1]
         urls = _portrait_urls(person, source=source, source_order=anime.sources)
         lines = [
             title_value + ":",
@@ -80,7 +129,13 @@ def _page_text(
             lines.append(
                 text("people", "portraits", locale=locale, sources=", ".join(sources))
             )
-        return "\n".join(lines), urls, page, len(people), page
+        return (
+            "\n".join(lines),
+            urls,
+            sum(len(g) for g in groups) + portrait_index + 1,
+            total,
+            page,
+        )
     without, with_portraits = _people_state(anime, section, source, locale=locale)
     actual_total = len(without) + len(with_portraits)
     total = (

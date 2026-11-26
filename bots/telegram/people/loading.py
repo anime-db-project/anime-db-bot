@@ -98,6 +98,10 @@ async def ensure_lazy_people(
         source=source,
         requested_page=requested_page,
     )
+    if section == "staff":
+        session = state.anime_sessions.get(token)
+        if session is not None and progress.staff_portrait_indices is not None:
+            session.staff_gallery_indices = progress.staff_source_portrait_indices
     if (
         section == "staff"
         and progress.portrait_cursor > progress.staff_prefetched_cursor

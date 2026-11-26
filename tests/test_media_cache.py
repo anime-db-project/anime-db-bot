@@ -172,6 +172,83 @@ class TelegramMediaCacheTests(unittest.IsolatedAsyncioTestCase):
                 self.assertIn("<tg-button-row>", content.html)
                 self.assertIn("<table>", content.html)
 
+    async def test_staff_mixed_gallery_retries_valid_cached_photo_when_remote_omitted(
+        self,
+    ):
+        from aiogram.types import (
+            Message,
+            RichMessage,
+            RichBlockSlideshow,
+            RichBlockPhoto,
+            PhotoSize,
+        )
+        from bots.telegram.rich_media import _photo_groups
+
+        settings = replace(
+            get_settings().telegram,
+            media_cache_enabled=True,
+            media_cache_persistent=False,
+            media_cache_chat_id=0,
+        )
+        cache = TelegramMediaCache(settings)
+        a = "https://example.org/one.jpg"
+        b = "https://example.org/two.jpg"
+        await cache.remember(12, a, "known")
+        blank = Message.model_construct(rich_message=RichMessage(blocks=[]))
+        photo = RichBlockPhoto.model_construct(
+            photo=[
+                PhotoSize(
+                    file_id="known", file_unique_id="unique", width=100, height=100
+                )
+            ]
+        )
+        ok = Message.model_construct(
+            rich_message=RichMessage(blocks=[RichBlockSlideshow(blocks=[photo])])
+        )
+        send = AsyncMock(side_effect=[blank, ok])
+        rich = InputRichMessage(
+            html=f'<tg-slideshow><img src="{a}"/><img src="{b}"/></tg-slideshow><p>Staff</p>'
+        )
+        with patch("bots.telegram.media_cache.get_media_cache", return_value=cache):
+            await deliver_rich_media(
+                send, rich, bot=SimpleNamespace(id=12), verify_photo=True
+            )
+        self.assertEqual(send.await_count, 2)
+        content = send.await_args.args[0]
+        self.assertEqual(content.media[0].media.media, "known")
+        self.assertEqual(len(content.media), 1)
+        self.assertIn("Staff", content.html)
+        self.assertEqual(len(_photo_groups(ok)), 1)
+        self.assertEqual(await cache.lookup(12, a), "known")
+
+    async def test_staff_direct_success_without_photo_retries_url_binding(self):
+        from aiogram.types import Message, RichMessage, RichBlockPhoto, PhotoSize
+        from bots.telegram.rich_media import RichMediaDelivery
+
+        settings = replace(get_settings().telegram.rich_media, order=("direct", "url"))
+        blank = Message.model_construct(rich_message=RichMessage(blocks=[]))
+        photo = RichBlockPhoto.model_construct(
+            photo=[PhotoSize(file_id="f", file_unique_id="u", width=100, height=100)]
+        )
+        ok = Message.model_construct(rich_message=RichMessage(blocks=[photo]))
+        send = AsyncMock(side_effect=[blank, ok])
+        with patch(
+            "bots.telegram.rich_media.get_rich_media_delivery",
+            return_value=RichMediaDelivery(settings),
+        ):
+            await deliver_rich_media(
+                send,
+                InputRichMessage(
+                    html='<img src="https://example.org/portrait.jpg"/><p>Staff</p>'
+                ),
+                verify_photo=True,
+            )
+        self.assertEqual(send.await_count, 2)
+        self.assertEqual(
+            send.await_args.args[0].media[0].media.media,
+            "https://example.org/portrait.jpg",
+        )
+
     def test_index_capacity_and_ttl(self):
         with tempfile.TemporaryDirectory() as tmp:
             index = MediaIndex(SQLiteUserSettingsStore(Path(tmp) / "test.db"))
