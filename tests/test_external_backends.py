@@ -9,6 +9,7 @@ from tempfile import TemporaryDirectory
 from concurrent.futures import ThreadPoolExecutor
 
 from core.models import SearchCandidate, SearchPage, SearchResultSet
+from core.sqlite import managed_sqlite_connection
 from core.settings import AppSettings, CacheBackendSettings, SearchSettings
 from services.runtime.app_context import AppContext
 from scripts.migrate_sqlite_to_postgres import count_rows, migrate
@@ -80,7 +81,7 @@ class PostgreSQLIntegrationTests(unittest.TestCase):
             users_path = root / "users.db"
             bans_path = root / "bans.db"
             quota_path = root / "quota.db"
-            with sqlite3.connect(users_path) as conn:
+            with managed_sqlite_connection(sqlite3.connect(users_path)) as conn:
                 conn.execute(
                     "CREATE TABLE user_settings (platform TEXT, user_id INTEGER, "
                     "locale TEXT, updated_at TEXT)"
@@ -100,7 +101,7 @@ class PostgreSQLIntegrationTests(unittest.TestCase):
                         "2026-10-01 11:22:33", "2026-11-01 11:22:33",
                     ),
                 )
-            with sqlite3.connect(bans_path) as conn:
+            with managed_sqlite_connection(sqlite3.connect(bans_path)) as conn:
                 conn.execute(
                     "CREATE TABLE bans (platform TEXT, user_id INTEGER, "
                     "reason TEXT, banned_by INTEGER, created_at INTEGER, "
@@ -110,7 +111,7 @@ class PostgreSQLIntegrationTests(unittest.TestCase):
                     "INSERT INTO bans VALUES (?,?,?,?,?,?)",
                     ("telegram", 9876543211, "test", 99, 500, None),
                 )
-            with sqlite3.connect(quota_path) as conn:
+            with managed_sqlite_connection(sqlite3.connect(quota_path)) as conn:
                 conn.execute(
                     "CREATE TABLE image_search_quota "
                     "(provider TEXT,period TEXT,used INTEGER,exhausted INTEGER)"

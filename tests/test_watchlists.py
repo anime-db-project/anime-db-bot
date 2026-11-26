@@ -6,6 +6,7 @@ import unittest
 from pathlib import Path
 
 from core.models import SearchCandidate
+from core.sqlite import managed_sqlite_connection
 from services.users.settings import SQLiteUserSettingsStore
 from services.users.watchlists import WatchListStore, entry_for, STATUSES, BUILTIN_LISTS
 from services.users.watchlist_import import parse_mal_xml, imported
@@ -75,7 +76,7 @@ class WatchListsTests(unittest.TestCase):
 
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / "users.db"
-            with sqlite3.connect(path) as db:
+            with managed_sqlite_connection(sqlite3.connect(path)) as db:
                 db.execute(
                     "CREATE TABLE anime_watch_lists(owner BIGINT,list_id TEXT,name TEXT,PRIMARY KEY(owner,list_id))"
                 )
