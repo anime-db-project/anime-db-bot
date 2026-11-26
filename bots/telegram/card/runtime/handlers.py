@@ -784,9 +784,7 @@ def build_dispatcher(mode_name: str, state: TelegramCardState) -> Dispatcher:
                 owner_user_id=callback.from_user.id,
             )
         except IndexError:
-            await callback.message.answer(
-                text("card", "invalid_command", locale=locale)
-            )
+            return
 
     @dp.callback_query(F.data.startswith("av:"))
     async def anime_view_callback_handler(callback: CallbackQuery) -> None:

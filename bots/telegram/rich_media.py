@@ -232,12 +232,12 @@ class RichMediaDelivery:
         self._disk_last_prune = 0.0
 
     async def _fetch(self, url: str, deadline: float) -> bytes | None:
-        if self._bad_urls.get(url):
-            return None
         if self.settings.ram_enabled and self.settings.ram_cache_bytes:
             cached = self._memory.get(url)
             if cached is not None:
                 return cached
+        if self._bad_urls.get(url):
+            return None
         try:
             async with asyncio.timeout_at(deadline):
                 async with self._slots:
@@ -309,7 +309,11 @@ class RichMediaDelivery:
                     "error_type": type(exc).__name__,
                 },
             )
-            self._bad_urls.set(url, True)
+            if isinstance(exc, ValueError) or (
+                isinstance(exc, httpx.HTTPStatusError)
+                and exc.response.status_code in (404, 410)
+            ):
+                self._bad_urls.set(url, True)
             return None
 
     def _disk_directory(self) -> Path:
@@ -441,6 +445,8 @@ class RichMediaDelivery:
         self,
         send: Callable[[InputRichMessage], Awaitable[object]],
         message: InputRichMessage,
+        *,
+        retry_transient: bool = False,
     ) -> None:
         urls = _remote_urls(message)
         if not urls:
@@ -458,7 +464,7 @@ class RichMediaDelivery:
             if asyncio.get_running_loop().time() >= deadline:
                 break
             cache_key = (mode, tuple(urls))
-            if self._bad_strategies.get(cache_key):
+            if not retry_transient and self._bad_strategies.get(cache_key):
                 continue
             try:
                 if mode == "direct":
@@ -541,13 +547,18 @@ async def deliver_rich_media(
         original_send = send
 
         async def checked(content: InputRichMessage) -> object:
-            result = await original_send(content)
+            try:
+                result = await original_send(content)
+            except TelegramBadRequest as exc:
+                if "message is not modified" in str(exc).casefold():
+                    return True
+                raise
             _verify_photo_result(result, content)
             return result
 
         send = checked
     if bot is None or not isinstance(getattr(bot, "id", None), int):
-        await manager.deliver(send, message)
+        await manager.deliver(send, message, retry_transient=verify_photo)
         return
     from bots.telegram.media_cache import get_media_cache
     from bots.telegram.inline_media import remember_photo
@@ -569,7 +580,7 @@ async def deliver_rich_media(
     )
     urls = urls[: manager.settings.max_images]
     if not urls or not cache.settings.media_cache_enabled:
-        await manager.deliver(send, message)
+        await manager.deliver(send, message, retry_transient=verify_photo)
         return
     ids = dict(
         zip(urls, await asyncio.gather(*(cache.lookup(bot.id, url) for url in urls)))
@@ -669,9 +680,26 @@ async def deliver_rich_media(
     if verify_photo:
 
         async def preserve_one(content: InputRichMessage) -> object:
-            if "<img" not in (content.html or "").lower() and len(urls) > 1:
-                for url in urls:
-                    variant = _with_media(message, {url: url})
+            if "<img" not in (content.html or "").lower():
+                # Background prefetch may have completed during direct/RAM
+                # attempts. Re-read the index before losing the portrait.
+                recent = {
+                    url: fid
+                    for url, fid in zip(
+                        urls,
+                        await asyncio.gather(
+                            *(cache.lookup(bot.id, url) for url in urls)
+                        ),
+                    )
+                    if fid
+                }
+                variants = []
+                if recent:
+                    variants.append(recent)
+                if len(urls) > 1:
+                    variants.extend({url: recent.get(url) or url} for url in urls[:3])
+                for subset in variants[:4]:
+                    variant = _with_media(message, subset)
                     if variant is None:
                         continue
                     try:
@@ -683,7 +711,7 @@ async def deliver_rich_media(
                             raise
             return await capture(content)
 
-        await manager.deliver(preserve_one, message)
+        await manager.deliver(preserve_one, message, retry_transient=True)
     else:
         await manager.deliver(capture, message)
     cache.enqueue(bot, urls)

@@ -16,6 +16,7 @@ from core.http_client import http_request
 from core.http_config import USER_AGENT
 from core.models import CharacterRecord, PersonCredit
 from core.people_loading import PeopleManifest, without_portraits
+from core.media_urls import usable_image_url
 from core.settings import SourceSettings, get_settings
 from core.source_errors import SourceInvalidResponse
 from sources.providers.shikimori_people_runtime import ShikimoriPeopleRuntime
@@ -85,7 +86,7 @@ def _best_rest_image_url(
 ) -> str | None:
     for field in ("original", "x96", "preview", "x48"):
         value = _absolute_shikimori_url(image.get(field), settings)
-        if value:
+        if value and usable_image_url(value):
             return value
     return None
 

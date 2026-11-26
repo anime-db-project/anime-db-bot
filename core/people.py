@@ -4,6 +4,7 @@ import re
 from dataclasses import replace
 
 from core.models import AggregatedAnime, PersonCredit
+from core.media_urls import usable_image_url
 
 PEOPLE_SECTIONS = frozenset({"staff", "voices"})
 
@@ -46,7 +47,9 @@ def portrait_urls(
     source_order: list[str] | None = None,
 ) -> list[str]:
     if source is not None:
-        return dedupe_strings(list(person.portraits.get(source, [])))
+        return dedupe_strings(
+            [url for url in person.portraits.get(source, []) if usable_image_url(url)]
+        )
     result: list[str] = []
     seen_sources: set[str] = set()
     for source_name in source_order or []:
@@ -55,14 +58,14 @@ def portrait_urls(
     for source_name, urls in person.portraits.items():
         if source_name not in seen_sources:
             result.extend(urls)
-    return dedupe_strings(result)
+    return dedupe_strings([url for url in result if usable_image_url(url)])
 
 
 def portrait_source_names(person: PersonCredit, source_order: list[str]) -> list[str]:
     available = {
         source
         for source, urls in person.portraits.items()
-        if dedupe_strings(list(urls or []))
+        if any(usable_image_url(url) for url in urls or [])
     }
     ordered = [source for source in source_order if source in available]
     ordered.extend(sorted(available - set(ordered)))

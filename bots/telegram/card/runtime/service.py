@@ -9,7 +9,7 @@ from aiogram.types import Message
 
 from bots.telegram.card.runtime.state import AnimeCardSession, TelegramCardState
 from bots.telegram.card.ui.keyboards import fallback_main_keyboard, navigation_keyboard
-from bots.telegram.card.views.renderer import send_anime_view
+from bots.telegram.card.views.renderer import send_anime_view, edit_anime_view
 from core.models import SearchCandidate
 from localization import text
 from services.runtime.app_context import get_app_context
@@ -84,12 +84,15 @@ async def aggregate_and_send(
     candidate: SearchCandidate,
     owner_user_id: int,
     state: TelegramCardState,
-) -> None:
+    *,
+    replace_message: bool = False,
+) -> bool:
     locale = get_user_locale(owner_user_id)
     identity = candidate.identity
     if identity.is_empty():
-        await message.answer(text("search", "result_unavailable", locale=locale))
-        return
+        if not replace_message:
+            await message.answer(text("search", "result_unavailable", locale=locale))
+        return False
 
     context = get_app_context()
     try:
@@ -102,8 +105,9 @@ async def aggregate_and_send(
             exc,
             exc_info=True,
         )
-        await message.answer(text("search", "get_result_failed", locale=locale))
-        return
+        if not replace_message:
+            await message.answer(text("search", "get_result_failed", locale=locale))
+        return False
 
     try:
         await context.imdb_rating_service.enrich(anime)
@@ -122,15 +126,28 @@ async def aggregate_and_send(
         if isinstance(getattr(message, "inline_message_id", None), str)
         else None
     )
-    sent_message, plain_fallback = await send_anime_view(
-        message,
-        token,
-        anime,
-        section="main",
-        page=0,
-        locale=locale,
-        show_related=False,
-    )
+    if replace_message:
+        await edit_anime_view(
+            message,
+            token,
+            anime,
+            "main",
+            0,
+            locale=locale,
+            show_related=False,
+            replace_only=True,
+        )
+        sent_message, plain_fallback = message, False
+    else:
+        sent_message, plain_fallback = await send_anime_view(
+            message,
+            token,
+            anime,
+            section="main",
+            page=0,
+            locale=locale,
+            show_related=False,
+        )
     if sent_message is not None:
         task = asyncio.create_task(
             _check_related_and_update_button(
@@ -144,3 +161,4 @@ async def aggregate_and_send(
         )
         state.background_tasks.add(task)
         task.add_done_callback(state.background_tasks.discard)
+    return sent_message is not None

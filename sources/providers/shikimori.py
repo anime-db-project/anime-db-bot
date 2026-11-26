@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from core.media_urls import usable_image_url
+
 import html
 import logging
 import re
@@ -289,7 +291,7 @@ def _season(value: Any) -> tuple[str | None, int | None]:
 def _best_poster_url(poster: dict[str, Any]) -> str | None:
     for field in ("originalUrl", "main2xUrl", "mainUrl", "preview2xUrl", "previewUrl"):
         value = _clean_text(poster.get(field))
-        if value:
+        if value and usable_image_url(value):
             return value
     return None
 
@@ -449,9 +451,10 @@ def _reference_from_brief(
         source="Shikimori",
         titles=titles,
         external_ids=external_ids,
-        posters=[poster] if poster else [],
+        posters=[poster] if poster and usable_image_url(poster) else [],
         relation=canonical_relation_kind(relation) if relation else None,
         rank=max(1, int(rank)),
+        kind=source_value_key("shikimori", "kind", raw.get("kind")),
     )
 
 

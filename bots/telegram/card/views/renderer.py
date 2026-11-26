@@ -94,11 +94,14 @@ async def edit_standard_text(
     *,
     locale: str = DEFAULT_LOCALE,
     limit: int = STANDARD_MESSAGE_LIMIT,
+    allow_overflow_messages: bool = True,
 ) -> None:
-    """Edit callback text without discarding overflow chunks."""
+    """Edit callback text; optional replacement never creates new messages."""
     chunks = split_text(text_value, limit, locale=locale)
     await message.edit_text(text=chunks[0], reply_markup=reply_markup)
-    if isinstance(getattr(message, "inline_message_id", None), str):
+    if not allow_overflow_messages or isinstance(
+        getattr(message, "inline_message_id", None), str
+    ):
         return
     for chunk in chunks[1:]:
         await message.answer(chunk)
@@ -220,6 +223,7 @@ async def edit_anime_view(
     *,
     locale: str,
     show_related: bool = False,
+    replace_only: bool = False,
 ) -> None:
     pages = view_pages(anime, section, locale=locale)
     page = max(0, min(page, len(pages) - 1))
@@ -267,6 +271,7 @@ async def edit_anime_view(
             reply_markup=fallback,
             locale=locale,
             limit=STANDARD_MESSAGE_LIMIT if section == "main" else 4050,
+            allow_overflow_messages=not replace_only,
         )
 
 

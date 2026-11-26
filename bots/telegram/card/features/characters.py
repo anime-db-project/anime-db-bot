@@ -22,6 +22,12 @@ from bots.telegram.card.runtime.state import AnimeCardSession
 from core.canonicalization import display_person_name, person_identity_keys
 from sources.runtime.catalog import source_key_for_display_name
 from core.models import CharacterRecord
+from core.credit_identity import (
+    ambiguous_name_keys,
+    matching_credit_index,
+    shared_credit_id,
+)
+from core.media_urls import usable_image_url
 from localization import text
 from services.runtime.app_context import get_app_context
 
@@ -42,35 +48,18 @@ def _role_priority(role: str | None) -> int:
     return {"main": 3, "supporting": 2, "background": 1}.get((role or "").casefold(), 0)
 
 
-def _merge_characters(groups: list[list[CharacterRecord]]) -> list[CharacterRecord]:
+def _merge_characters(
+    groups: list[list[CharacterRecord]], *, portrait_match=None
+) -> list[CharacterRecord]:
     merged: list[CharacterRecord] = []
-    name_keys_by_index: list[set[str]] = []
+    ambiguous = ambiguous_name_keys(groups)
+    confirmed_ids: list[dict[str, str]] = []
     for group in groups:
         for character in group:
             names = _dedupe([character.name, *character.aliases])
-            name_keys = person_identity_keys(names)
-            identity = character.identity
-
-            match_index = next(
-                (
-                    index
-                    for index, existing in enumerate(merged)
-                    if existing.identity.matches(identity)
-                ),
-                None,
+            match_index = matching_credit_index(
+                merged, character, ambiguous, portrait_match
             )
-            matched_by_id = match_index is not None
-            if match_index is None:
-                match_index = next(
-                    (
-                        index
-                        for index, existing in enumerate(merged)
-                        if name_keys_by_index[index] & name_keys
-                        and not existing.identity.conflicts_with(identity)
-                    ),
-                    None,
-                )
-
             if match_index is None:
                 merged.append(
                     CharacterRecord(
@@ -79,15 +68,20 @@ def _merge_characters(groups: list[list[CharacterRecord]]) -> list[CharacterReco
                         aliases=list(character.aliases),
                         external_ids=dict(character.external_ids),
                         portraits={
-                            source: list(urls)
+                            source: [url for url in urls if usable_image_url(url)]
                             for source, urls in character.portraits.items()
                         },
                     )
                 )
-                name_keys_by_index.append(name_keys)
+                confirmed_ids.append(dict(character.external_ids))
                 continue
 
             existing = merged[match_index]
+            if shared_credit_id(existing, character) and any(
+                confirmed_ids[match_index].get(k) == v
+                for k, v in character.external_ids.items()
+            ):
+                confirmed_ids[match_index].update(character.external_ids)
             all_names = _dedupe(
                 [
                     existing.name,
@@ -101,24 +95,20 @@ def _merge_characters(groups: list[list[CharacterRecord]]) -> list[CharacterReco
                 for value in all_names
                 if value.casefold() != existing.name.casefold()
             ]
-            name_keys_by_index[match_index].update(name_keys)
             if _role_priority(character.role) > _role_priority(existing.role):
                 existing.role = character.role
-            if matched_by_id:
-                merged_identity = existing.identity
-                merged_identity.merge_missing(identity)
-                existing.external_ids = dict(merged_identity.external_ids)
-            elif not existing.external_ids and character.external_ids:
-                # A name-only presentation merge may carry one source-local ID,
-                # but it must not infer a new cross-provider mapping.
-                existing.external_ids = dict(character.external_ids)
+            # Preserve observed source-local identifiers in this view so a
+            # subsequent homonym cannot bypass the conflict check.
+            existing.external_ids.update(character.external_ids)
             for source_name, urls in character.portraits.items():
                 existing.portraits[source_name] = _dedupe(
                     [
                         *existing.portraits.get(source_name, []),
-                        *urls,
+                        *(url for url in urls if usable_image_url(url)),
                     ]
                 )
+    for record, ids in zip(merged, confirmed_ids):
+        record.external_ids = ids
     return merged
 
 
@@ -173,19 +163,27 @@ def _portrait_urls(
     character: CharacterRecord, source: str | None, source_order: list[str]
 ) -> list[str]:
     if source is not None:
-        return _dedupe(character.portraits.get(source, []))
+        return _dedupe(
+            [
+                url
+                for url in character.portraits.get(source, [])
+                if usable_image_url(url)
+            ]
+        )
     values: list[str] = []
     for source_name in source_order:
         values.extend(character.portraits.get(source_name, []))
     for source_name, urls in character.portraits.items():
         if source_name not in source_order:
             values.extend(urls)
-    return _dedupe(values)
+    return _dedupe([url for url in values if usable_image_url(url)])
 
 
 def _portrait_sources(character: CharacterRecord, source_order: list[str]) -> list[str]:
     available = {
-        source for source, urls in character.portraits.items() if _dedupe(urls)
+        source
+        for source, urls in character.portraits.items()
+        if any(usable_image_url(url) for url in urls)
     }
     ordered = [source for source in source_order if source in available]
     ordered.extend(sorted(available - set(ordered)))
@@ -430,18 +428,19 @@ async def _ensure_loaded(
     result = await get_app_context().character_service.load(session.anime.identity)
     session.anime.characters_by_source = result.by_source
     session.character_key_by_source = result.key_by_source
-    session.anime.characters = _merge_characters(
-        [
-            result.by_source[source]
-            for source in session.anime.sources
-            if source in result.by_source
-        ]
-        + [
-            values
-            for source, values in result.by_source.items()
-            if source not in session.anime.sources
-        ]
-    )
+    groups = [
+        result.by_source[source]
+        for source in session.anime.sources
+        if source in result.by_source
+    ] + [
+        values
+        for source, values in result.by_source.items()
+        if source not in session.anime.sources
+    ]
+    from bots.telegram.card.portrait_matching import portrait_matcher
+
+    matches = await portrait_matcher(groups)
+    session.anime.characters = _merge_characters(groups, portrait_match=matches)
     session.character_errors = result.errors
     session.characters_loaded = True
 

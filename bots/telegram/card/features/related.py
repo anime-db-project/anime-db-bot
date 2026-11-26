@@ -19,6 +19,7 @@ from bots.telegram.card.views.renderer import edit_standard_text
 from bots.telegram.card.views.rendering import _table_html, image_gallery_html
 from bots.telegram.card.views.titles import preferred_title_keys
 from core.related_anime import AggregatedAnimeReference
+from core.media_urls import usable_image_url
 from localization import text
 from services.runtime.app_context import get_app_context
 
@@ -85,6 +86,8 @@ def prefetch_related_posters(
 
 
 def _display_title(item: AggregatedAnimeReference, locale: str) -> str:
+    if item.kind in {"music", "music_video"} and item.titles.get("romaji"):
+        return item.titles["romaji"]
     for key in preferred_title_keys(locale):
         value = str(item.titles.get(key) or "").strip()
         if value:
@@ -92,11 +95,7 @@ def _display_title(item: AggregatedAnimeReference, locale: str) -> str:
     candidate = item.candidate.title.strip()
     if candidate and candidate != "Unknown anime":
         return candidate
-    for key in _DISPLAY_ID_ORDER:
-        value = str(item.external_ids.get(key) or "").strip()
-        if value:
-            return f"{key.upper()} #{value}"
-    return "Unknown anime"
+    return text("common", "unknown", locale=locale)
 
 
 def _relation_label(item: AggregatedAnimeReference, locale: str) -> str | None:
@@ -125,6 +124,15 @@ def _detail_lines(
     locale: str,
 ) -> list[str]:
     lines: list[str] = []
+    if item.kind:
+        lines.append(
+            text(
+                "card",
+                "type",
+                locale=locale,
+                value=text("anime_kind", item.kind, locale=locale, default=item.kind),
+            )
+        )
     if section == "related":
         relation = _relation_label(item, locale)
         if relation:
@@ -173,7 +181,11 @@ def _detail_rich(
         _detail_lines(item, section, locale=locale),
     )
     return InputRichMessage(
-        html=image_gallery_html(item.posters, limit=1) + f"<h2>{title}</h2>" + table
+        html=image_gallery_html(
+            [url for url in item.posters if usable_image_url(url)], limit=3
+        )
+        + f"<h2>{title}</h2>"
+        + table
     )
 
 
@@ -402,9 +414,18 @@ async def send_related_item(
     items = _items(session, section, source_key)
     if not 0 <= int(index) < len(items):
         raise IndexError(index)
-    await aggregate_and_send(
+    session.main_view_active = False
+    replaced = await aggregate_and_send(
         message,
         items[int(index)].candidate,
         owner_user_id,
         state,
+        replace_message=True,
     )
+    if replaced:
+        for token in tuple(state.anime_sessions):
+            if state.anime_sessions.get(token) is session:
+                state.anime_sessions.pop(token, None)
+                for kind in ("staff", "voices"):
+                    state.people_loads.pop(f"{token}:{kind}", None)
+                break

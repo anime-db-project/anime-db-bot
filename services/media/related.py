@@ -6,6 +6,8 @@ from typing import Any, Protocol
 
 from core.capabilities import SourceCapability
 from core.identity import AnimeIdentity
+from core.media_urls import usable_image_url
+from core.models import AnimeRecord
 from core.related_anime import (
     AggregatedAnimeReference,
     AnimeReference,
@@ -72,6 +74,7 @@ def _borrow_display_metadata(
         target.titles.setdefault(key, value)
     target.aliases = _dedupe([*target.aliases, *aggregate.aliases])
     target.posters = _dedupe([*target.posters, *aggregate.posters])
+    target.kind = target.kind or aggregate.kind
 
 
 class RelatedAnimeService:
@@ -172,6 +175,7 @@ class RelatedAnimeService:
                     source_name,
                 )
 
+        await self._enrich_missing_metadata(merged)
         _sort_items(merged, recommendations=recommendations)
         result.items = merged
 
@@ -190,6 +194,69 @@ class RelatedAnimeService:
                 if aggregate is not None:
                     _borrow_display_metadata(local_item, aggregate)
         return result
+
+    async def _enrich_missing_metadata(
+        self, items: list[AggregatedAnimeReference]
+    ) -> None:
+        incomplete = [
+            item
+            for item in items
+            if item.candidate.title == "Unknown anime"
+            or not item.posters
+            or item.kind == "music"
+        ]
+        if not incomplete:
+            return
+        slots = asyncio.Semaphore(3)
+        source_map = {
+            str(getattr(source, "source_key", "")): source for source in self._sources
+        }
+
+        async def fill(item):
+            async with slots:
+                for key in (
+                    "mal",
+                    "anilist",
+                    "shikimori",
+                    "kitsu",
+                    "anisearch",
+                    "anidb",
+                ):
+                    id = item.external_ids.get(key)
+                    loader = getattr(source_map.get(key), "get_details", None)
+                    if not id or not callable(loader):
+                        continue
+                    try:
+                        record = await asyncio.wait_for(
+                            loader(AnimeIdentity({key: id})), timeout=4
+                        )
+                    except Exception:
+                        continue
+                    if (
+                        not isinstance(record, AnimeRecord)
+                        or record.identity.get(key) != id
+                        or record.identity.conflicting_ids(item.identity)
+                    ):
+                        continue
+                    for title_key, value in record.titles.items():
+                        if value:
+                            item.titles.setdefault(title_key, value)
+                    item.aliases = _dedupe([*item.aliases, *record.synonyms])
+                    item.posters = _dedupe(
+                        [
+                            *item.posters,
+                            *(url for url in record.posters if usable_image_url(url)),
+                        ]
+                    )
+                    item.kind = record.kind or item.kind
+                    if item.candidate.title != "Unknown anime" and item.posters:
+                        return
+
+        tasks = [asyncio.create_task(fill(item)) for item in incomplete[:12]]
+        try:
+            await asyncio.wait_for(asyncio.gather(*tasks), timeout=10)
+        except TimeoutError:
+            pass
 
     @staticmethod
     def _merge_reference(
@@ -227,7 +294,13 @@ class RelatedAnimeService:
             elif existing.casefold() != value.casefold():
                 target.aliases = _dedupe([*target.aliases, value])
         target.aliases = _dedupe([*target.aliases, *reference.aliases])
-        target.posters = _dedupe([*target.posters, *reference.posters])
+        target.posters = _dedupe(
+            [
+                *target.posters,
+                *(url for url in reference.posters if usable_image_url(url)),
+            ]
+        )
+        target.kind = target.kind or reference.kind
         target.sources = _dedupe([*target.sources, reference.source])
         if reference.relation:
             relation = canonical_relation_kind(reference.relation)
@@ -248,6 +321,7 @@ class RelatedAnimeService:
                 target.aliases = _dedupe([*target.aliases, value])
         target.aliases = _dedupe([*target.aliases, *other.aliases])
         target.posters = _dedupe([*target.posters, *other.posters])
+        target.kind = target.kind or other.kind
         target.relations = _dedupe([*target.relations, *other.relations])
         target.sources = _dedupe([*target.sources, *other.sources])
         target.rank_score += other.rank_score

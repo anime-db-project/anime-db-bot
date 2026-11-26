@@ -166,6 +166,7 @@ def _anime_reference(
         posters=[poster] if poster else [],
         relation=canonical_relation_kind(relation) if relation else None,
         rank=max(1, int(rank)),
+        kind=source_value_key("mal", "media_type", node.get("media_type")),
     )
 
 

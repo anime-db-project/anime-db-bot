@@ -197,6 +197,75 @@ class CharacterUiTests(unittest.TestCase):
         self.assertEqual(len(values), 1)
         self.assertEqual(values[0].external_ids, {"anilist": "1"})
 
+    def test_homonyms_do_not_mix_mal_shikimori_portraits(self):
+        def c(name, source, id, url):
+            return CharacterRecord(
+                name=name, external_ids={source: id}, portraits={source: [url]}
+            )
+
+        shiki = [
+            c("Toki", "shikimori", "16321", "https://example.org/first"),
+            c(
+                "Toki",
+                "shikimori",
+                "252911",
+                "https://shikimori.io/assets/globals/missing_original.jpg",
+            ),
+        ]
+        mal = [
+            c("Toki", "mal", "252911", "https://example.org/second"),
+            c("Toki", "mal", "16321", "https://example.org/first-mal"),
+        ]
+        values = _merge_characters([shiki, mal])
+        self.assertEqual(len(values), 2)
+        self.assertEqual(values[0].portraits["mal"], ["https://example.org/first-mal"])
+        self.assertEqual(values[1].portraits["mal"], ["https://example.org/second"])
+        self.assertEqual(values[1].portraits["shikimori"], [])
+
+    def test_qualified_alias_merges_ruslan_lutheran_barnett(self):
+        values = _merge_characters(
+            [
+                [
+                    CharacterRecord(
+                        name="Ruslan Barnett",
+                        aliases=["Руслан Барнетт"],
+                        external_ids={"shikimori": "219929"},
+                    )
+                ],
+                [
+                    CharacterRecord(
+                        name="Lutheran Barnett",
+                        aliases=["ルスラン・バーネット", "Ruslan"],
+                        external_ids={"anilist": "291390"},
+                    )
+                ],
+                [
+                    CharacterRecord(
+                        name="Lutheran Barnett", external_ids={"anidb": "127509"}
+                    )
+                ],
+            ]
+        )
+        self.assertEqual(len(values), 1)
+        self.assertIn("Lutheran Barnett", values[0].aliases)
+
+    def test_ambiguous_name_only_stays_distinct_without_visual_evidence(self):
+        left = [
+            CharacterRecord(name="Tsubaki", external_ids={"mal": "1"}),
+            CharacterRecord(name="Tsubaki", external_ids={"mal": "2"}),
+        ]
+        right = CharacterRecord(name="Tsubaki", external_ids={"anidb": "3"})
+        self.assertEqual(len(_merge_characters([left, [right]])), 3)
+        self.assertEqual(
+            len(
+                _merge_characters(
+                    [left, [right]],
+                    portrait_match=lambda a, b: a.external_ids.get("mal") == "2",
+                )
+            ),
+            2,
+        )
+
     def test_shared_character_id_merges_even_when_names_differ(self) -> None:
         values = _merge_characters(
             [

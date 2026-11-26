@@ -94,6 +94,7 @@ class AnimeReference:
     posters: list[str] = field(default_factory=list)
     relation: str | None = None
     rank: int = 1
+    kind: str | None = None
 
     @property
     def identity(self) -> AnimeIdentity:
@@ -111,6 +112,7 @@ class AggregatedAnimeReference:
     relations: list[str] = field(default_factory=list)
     sources: list[str] = field(default_factory=list)
     rank_score: float = 0.0
+    kind: str | None = None
 
     @property
     def identity(self) -> AnimeIdentity:

@@ -6,6 +6,13 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from core.canonicalization import person_identity_keys
+from core.credit_identity import (
+    shared_credit_id,
+    credit_conflict,
+    credit_name_keys,
+    ambiguous_name_keys,
+    matching_credit_index,
+)
 from core.models import AggregatedAnime, PersonCredit
 from core.people import (
     all_people,
@@ -43,6 +50,7 @@ class PeopleLoadProgress:
     view_revision: int = 0
     staff_portrait_indices: list[int] | None = None
     staff_prefetched_cursor: int = 0
+    portrait_links: dict[int, list[tuple[str, int]]] = field(default_factory=dict)
     staff_source_portrait_indices: dict[str | None, list[int]] = field(
         default_factory=dict
     )
@@ -158,18 +166,17 @@ class PeopleProgressService:
         right: PersonCredit,
         source_key: str,
     ) -> bool:
-        left_id = (
-            str(left.external_ids.get(source_key) or "").strip() if source_key else ""
-        )
-        right_id = (
-            str(right.external_ids.get(source_key) or "").strip() if source_key else ""
-        )
-        if left_id and right_id:
-            return left_id == right_id
-        return bool(
-            person_identity_keys(cls._person_names(left))
-            & person_identity_keys(cls._person_names(right))
-        )
+        if credit_conflict(left, right):
+            return False
+        if shared_credit_id(left, right):
+            return True
+        if (
+            source_key
+            and left.external_ids.get(source_key)
+            and right.external_ids.get(source_key)
+        ):
+            return left.external_ids[source_key] == right.external_ids[source_key]
+        return bool(credit_name_keys(left) & credit_name_keys(right))
 
     @classmethod
     def _source_targets(
@@ -395,6 +402,14 @@ class PeopleProgressService:
                 remote_only = any(
                     item.portrait_only for item in progress.sources.values()
                 )
+                ambiguity = ambiguous_name_keys([roster, *mapping.values()])
+                links: dict[int, list[tuple[str, int]]] = {}
+                for name, people in mapping.items():
+                    for j in available.get(name, []):
+                        idx = matching_credit_index(roster, people[j], ambiguity)
+                        if idx is not None:
+                            links.setdefault(idx, []).append((name, j))
+                progress.portrait_links = links
                 available[None] = [
                     i
                     for i, person in enumerate(roster)
@@ -404,18 +419,12 @@ class PeopleProgressService:
                         or voice_credits_for_locale([person], progress.locale)
                     )
                     and (
-                        (
+                        i in links
+                        or (
                             remote_only
                             and any(
                                 role.startswith("voice_of::") for role in person.roles
                             )
-                        )
-                        or any(
-                            self._same_person(
-                                person, mapping[name][j], self._source_key(item)
-                            )
-                            for name, item in progress.sources.items()
-                            for j in available.get(name, [])
                         )
                     )
                 ]
@@ -577,37 +586,45 @@ class PeopleProgressService:
             if progress.staff_portrait_indices is not None:
                 for index in selected:
                     target = all_people(anime, section)[index]
-                    for item in progress.sources.values():
-                        key = self._source_key(item)
-                        source_people = section_mapping(anime, section).get(
-                            item.source.name, []
-                        )
-                        matching = [
-                            p
-                            for p in source_people
-                            if self._same_person(p, target, key)
-                        ]
-                        if not matching:
+                    for source_name, local_index in progress.portrait_links.get(
+                        index, []
+                    ):
+                        item = progress.sources.get(source_name)
+                        if item is None:
                             continue
-                        # Pool rows are never appended to the roster: only
-                        # portrait fields are copied to already published identities.
-                        for person in matching:
-                            for pool_person in item.portrait_pool:
-                                if not self._same_person(person, pool_person, key):
+                        key = self._source_key(item)
+                        person = section_mapping(anime, section)[source_name][
+                            local_index
+                        ]
+                        candidates = [
+                            p
+                            for p in item.portrait_pool
+                            if self._same_person(person, p, key)
+                        ]
+                        strong = [p for p in candidates if shared_credit_id(person, p)]
+                        # A provider can supply several rows for the same
+                        # confirmed person, but an ambiguous name is not enough.
+                        for pool_person in strong or (
+                            candidates if len(candidates) == 1 else []
+                        ):
+                            for name, urls in pool_person.portraits.items():
+                                urls = [
+                                    url
+                                    for url in urls
+                                    if url in portrait_urls(pool_person, source=name)
+                                ]
+                                if not urls:
                                     continue
-                                for name, urls in pool_person.portraits.items():
-                                    if not urls:
-                                        continue
-                                    person.portraits[name] = list(
-                                        dict.fromkeys(
-                                            [*person.portraits.get(name, []), *urls]
-                                        )
+                                person.portraits[name] = list(
+                                    dict.fromkeys(
+                                        [*person.portraits.get(name, []), *urls]
                                     )
-                                    target.portraits[name] = list(
-                                        dict.fromkeys(
-                                            [*target.portraits.get(name, []), *urls]
-                                        )
+                                )
+                                target.portraits[name] = list(
+                                    dict.fromkeys(
+                                        [*target.portraits.get(name, []), *urls]
                                     )
+                                )
                 for item in progress.sources.values():
                     if item.portrait_only:
                         task = asyncio.create_task(

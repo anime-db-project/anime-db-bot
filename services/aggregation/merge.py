@@ -13,6 +13,8 @@ from core.canonicalization import (
     studio_identity_key,
 )
 from core.contracts import AnimeSource
+from core.credit_identity import ambiguous_name_keys, matching_credit_index
+from core.media_urls import usable_image_url
 from core.models import AggregatedAnime, AnimeRecord, BroadcastSlot, PersonCredit
 from core.temporal import PartialDate, format_time, parse_time
 from localization import canonicalize_domain_value
@@ -43,7 +45,7 @@ def _normalized_portraits(values: dict[str, list[str]]) -> dict[str, list[str]]:
     result: dict[str, list[str]] = {}
     for source, urls in values.items():
         source = _clean(source)
-        cleaned = _dedupe_strings(list(urls or []))
+        cleaned = _dedupe_strings([url for url in urls or [] if usable_image_url(url)])
         if source and cleaned:
             result[source] = cleaned
     return result
@@ -104,7 +106,7 @@ def _merge_people(
     drop_localization_roles: bool = False,
 ) -> list[PersonCredit]:
     merged: list[PersonCredit] = []
-    identity_sets: list[set[str]] = []
+    ambiguous = ambiguous_name_keys(groups)
 
     for group in groups:
         for person in group:
@@ -122,19 +124,7 @@ def _merge_people(
                     if canonical_role_token(role)
                 ]
             )
-            keys = person_identity_keys(names)
-            match_index: int | None = None
-
-            for index, existing in enumerate(merged):
-                if _external_ids_match(existing.external_ids, person.external_ids):
-                    match_index = index
-                    break
-                if _external_ids_conflict(existing.external_ids, person.external_ids):
-                    continue
-                if keys and keys & identity_sets[index]:
-                    match_index = index
-                    break
-
+            match_index = matching_credit_index(merged, person, ambiguous)
             if match_index is None:
                 preferred = preferred_person_name(names, locale="en")
                 aliases = [
@@ -151,7 +141,6 @@ def _merge_people(
                         portraits=_normalized_portraits(person.portraits),
                     )
                 )
-                identity_sets.append(keys)
                 continue
 
             current = merged[match_index]
@@ -170,7 +159,6 @@ def _merge_people(
                 {key: value for key, value in person.external_ids.items() if value}
             )
             _merge_portraits(current.portraits, person.portraits)
-            identity_sets[match_index] |= keys
 
     return merged
 

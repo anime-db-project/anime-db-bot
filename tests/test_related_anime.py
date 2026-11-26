@@ -162,6 +162,41 @@ class RelatedAnimeServiceTests(unittest.IsolatedAsyncioTestCase):
         )
         self.assertEqual(len(result.items), 2)
 
+    async def test_id_only_reference_fetches_verified_title_and_real_poster(self):
+        from core.models import AnimeRecord
+        from unittest.mock import AsyncMock
+
+        source = _Source(
+            "AniList",
+            "anilist",
+            relations=[
+                AnimeReference(
+                    source="AniList",
+                    external_ids={"anilist": "2248"},
+                    posters=[
+                        "https://shikimori.io/assets/globals/missing_original.jpg"
+                    ],
+                )
+            ],
+        )
+        source.get_details = AsyncMock(
+            return_value=AnimeRecord(
+                source="AniList",
+                source_id="2248",
+                external_ids={"anilist": "2248"},
+                titles={"english": "Sports Festival"},
+                posters=["https://example.org/poster.jpg"],
+                kind="special",
+            )
+        )
+        service = RelatedAnimeService([source], _MappingResolver())
+        result = await service.load_relations(AnimeIdentity({"anilist": "1"}))
+        self.assertEqual(result.items[0].candidate.title, "Sports Festival")
+        self.assertEqual(result.items[0].posters, ["https://example.org/poster.jpg"])
+        self.assertEqual(
+            result.by_source["anilist"][0].candidate.title, "Sports Festival"
+        )
+
     async def test_current_anime_is_filtered_from_results(self) -> None:
         service = RelatedAnimeService(
             (
@@ -503,6 +538,62 @@ class RelatedAnimeAvailabilityTests(unittest.IsolatedAsyncioTestCase):
             owner_user_id=42,
         )
         return state, token
+
+    async def test_related_details_replace_existing_message_and_retire_old_session(
+        self,
+    ):
+        from bots.telegram.card.features.related import send_related_item
+
+        state, old_token = self._setup()
+        session = state.anime_sessions[old_token]
+        session.related_loaded = True
+        session.related_items = [
+            AggregatedAnimeReference(
+                titles={"romaji": "New title"}, external_ids={"mal": "2"}
+            )
+        ]
+        replacement = AggregatedAnime(title="New title", external_ids={"mal": "2"})
+        context = SimpleNamespace(
+            aggregator=SimpleNamespace(aggregate=AsyncMock(return_value=replacement)),
+            imdb_rating_service=SimpleNamespace(enrich=AsyncMock()),
+            related_anime_service=SimpleNamespace(
+                load_relations=AsyncMock(return_value=RelatedAnimeLoadResult())
+            ),
+        )
+        message = SimpleNamespace(
+            answer=AsyncMock(),
+            answer_rich=AsyncMock(),
+            edit_text=AsyncMock(),
+            edit_reply_markup=AsyncMock(),
+        )
+        with (
+            patch(
+                "bots.telegram.card.features.related.get_app_context",
+                return_value=context,
+            ),
+            patch(
+                "bots.telegram.card.runtime.service.get_app_context",
+                return_value=context,
+            ),
+            patch(
+                "bots.telegram.card.runtime.service.get_user_locale", return_value="en"
+            ),
+        ):
+            await send_related_item(
+                message,
+                session,
+                state,
+                section="related",
+                source_key="all",
+                index=0,
+                owner_user_id=42,
+            )
+            await __import__("asyncio").gather(*tuple(state.background_tasks))
+        message.edit_text.assert_awaited_once()
+        message.answer.assert_not_awaited()
+        message.answer_rich.assert_not_awaited()
+        self.assertIsNone(state.anime_sessions.get(old_token))
+        self.assertEqual(len(state.anime_sessions), 1)
 
     async def test_relations_present_reveal_main_button(self) -> None:
         state, token = self._setup()

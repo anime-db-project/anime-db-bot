@@ -12,13 +12,14 @@ from aiogram.exceptions import TelegramRetryAfter
 from aiogram.types import BufferedInputFile, InputMediaPhoto
 
 from core.cache import BoundedTTLCache
+from core.media_urls import usable_image_url
 from core.settings import get_settings
 from core.sqlite import managed_sqlite_connection
 from services.users.settings import get_user_settings_store
 
 
 def valid_url(url):
-    if not isinstance(url, str) or len(url) > 4096:
+    if not isinstance(url, str) or len(url) > 4096 or not usable_image_url(url):
         return False
     try:
         parsed = urlsplit(url)

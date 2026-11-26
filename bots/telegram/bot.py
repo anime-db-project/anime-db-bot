@@ -157,17 +157,47 @@ class _ObservabilityMiddleware(BaseMiddleware):
 
 
 class _CallbackRoutingMiddleware(BaseMiddleware):
-    """Route callback extensions that sit outside the core card handlers."""
+    """Route and serialize card edits, including people and inline views."""
 
     def __init__(self, card_state: TelegramCardState) -> None:
         self._card_state = card_state
+        self._active: dict[tuple, tuple[asyncio.Lock, set[str]]] = {}
 
-    async def __call__(self, handler, event, data):
+    async def _dispatch(self, handler, event, data):
         if isinstance(event, CallbackQuery) and await handle_people_callback(
             event, self._card_state
         ):
             return None
         return await handler(event, data)
+
+    async def __call__(self, handler, event, data):
+        from bots.telegram.inline_mode import CARD_PREFIXES
+
+        if (
+            not isinstance(event, CallbackQuery)
+            or not event.data
+            or event.data.split(":", 1)[0] not in CARD_PREFIXES
+        ):
+            return await self._dispatch(handler, event, data)
+        if event.inline_message_id:
+            key = ("inline", event.inline_message_id)
+        elif event.message is not None:
+            key = ("chat", event.message.chat.id, event.message.message_id)
+        else:
+            return await self._dispatch(handler, event, data)
+        lock, pending = self._active.setdefault(key, (asyncio.Lock(), set()))
+        raw = event.data
+        if raw in pending:
+            await event.answer()
+            return None
+        pending.add(raw)
+        try:
+            async with lock:
+                return await self._dispatch(handler, event, data)
+        finally:
+            pending.discard(raw)
+            if not pending:
+                self._active.pop(key, None)
 
 
 async def run_bot(

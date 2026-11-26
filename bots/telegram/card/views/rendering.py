@@ -56,7 +56,9 @@ def dedupe_strings(values: list[str]) -> list[str]:
 
 
 def image_gallery_html(urls: list[str], *, limit: int | None = None) -> str:
-    urls = dedupe_strings(urls)
+    from core.media_urls import usable_image_url
+
+    urls = dedupe_strings([url for url in urls if usable_image_url(url)])
     if limit is not None:
         urls = urls[:limit]
     if not urls:
