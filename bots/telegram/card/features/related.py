@@ -64,6 +64,26 @@ def _items(
     return by_source.get(source_key, [])
 
 
+def prefetch_related_posters(
+    message: Message,
+    session: AnimeCardSession,
+    section: str,
+    source_key: str = "all",
+    *,
+    page: int = 0,
+) -> None:
+    from bots.telegram.card.media_prefetch import prefetch_gallery
+
+    prefetch_gallery(
+        message,
+        session,
+        section,
+        source_key,
+        [item.posters[:1] for item in _items(session, section, source_key)],
+        index=page,
+    )
+
+
 def _display_title(item: AggregatedAnimeReference, locale: str) -> str:
     for key in preferred_title_keys(locale):
         value = str(item.titles.get(key) or "").strip()
@@ -346,6 +366,7 @@ async def edit_related_view(
         return
 
     item = items[page]
+    prefetch_related_posters(message, session, section, source_key, page=page)
     try:
         await deliver_rich_media(
             lambda content: message.edit_text(
@@ -353,6 +374,7 @@ async def edit_related_view(
             ),
             _detail_rich(item, section, locale=locale),
             bot=getattr(message, "bot", None),
+            verify_photo=True,
         )
     except Exception:
         logging.exception(

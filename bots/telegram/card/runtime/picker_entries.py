@@ -269,11 +269,16 @@ def labels_for_route(
                 source = dict(source_section_options(session.anime, parts[2])).get(
                     parts[3]
                 )
-            if parts[2] == "staff":
+            indices = (
+                session.staff_gallery_indices
+                if parts[2] == "staff"
+                else session.voice_gallery_indices
+            )
+            if parts[2] == "staff" or indices is not None:
                 from bots.telegram.people.views import staff_gallery
 
                 groups, portrait_entries = staff_gallery(
-                    session.anime, source, locale, session.staff_gallery_indices
+                    session.anime, source, locale, indices, section=parts[2]
                 )
                 labels = []
                 offset = 0
@@ -425,11 +430,16 @@ async def prepare_initial_picker(
         without, _ = people_state(
             session.anime, people_section, source_name, locale=locale
         )
-        if people_section == "staff":
+        indices = (
+            session.staff_gallery_indices
+            if people_section == "staff"
+            else session.voice_gallery_indices
+        )
+        if people_section == "staff" or indices is not None:
             from bots.telegram.people.views import staff_gallery
 
             groups, _ = staff_gallery(
-                session.anime, source_name, locale, session.staff_gallery_indices
+                session.anime, source_name, locale, indices, section=people_section
             )
             group_count = len(groups)
         else:
@@ -439,9 +449,13 @@ async def prepare_initial_picker(
         return (route, labels) if labels else None
 
     if section in {"related", "recommendations"}:
-        from bots.telegram.card.features.related import ensure_related_loaded
+        from bots.telegram.card.features.related import (
+            ensure_related_loaded,
+            prefetch_related_posters,
+        )
 
         await ensure_related_loaded(session, section)
+        prefetch_related_posters(message, session, section)
         route = f"ar~{section}~all"
         labels = labels_for_route(session, route, locale=locale)
         return (route, labels) if labels else None
@@ -486,9 +500,11 @@ async def prepare_initial_picker(
         from bots.telegram.card.features.characters import (
             _character_state,
             _ensure_loaded,
+            prefetch_character_portraits,
         )
 
         await _ensure_loaded(message, session, locale=locale)
+        prefetch_character_portraits(message, session, None, locale=locale)
         _, without, portraits = _character_state(session, None)
         route = f"gx~av~characters~{_group_count(without, 'characters', locale)}"
         labels = labels_for_route(session, route, locale=locale)
@@ -507,11 +523,16 @@ async def prepare_initial_picker(
             requested_page=0,
         )
         without, portraits = people_state(session.anime, section, None, locale=locale)
-        if section == "staff":
+        indices = (
+            session.staff_gallery_indices
+            if section == "staff"
+            else session.voice_gallery_indices
+        )
+        if section == "staff" or indices is not None:
             from bots.telegram.people.views import staff_gallery
 
             groups, _ = staff_gallery(
-                session.anime, None, locale, session.staff_gallery_indices
+                session.anime, None, locale, indices, section=section
             )
             group_count = len(groups)
         else:
@@ -521,9 +542,13 @@ async def prepare_initial_picker(
         return (route, labels) if labels else None
 
     if section == "screenshots":
-        from bots.telegram.card.features.screenshots import ensure_screenshots_loaded
+        from bots.telegram.card.features.screenshots import (
+            ensure_screenshots_loaded,
+            prefetch_screenshots,
+        )
 
         await ensure_screenshots_loaded(message, session, locale=locale)
+        prefetch_screenshots(message, session)
         route = "av~screenshots"
         labels = labels_for_route(session, route, locale=locale)
         return (route, labels) if labels else None

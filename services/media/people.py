@@ -8,6 +8,8 @@ from typing import Any
 from core.canonicalization import person_identity_keys
 from core.models import AggregatedAnime, PersonCredit
 from core.people import (
+    all_people,
+    voice_credits_for_locale,
     people_for_scope,
     people_state,
     portrait_urls,
@@ -33,6 +35,7 @@ class PeopleLoadProgress:
     sources: dict[str, SourceLoadProgress] = field(default_factory=dict)
     manifest_people: list[PersonCredit] = field(default_factory=list)
     roster_published: bool = False
+    locale: str | None = None
     portrait_cursor: int = 0
     portraits_complete: bool = False
     portrait_task: asyncio.Task[bool] | None = None
@@ -64,11 +67,11 @@ class PeopleProgressService:
         self._remote_portrait_slots = asyncio.Semaphore(max(1, portrait_concurrency))
 
     def build_progress(
-        self, anime: AggregatedAnime, section: str
+        self, anime: AggregatedAnime, section: str, *, locale: str | None = None
     ) -> PeopleLoadProgress:
         identity = anime.identity
         mapping = section_mapping(anime, section)
-        progress = PeopleLoadProgress()
+        progress = PeopleLoadProgress(locale=locale)
         for source in self._sources:
             source_key = str(getattr(source, "source_key", "") or "").strip().casefold()
             if source_key and not identity.has(source_key):
@@ -100,7 +103,13 @@ class PeopleProgressService:
             return sources_with_portraits(anime, section)
         if PeopleProgressService._manifest_complete(progress, None):
             return [
-                name for name, item in progress.sources.items() if item.manifest_people
+                name
+                for name, item in progress.sources.items()
+                if item.manifest_people
+                and (
+                    not item.portrait_only
+                    or bool(section_mapping(anime, section).get(name))
+                )
             ]
         return list(progress.sources)
 
@@ -214,7 +223,7 @@ class PeopleProgressService:
         section: str,
         progress: PeopleLoadProgress,
     ) -> None:
-        if section == "staff" and progress.roster_published:
+        if progress.roster_published:
             return
         temporary = AggregatedAnime(title=anime.title, sources=list(anime.sources))
         ordered_names = [name for name in anime.sources if name in progress.sources]
@@ -270,11 +279,7 @@ class PeopleProgressService:
                 manifest = PeopleManifest(people=without_portraits(values))
             item.portrait_only = bool(manifest.portrait_only)
             item.manifest_people = without_portraits(list(manifest.people))
-            item.portrait_pool = (
-                [*item.portrait_pool, *manifest.portrait_pool]
-                if section == "staff"
-                else list(manifest.portrait_pool)
-            )
+            item.portrait_pool = [*item.portrait_pool, *manifest.portrait_pool]
             item.manifest_complete = True
             self._rebuild_manifest(anime, section, progress)
             logging.info(
@@ -351,11 +356,14 @@ class PeopleProgressService:
         if self._manifest_complete(progress, None) and not progress.roster_published:
             # Staff pages must keep the same ordinal even after portraits are
             # added. Remove preview portraits before publishing the full roster.
-            if section == "staff":
+            if section in {"staff", "voices"}:
                 mapping = section_mapping(anime, section)
                 for name, values in tuple(mapping.items()):
                     mapping[name] = without_portraits(values)
-                anime.staff = without_portraits(anime.staff)
+                if section == "staff":
+                    anime.staff = without_portraits(anime.staff)
+                else:
+                    anime.voices = without_portraits(anime.voices)
             # The full lightweight roster is available before portrait batches.
             for item in progress.sources.values():
                 if not item.portrait_only and item.manifest_people:
@@ -363,12 +371,12 @@ class PeopleProgressService:
                         anime, section, item.source.name, item.manifest_people
                     )
             progress.roster_published = True
-            if section == "staff":
-                # Reconcile the canonical manifest with the actual published
-                # merged roster (including existing non-provider metadata).
-                progress.manifest_people = without_portraits(anime.staff)
+            if section in {"staff", "voices"}:
+                roster = all_people(anime, section)
+                mapping = section_mapping(anime, section)
+                progress.manifest_people = without_portraits(roster)
                 available: dict[str | None, list[int]] = {}
-                for name, people in anime.staff_by_source.items():
+                for name, people in mapping.items():
                     source_progress = progress.sources.get(name)
                     pool = source_progress.portrait_pool if source_progress else []
                     key = self._source_key(source_progress) if source_progress else ""
@@ -381,17 +389,34 @@ class PeopleProgressService:
                             for p in pool
                         )
                     ]
+                # Portrait-only providers cannot advertise photo availability
+                # without crawling characters. Reserve an individual page
+                # for these uncertain verified identities, never invent new ones.
+                remote_only = any(
+                    item.portrait_only for item in progress.sources.values()
+                )
                 available[None] = [
                     i
-                    for i, person in enumerate(anime.staff)
-                    if any(
-                        self._same_person(
-                            person,
-                            anime.staff_by_source[name][j],
-                            self._source_key(item),
+                    for i, person in enumerate(roster)
+                    if (
+                        section != "voices"
+                        or progress.locale is None
+                        or voice_credits_for_locale([person], progress.locale)
+                    )
+                    and (
+                        (
+                            remote_only
+                            and any(
+                                role.startswith("voice_of::") for role in person.roles
+                            )
                         )
-                        for name, item in progress.sources.items()
-                        for j in available.get(name, [])
+                        or any(
+                            self._same_person(
+                                person, mapping[name][j], self._source_key(item)
+                            )
+                            for name, item in progress.sources.items()
+                            for j in available.get(name, [])
+                        )
                     )
                 ]
                 progress.staff_source_portrait_indices = available
@@ -428,7 +453,61 @@ class PeopleProgressService:
         try:
             enriched = await loader(anime.identity.copy(), local_targets)
             if enriched:
-                self._merge_people(anime, section, source.name, enriched)
+                if (
+                    progress.roster_published
+                    and progress.staff_portrait_indices is not None
+                ):
+                    roster = all_people(anime, section)
+                    mapping = section_mapping(anime, section)
+                    key = self._source_key(item)
+                    for result in enriched:
+                        # Enrichment can only attach portraits to one verified
+                        # identity from this batch, not add a new voice actor.
+                        matches = [
+                            p
+                            for p in roster
+                            if self._same_person(p, result, key)
+                            and any(
+                                self._same_person(p, target, key)
+                                for target in local_targets
+                            )
+                        ]
+                        if len(matches) != 1 or not portrait_urls(
+                            result, source=source.name
+                        ):
+                            continue
+                        target = matches[0]
+                        for name, urls in result.portraits.items():
+                            if urls:
+                                target.portraits[name] = list(
+                                    dict.fromkeys(
+                                        [*target.portraits.get(name, []), *urls]
+                                    )
+                                )
+                        existing = mapping.setdefault(source.name, [])
+                        local = next(
+                            (p for p in existing if self._same_person(p, result, key)),
+                            None,
+                        )
+                        if local is None:
+                            local = without_portraits([target])[0]
+                            existing.append(local)
+                        local.portraits[source.name] = list(
+                            dict.fromkeys(
+                                [
+                                    *local.portraits.get(source.name, []),
+                                    *result.portraits[source.name],
+                                ]
+                            )
+                        )
+                        index = next(i for i, p in enumerate(existing) if p is local)
+                        indices = progress.staff_source_portrait_indices.setdefault(
+                            source.name, []
+                        )
+                        if index not in indices:
+                            indices.append(index)
+                else:
+                    self._merge_people(anime, section, source.name, enriched)
         except asyncio.CancelledError:
             raise
         except Exception:
@@ -476,7 +555,7 @@ class PeopleProgressService:
     ) -> bool:
         try:
             start = progress.portrait_cursor
-            if section == "staff" and progress.staff_portrait_indices is not None:
+            if progress.staff_portrait_indices is not None:
                 remaining = [i for i in progress.staff_portrait_indices if i >= start]
                 selected = remaining[: self._portrait_batch_size]
                 end = (
@@ -495,12 +574,14 @@ class PeopleProgressService:
                 progress.portraits_complete = True
                 return False
 
-            if section == "staff" and progress.staff_portrait_indices is not None:
+            if progress.staff_portrait_indices is not None:
                 for index in selected:
-                    target = anime.staff[index]
+                    target = all_people(anime, section)[index]
                     for item in progress.sources.values():
                         key = self._source_key(item)
-                        source_people = anime.staff_by_source.get(item.source.name, [])
+                        source_people = section_mapping(anime, section).get(
+                            item.source.name, []
+                        )
                         matching = [
                             p
                             for p in source_people
@@ -527,10 +608,18 @@ class PeopleProgressService:
                                             [*target.portraits.get(name, []), *urls]
                                         )
                                     )
+                for item in progress.sources.values():
+                    if item.portrait_only:
+                        task = asyncio.create_task(
+                            self._limited_remote_enrichment(
+                                anime, section, progress, item, targets
+                            )
+                        )
+                        self._track_enrichment(progress, task)
                 progress.portrait_cursor = end
                 progress.portraits_complete = end >= len(progress.manifest_people)
                 logging.info(
-                    "Staff portrait batch loaded",
+                    "People portrait batch loaded",
                     extra={
                         "event": "people_portraits",
                         "operation": section,
@@ -659,12 +748,12 @@ class PeopleProgressService:
             return len(people_state(anime, section, source)[1])
 
         if progress.portrait_cursor == 0 and self.scope_has_more(
-            progress, None if section == "staff" else source
+            progress, None if progress.staff_portrait_indices is not None else source
         ):
             await self._await_portrait_batch(anime, section, progress)
 
         requested_page = max(0, int(requested_page))
-        if section == "staff":
+        if progress.staff_portrait_indices is not None:
             people = current_people()
             if requested_page and people:
                 target = people[min(requested_page, len(people)) - 1]

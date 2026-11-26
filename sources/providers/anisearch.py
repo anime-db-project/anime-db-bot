@@ -702,7 +702,7 @@ class AniSearchSource:
 
     async def load_voices_manifest(self, identity: AnimeIdentity) -> PeopleManifest:
         values = await self.load_voices(identity)
-        return PeopleManifest(people=without_portraits(values))
+        return PeopleManifest(people=without_portraits(values), portrait_pool=values)
 
     async def load_episode_page(
         self,

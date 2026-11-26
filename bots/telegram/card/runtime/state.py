@@ -19,6 +19,10 @@ class AnimeCardSession:
     owner_user_id: int
     inline_message_id: str | None = None
     staff_gallery_indices: dict[str | None, list[int]] | None = None
+    voice_gallery_indices: dict[str | None, list[int]] | None = None
+    media_prefetch_batches: set[tuple[str, str | None, int]] = field(
+        default_factory=set
+    )
     episode_pages: dict[tuple[str, int], EpisodePage] = field(default_factory=dict)
     episode_catalogs: dict[str, list[EpisodeRecord]] = field(default_factory=dict)
     episode_details: dict[tuple[str, int], EpisodeRecord] = field(default_factory=dict)

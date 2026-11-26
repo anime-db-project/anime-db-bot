@@ -396,7 +396,7 @@ class TelegramMediaCache:
             return
         for url in urls:
             key = (bot.id, url)
-            if not valid_url(url) or key in self.queued:
+            if not valid_url(url) or key in self.queued or self.hot.get(key):
                 continue
             try:
                 self.queue.put_nowait((bot, url))

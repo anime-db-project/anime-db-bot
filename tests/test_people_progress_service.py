@@ -238,6 +238,58 @@ class PeopleProgressServiceTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(view(121)[2:], (141, 141, 121))
         self.assertEqual(source.manifest_calls, 1)
 
+    async def test_voice_gallery_uses_localized_complete_roster_and_stable_batches(
+        self,
+    ):
+        from bots.telegram.card.runtime.state import AnimeCardSession
+        from bots.telegram.card.runtime.picker_entries import labels_for_route
+        from bots.telegram.people.views import (
+            staff_gallery,
+            staff_gallery_ordinal,
+            _page_text,
+        )
+
+        source = _ManifestSource(count=160)
+        for i, person in enumerate(source.people):
+            person.roles = [
+                "voice_of::Example [en]" if i < 40 else "voice_of::Example [ja]"
+            ]
+            if 40 <= i < 50:
+                person.portraits = {}
+        service = PeopleProgressService(
+            [source], _FakeAggregator(), portrait_batch_size=50
+        )
+        anime = AggregatedAnime(
+            title="Example", sources=["AniList"], external_ids={"anilist": "1"}
+        )
+        progress = service.build_progress(anime, "voices", locale="ru")
+        await service.ensure(anime, "voices", progress, requested_page=0)
+        indices = progress.staff_source_portrait_indices
+        groups, portraits = staff_gallery(anime, None, "ru", indices, section="voices")
+        self.assertEqual(len(anime.voices), 160)
+        self.assertEqual(sum(map(len, groups)), 10)
+        self.assertEqual(len(portraits), 110)
+        self.assertEqual(sum(bool(p.portraits) for p in anime.voices), 50)
+        session = AnimeCardSession(anime, 1, voice_gallery_indices=indices)
+        route = f"gx~av~voices~{len(groups)}"
+        before = labels_for_route(session, route, locale="ru")
+        self.assertEqual(len(before), 111)
+        self.assertEqual(progress.portrait_cursor, 100)
+        target = staff_gallery_ordinal(groups, portraits, 51)
+        self.assertEqual(target, 101)
+        await service.ensure(anime, "voices", progress, requested_page=target)
+        self.assertEqual(sum(bool(p.portraits) for p in anime.voices), 100)
+        self.assertEqual(labels_for_route(session, route, locale="ru"), before)
+        self.assertTrue(
+            _page_text(anime, "voices", None, 51, locale="ru", staff_indices=indices)[1]
+        )
+        self.assertEqual(
+            _page_text(anime, "voices", None, 51, locale="ru", staff_indices=indices)[
+                3
+            ],
+            120,
+        )
+
     async def test_preview_people_do_not_mark_manifest_as_complete(self) -> None:
         source = _ManifestSource(count=56)
         service = PeopleProgressService(

@@ -79,7 +79,7 @@ async def _render_people_view(
         )
         source = dict(options)[source_key]
 
-    if section == "staff":
+    if section == "staff" or progress.staff_portrait_indices is not None:
         groups, portraits = staff_gallery(
             anime,
             source,
@@ -87,6 +87,7 @@ async def _render_people_view(
             progress.staff_source_portrait_indices
             if progress.staff_portrait_indices is not None
             else None,
+            section=section,
         )
         max_page = len(portraits) + max(0, len(groups) - 1)
         first_page = 0 if groups or not portraits else 1
@@ -125,7 +126,9 @@ async def _render_people_view(
         max_page,
         locale=locale,
         source_names=sources,
-        has_more=section != "staff" and _scope_has_more(progress, source),
+        has_more=progress.staff_portrait_indices is None
+        and section != "staff"
+        and _scope_has_more(progress, source),
         first_page=first_page,
         group_pages=len(groups),
     )
@@ -137,7 +140,7 @@ async def _render_people_view(
             ),
             _rich(text_value, urls),
             bot=getattr(message, "bot", None),
-            verify_photo=section == "staff",
+            verify_photo=True,
         )
     except Exception:
         logging.exception(
@@ -183,9 +186,9 @@ async def _edit_people_view(
         section,
         locale=locale,
         source=source,
-        requested_page=0 if section == "staff" else int(page),
+        requested_page=0,
     )
-    if section == "staff":
+    if section == "staff" or progress.staff_portrait_indices is not None:
         groups, portraits = staff_gallery(
             anime,
             source,
@@ -193,6 +196,7 @@ async def _edit_people_view(
             progress.staff_source_portrait_indices
             if progress.staff_portrait_indices is not None
             else None,
+            section=section,
         )
         first = 0 if groups or not portraits else 1
         maximum = len(portraits) + max(0, len(groups) - 1)

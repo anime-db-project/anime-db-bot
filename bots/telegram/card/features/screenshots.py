@@ -120,6 +120,26 @@ def screenshot_text(
     return "\n".join(lines)
 
 
+def prefetch_screenshots(
+    message: Message,
+    session: AnimeCardSession,
+    source: str | None = None,
+    *,
+    page: int = 0,
+) -> None:
+    from bots.telegram.card.media_prefetch import prefetch_gallery
+
+    prefetch_gallery(
+        message,
+        session,
+        "screenshots",
+        source,
+        [[url] for url in screenshot_urls(session.anime, source)],
+        index=page * SCREENSHOTS_PER_PAGE,
+        visible_count=SCREENSHOTS_PER_PAGE,
+    )
+
+
 async def ensure_screenshots_loaded(
     message: Message,
     session: AnimeCardSession,
@@ -169,6 +189,7 @@ async def edit_screenshots_view(
 
     pages = screenshot_pages(anime, source)
     page = max(0, min(page, len(pages) - 1))
+    prefetch_screenshots(message, session, source, page=page)
     if resolved_source_key is None:
         keyboard = navigation_keyboard(
             token,
@@ -198,6 +219,7 @@ async def edit_screenshots_view(
             ),
             screenshot_rich_message(anime, source=source, page=page, locale=locale),
             bot=getattr(message, "bot", None),
+            verify_photo=True,
         )
     except Exception:
         logger.exception(

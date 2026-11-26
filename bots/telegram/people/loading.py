@@ -72,8 +72,16 @@ async def ensure_lazy_people(
     key = progress_key(token, section)
     progress = state.people_loads.get(key)
     service = _service()
-    if progress is None:
-        progress = service.build_progress(anime, section)
+    if progress is None or (
+        section == "voices"
+        and progress.locale is not None
+        and progress.locale != locale
+    ):
+        progress = (
+            service.build_progress(anime, section, locale=locale)
+            if section == "voices"
+            else service.build_progress(anime, section)
+        )
         state.people_loads[key] = progress
     if not progress.sources:
         return progress
@@ -98,37 +106,42 @@ async def ensure_lazy_people(
         source=source,
         requested_page=requested_page,
     )
-    if section == "staff":
+    if section in {"staff", "voices"}:
         session = state.anime_sessions.get(token)
         if session is not None and progress.staff_portrait_indices is not None:
-            session.staff_gallery_indices = progress.staff_source_portrait_indices
+            if section == "staff":
+                session.staff_gallery_indices = progress.staff_source_portrait_indices
+            else:
+                session.voice_gallery_indices = progress.staff_source_portrait_indices
     if (
-        section == "staff"
+        progress.staff_portrait_indices is not None
         and progress.portrait_cursor > progress.staff_prefetched_cursor
     ):
-        from bots.telegram.media_cache import get_media_cache
-        from core.people import portrait_urls
+        from bots.telegram.card.media_prefetch import enqueue_portraits
+        from core.people import all_people, portrait_urls
 
         bot = getattr(message, "bot", None)
         if isinstance(getattr(bot, "id", None), int):
             start = progress.staff_prefetched_cursor
             end = progress.portrait_cursor
-            portraits = [
-                portrait_urls(person, source_order=anime.sources)
-                for person in anime.staff[start:end]
-            ]
-            # Give every person one image before queueing alternate portraits,
-            # so a multi-source portrait set cannot monopolize the bounded queue.
-            urls = list(
-                dict.fromkeys(
+
+            def enqueue_batch():
+                return enqueue_portraits(
+                    bot,
                     [
-                        *(images[0] for images in portraits if images),
-                        *(url for images in portraits for url in images[1:]),
-                    ]
+                        portrait_urls(person, source_order=anime.sources)
+                        for person in all_people(anime, section)[start:end]
+                    ],
                 )
-            )
-            get_media_cache().enqueue(bot, urls)
-            progress.staff_prefetched_cursor = end
+
+            if enqueue_batch():
+                progress.staff_prefetched_cursor = end
+            # Shikimori supplies supplemental photos asynchronously. Queue
+            # newly discovered URLs too, without blocking the initial picker.
+            for task in tuple(progress.enrichment_tasks):
+                task.add_done_callback(
+                    lambda done: None if done.cancelled() else enqueue_batch()
+                )
     return progress
 
 

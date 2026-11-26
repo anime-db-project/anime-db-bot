@@ -161,6 +161,8 @@ def _source_name_for_selector(
 def _characters(session: AnimeCardSession, source: str | None) -> list[CharacterRecord]:
     if source is not None:
         return session.anime.characters_by_source.get(source, [])
+    if session.characters_loaded and session.anime.characters:
+        return session.anime.characters
     groups = [
         session.anime.characters_by_source[source] for source in _source_names(session)
     ]
@@ -215,6 +217,36 @@ def _character_state(
         else:
             without.append(character)
     return values, without, with_portraits
+
+
+def prefetch_character_portraits(
+    message: Message,
+    session: AnimeCardSession,
+    source: str | None,
+    *,
+    page: int = 0,
+    locale: str,
+) -> None:
+    from bots.telegram.card.media_prefetch import prefetch_gallery
+
+    _, without, portraits = _character_state(session, source)
+    heading = (
+        text("characters", "title", locale=locale)
+        + (f" — {source}" if source else "")
+        + ":"
+    )
+    groups = record_pages(
+        [_character_line(p, locale) for p in without], heading=heading
+    )
+    index = max(0, page - len(groups) if groups else page - 1)
+    prefetch_gallery(
+        message,
+        session,
+        "characters",
+        source,
+        [_portrait_urls(p, source, _source_names(session)) for p in portraits],
+        index=index,
+    )
 
 
 def _first_character_page(
@@ -466,6 +498,7 @@ async def edit_characters_view(
         content, urls, shown, total, page = _page_text(
             session, source, page, locale=locale
         )
+        prefetch_character_portraits(message, session, source, page=page, locale=locale)
         keyboard = _keyboard(
             token,
             source_options,
@@ -485,6 +518,7 @@ async def edit_characters_view(
                 ),
                 _rich(content, urls),
                 bot=getattr(message, "bot", None),
+                verify_photo=True,
             )
             return
         except Exception:

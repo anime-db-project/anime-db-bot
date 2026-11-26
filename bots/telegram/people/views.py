@@ -23,6 +23,7 @@ from core.people import (
     portrait_urls as _portrait_urls,
     section_mapping as _section_mapping,
     sources_with_portraits as _sources_with_portraits,
+    voice_credits_for_locale,
 )
 from localization import text
 
@@ -47,9 +48,11 @@ def staff_gallery(
     source: str | None,
     locale: str,
     indices: dict[str | None, list[int]] | None = None,
+    *,
+    section: str = "staff",
 ) -> tuple[list[list[str]], list[tuple[int, PersonCredit]]]:
     """Classify by known photo availability, not current batch state."""
-    people = _people_for_scope(anime, "staff", source)
+    people = _people_for_scope(anime, section, source)
     available = (
         set(indices.get(source, []))
         if indices is not None
@@ -60,15 +63,20 @@ def staff_gallery(
         }
     )
     heading = (
-        text("people", "staff", locale=locale)
+        text("people", section, locale=locale)
         + (f" — {source}" if source else "")
         + ":"
     )
+    records = []
+    for i, p in enumerate(people):
+        visible = voice_credits_for_locale([p], locale) if section == "voices" else [p]
+        if visible:
+            records.append((i, visible[0]))
     groups = record_pages(
-        [_person_line(p, locale) for i, p in enumerate(people) if i not in available],
+        [_person_line(p, locale) for i, p in records if i not in available],
         heading=heading,
     )
-    return groups, [(i + 1, p) for i, p in enumerate(people) if i in available]
+    return groups, [(i + 1, p) for i, p in records if i in available]
 
 
 def staff_gallery_ordinal(
@@ -88,9 +96,11 @@ def _page_text(
     total_hint: int | None = None,
     staff_indices: dict[str | None, list[int]] | None = None,
 ) -> tuple[str, list[str], int, int, int]:
-    if section == "staff":
-        groups, portraits = staff_gallery(anime, source, locale, staff_indices)
-        total = len(_people_for_scope(anime, section, source))
+    if section == "staff" or staff_indices is not None:
+        groups, portraits = staff_gallery(
+            anime, source, locale, staff_indices, section=section
+        )
+        total = sum(map(len, groups)) + len(portraits)
         title_value = text("people", section, locale=locale) + (
             f" — {source}" if source else ""
         )

@@ -302,6 +302,17 @@ async def edit_trailers_view(
         page = max(0, min(int(page), page_count - 1))
         offset = page * TRAILERS_PER_PAGE
         items = all_items[offset : offset + TRAILERS_PER_PAGE]
+        from bots.telegram.card.media_prefetch import prefetch_gallery
+
+        prefetch_gallery(
+            message,
+            session,
+            "trailers",
+            source,
+            [[item.thumbnail] if item.thumbnail else [] for item in all_items],
+            index=offset,
+            visible_count=TRAILERS_PER_PAGE,
+        )
         content = _trailer_text(source, items, offset=offset, locale=locale)
         keyboard = _source_keyboard(
             token,
@@ -320,6 +331,7 @@ async def edit_trailers_view(
             lambda rich: message.edit_text(rich_message=rich, reply_markup=keyboard),
             _trailer_rich(content, rich_item),
             bot=getattr(message, "bot", None),
+            verify_photo=True,
         )
     except Exception:
         logging.exception("Rich trailer view edit failed; falling back to text")
